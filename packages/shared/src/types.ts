@@ -126,4 +126,6 @@ export interface BattlePublic {
   pieceMap: Record<string, number>;
   aiControlled: { white: boolean; black: boolean };
   drawOfferBy?: 'white' | 'black' | null;
+  /** World ids of pawns promoted in this battle: they fight as their new piece, then turn back into pawns (battle.md §5). */
+  promoted?: number[];
 }

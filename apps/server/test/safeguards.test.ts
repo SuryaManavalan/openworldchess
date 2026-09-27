@@ -106,6 +106,31 @@ describe('movement', () => {
   });
 });
 
+describe('clearings', () => {
+  it('settlements slowly clear the trees beside them, and the stumps are dug out', () => {
+    const p = join('Woodsman');
+    const k = game.kingsOf(p.id)[0];
+    const w = game.world;
+    // A tree right beside a house.
+    const tree = { x: k.x + 3, y: k.y + 3, kind: 'tree' as const, capacity: 200, remaining: 200 };
+    w.movePiece(k, k.x, k.y);
+    const hx = tree.x - 1, hy = tree.y;
+    for (const q of w.piecesNear(hx, hy, 1)) w.movePiece(q, q.x + 4, q.y + 4);
+    w.addBuilding(house(p.id, hx, hy));
+    w.nodeOverlay.set(tree.x * 134217728 + tree.y, tree);
+    (w as unknown as { nodesByChunk: Map<string, unknown[]> }).nodesByChunk.clear();
+    (w as unknown as { loaded: Set<number> }).loaded.clear();
+    const n = w.nodeAt(tree.x, tree.y)!;
+    expect(n.remaining).toBe(200);
+    let t = Date.now();
+    for (let i = 0; i < 400 && n.remaining > 0; i++) { t += 30_001; game.economy(t); }
+    expect(n.remaining).toBe(0);
+    // Its stump doesn't grow back beside the house: it's dug out.
+    game.economy(t + 31 * 60_000);
+    expect(w.nodeAt(tree.x, tree.y)).toBeUndefined();
+  });
+});
+
 describe('strays', () => {
   it('a piece stranded outside reach behind a wall can be ordered, and finds its own way home', () => {
     const p = join('Stray');

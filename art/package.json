@@ -15,6 +15,7 @@
     "./decor": "./assets/decor.mjs",
     "./creatures": "./assets/creatures.mjs",
     "./nature": "./assets/nature.mjs",
-    "./camps": "./assets/camps.mjs"
+    "./camps": "./assets/camps.mjs",
+    "./ascended": "./assets/ascended.mjs"
   }
 }

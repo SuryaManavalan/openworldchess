@@ -103,7 +103,7 @@ Each of these now has a proposed answer in the specs. [ROADMAP.md](ROADMAP.md) l
 | Resources | Your idea: buildings draw from resource nodes near them. There's no gathering and no stockpile | [economy.md](specs/economy.md) §1 |
 | Reserves and cooldown | The cooldown locks only the pieces that fought, so spare pieces around a fresh king can attack again right away | [battle.md](specs/battle.md) §8 |
 | Offline defense | Stockfish plays for you at your rating; spawn shield for new players | [battle.md](specs/battle.md) §5, [progression.md](specs/progression.md) §4 |
-| Pawn promotion | Only in battles, and it's permanent afterward | [battle.md](specs/battle.md) §5 |
+| Pawn promotion | Only in battles, and **only for that battle**: the pawn reverts afterward | [battle.md](specs/battle.md) §5 |
 | Captures in the open world | None; captures happen only in battles | [movement.md](specs/movement.md) §3 |
 | Elo zones | They set spawn and respawn location, AI strength and resource richness; they never block movement | [world.md](specs/world.md) §4 |
 | Emperor vs. city kings | The Emperor is a king: it anchors whatever it stands near. There is no capital rule | [economy.md](specs/economy.md) §2, [progression.md](specs/progression.md) §3 |

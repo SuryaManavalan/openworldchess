@@ -8,6 +8,7 @@ import * as decorArt from 'owc-art/decor';
 import * as creatureArt from 'owc-art/creatures';
 import * as natureArt from 'owc-art/nature';
 import * as campsArt from 'owc-art/camps';
+import * as ascendedArt from 'owc-art/ascended';
 import { FACTIONS, type PieceKind } from '@owc/shared';
 
 type ArtFn = (o?: { side?: string; team?: string; emperor?: boolean }) => string;
@@ -78,6 +79,28 @@ export function creatureUrl(faction: string, kind: PieceKind): string {
   let u = urlCache.get(k);
   if (!u) {
     u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${creature(FACTIONS[faction], kind)}</svg>`);
+    urlCache.set(k, u);
+  }
+  return u;
+}
+
+const ascended = ascendedArt.ascended as unknown as (ghost: string, pawn: string) => string;
+/** Markup of a piece as drawn in battle: a player's piece or a creature. */
+const pieceMarkup = (kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, emperor = false) =>
+  wild ? creature(FACTIONS[wild], kind) : kind === 'K' ? PIECES.king({ side, team, emperor }) : PIECES[ART_NAME[kind]]({ side, team });
+
+/** A promoted pawn (battle.md §5): the pawn inside a glowing spirit of the piece it's acting as. */
+function ascendedMarkup(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string) {
+  return ascended(pieceMarkup(kind, side, team, wild), pieceMarkup('P', side, team, wild));
+}
+export function ascendedTexture(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, onReady?: () => void) {
+  return get(`asc:${kind}:${side}:${team}:${wild ?? ''}`, () => ascendedMarkup(kind, side, team, wild), RES, onReady);
+}
+export function ascendedUrl(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string): string {
+  const k = `asc:${kind}:${side}:${team}:${wild ?? ''}`;
+  let u = urlCache.get(k);
+  if (!u) {
+    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${ascendedMarkup(kind, side, team, wild)}</svg>`);
     urlCache.set(k, u);
   }
   return u;

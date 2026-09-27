@@ -160,6 +160,10 @@ Ideas for later:
 - festivals when a city wins a siege;
 - seasons.
 
+### Clearings (added after playtesting)
+
+Settlements slowly clear the trees around them. Every 30 seconds, each of a town's buildings has a 1-in-10 chance to fell the nearest standing tree within 2 squares. Felled trees beside buildings are dug out instead of growing back 30 minutes later, so towns open into clearings as they grow, while the wild forest keeps regrowing (`Game.clearing`, `World.regrowNodes`).
+
 ## 11. Biomes and the wilds (added after playtesting)
 
 - **Every biome has its own ground:**

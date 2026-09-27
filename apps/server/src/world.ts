@@ -9,6 +9,8 @@ const cnum = (cx: number, cy: number) => (cx + 65536) * 131072 + (cy + 65536);
 
 const BLOCKING_NODE = { tree: true, rock: true, ore: true, wheat: false } as const;
 const TREE_REGROW_MS = 30 * 60_000;
+/** Trees this close to a settlement's buildings are cleared over time, and don't grow back. */
+export const SETTLED_R = 2;
 const WHEAT_REGROW_EVERY_MS = 6_000;
 
 export interface NodeRec extends NodeState {
@@ -118,11 +120,18 @@ export class World {
     return got;
   }
 
+  /** Is a settlement's building (a player's, not a camp or a ruin) within r squares? */
+  settledNear(x: number, y: number, r: number) {
+    return this.buildingsNear(x, y, r).some((b) => b.owner && b.type !== 'ruin' && b.type !== 'camp');
+  }
+
   /** Regrow trees and wheat (economy.md §1). */
   regrowNodes(now: number, dt: number) {
     for (const [k, n] of this.nodeOverlay) {
       if (n.gone) continue;
       if (n.kind === 'tree' && n.remaining === 0 && n.regrowAt && now >= n.regrowAt) {
+        // Inside a settlement the stump is dug out instead: towns open into clearings (visuals.md §10).
+        if (this.settledNear(n.x, n.y, SETTLED_R)) { n.gone = true; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y); continue; }
         n.remaining = n.capacity; n.regrowAt = undefined; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y);
       } else if (n.kind === 'wheat' && n.remaining < n.capacity) {
         n.acc = (n.acc ?? 0) + dt;

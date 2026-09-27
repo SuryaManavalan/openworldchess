@@ -220,6 +220,7 @@ export class Battles {
     r.pub.fen = gm.fen;
     r.pub.moves = [...gm.moves];
     r.pub.pieceMap = { ...gm.pieceMap };
+    r.pub.promoted = gm.promoted.map((p) => p.id);
     r.pub.clocks = { white: gm.timeLeft('white', now), black: gm.timeLeft('black', now), turnStartedAt: gm.turnStartedAt };
     r.pub.aiControlled = { white: this.isAI(r.white.player), black: this.isAI(r.black.player) };
     this.onUpdate(r.pub);
@@ -327,8 +328,7 @@ export class Battles {
       winner: null, loser: null, killed: [...gm.killed], converted: [], routed: [], promoted: gm.promoted.map((p) => p.id),
       buildingsTransferred: [], emperorKilled: false, cooldownMs: 0, rated: false, ratingChange: {},
     };
-    // Promotions are permanent (battle.md §5).
-    for (const pr of gm.promoted) { const p = w.pieces.get(pr.id); if (p) g.setKind(p, pr.to); }
+    // Promotions last only the battle (battle.md §5): the pawn walks out a pawn again.
     // Survivors step back into the world near their board squares.
     const survivors = new Set<number>();
     for (const [sq, id] of Object.entries(gm.pieceMap)) {

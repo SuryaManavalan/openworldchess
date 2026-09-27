@@ -119,6 +119,19 @@ describe('battles', () => {
     expect(g.clocks.white).toBe(300_000 - 1000 + 3000);
   });
 
+  it('en passant captures the right world piece', () => {
+    // White pawn on e5; black plays d7-d5, and white takes en passant on d6.
+    const g = new BattleGame('4k3/3p4/8/4P3/8/8/8/4K3 b - - 0 1', { e8: 9, d7: 7, e5: 5, e1: 1 });
+    g.start(0);
+    expect(g.move('d7d5', 1000).ok).toBe(true);
+    const r = g.move('e5d6', 2000);
+    expect(r.ok).toBe(true);
+    expect(r.captured).toBe(7);
+    expect(g.killed).toContain(7);
+    expect(g.pieceMap.d6).toBe(5);
+    expect(g.pieceMap.d5).toBeUndefined();
+  });
+
   it('flagging against a bare king is a draw', () => {
     const g = new BattleGame('4k3/8/8/8/8/8/8/4K2Q w - - 0 1', { e8: 2, e1: 1, h1: 3 });
     g.start(0);

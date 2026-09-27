@@ -64,7 +64,10 @@ The chosen pieces **auto-assemble**: they walk (animated, about 2 seconds) to th
 
 - **Rules:** standard FIDE chess, including en passant, castling, promotion, and all draw rules (stalemate, threefold repetition, 50-move rule, insufficient material).
 - **Clock (Decided):** **5 minutes + 3-second increment** per side. The whole battle lasts under ~13 minutes.
-- **Promotion:** the player chooses queen, Elephant, bishop or knight. **The promoted piece is permanent**: after the battle it lives on in the world as that piece. Winning a promotion is a real reward.
+- **Promotion (Decided after playtesting):** the player chooses queen, Elephant, bishop or knight, and **it lasts this battle only**. The pawn walks out of the battle a pawn again.
+  - **Why:** permanent promotions let one lucky battle mint queens that no palace paid for, which bypasses the economy.
+  - **On the board:** a promoted pawn is drawn as the pawn inside a glowing, see-through spirit of its new piece, with a few sparkles, like a pawn holding a magic artifact that lasts one battle (`art/assets/ascended.mjs`). The spirit's shape shows how it moves, and hovering names it ("Pawn, fighting as a queen for this battle only").
+- **En passant** works as in chess. The board marks the en passant square as a capture.
 - **Resign** and **offer draw** are available.
 - **Disconnects:** if a player is disconnected for 20 seconds, the **AI takes over** at that player's rating ([TECH.md](../TECH.md) T10) and hands control back when they reconnect. If the defender is offline at the start, the AI plays from move 1.
 - **Chat:** emotes only, to avoid moderation load. Full chat can come later.

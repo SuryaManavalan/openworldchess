@@ -7,7 +7,7 @@ import {
 } from '@owc/shared';
 import { findPath, findPathLong, newGroup, stepGroup, bestGaitMove, productionMs, richness, type GroupState } from '@owc/rules';
 import { randomBytes } from 'node:crypto';
-import { World } from './world.ts';
+import { World, SETTLED_R } from './world.ts';
 import { Battles } from './battles.ts';
 import { Routines } from './routines.ts';
 import { Wilds, type CampInfo } from './wilds.ts';
@@ -61,6 +61,10 @@ export interface GameOptions {
   /** Camps of creatures in the wilds (on unless turned off, e.g. in tests). */
   wilds?: boolean;
 }
+
+/** How often settlements clear a tree, and each building's chance to fell one then. */
+const CLEARING_EVERY_MS = 30_000;
+const CLEARING_CHANCE = 0.1;
 
 export type Alert = { kind: 'attacked' | 'battle-soon' | 'decay' | 'emperor-lost' | 'respawned' | 'info'; text: string; battleId?: number; at?: [number, number] };
 
@@ -625,6 +629,7 @@ export class Game {
     // Each node supplies one production at a time: buildings drawing from the same
     // node split its rate, so crowding one field gains nothing (safeguards.md §3).
     perf.time('wilds.tick', () => this.wilds.tick(now));
+    if (now - this.lastClearing >= CLEARING_EVERY_MS) { this.lastClearing = now; perf.time('clearing', () => this.clearing()); }
     this.nodeUsers = new Map();
     for (const b of w.buildings.values())
       if (b.owner && b.type !== 'ruin' && b.built >= 1 && !b.blocked && b.drawsFrom)
@@ -676,6 +681,28 @@ export class Game {
   }
 
   private nodeUsers = new Map<number, number>();
+  private lastClearing = Date.now();
+
+  /**
+   * Settlements slowly clear the trees around them (visuals.md §10): now and then a
+   * building fells the nearest tree right beside it. Its stump is dug out later
+   * instead of regrowing (World.regrowNodes), so towns open into clearings while
+   * the wild forest stays.
+   */
+  private clearing() {
+    const w = this.world;
+    let fells = 0;
+    for (const b of w.buildings.values()) {
+      if (fells >= 25) break;
+      if (!b.owner || b.type === 'ruin' || b.type === 'camp' || b.built < 1) continue;
+      if (Math.random() >= CLEARING_CHANCE) continue;
+      const trees = w.nodesNear(b.x, b.y, b.size, SETTLED_R).filter((n) => n.kind === 'tree' && n.remaining > 0);
+      if (!trees.length) continue;
+      const n = trees.reduce((a, c) => (distToRect(a.x, a.y, b.x, b.y, b.size) <= distToRect(c.x, c.y, b.x, b.y, b.size) ? a : c));
+      w.drawNode(n, n.remaining, this.now);
+      fells++;
+    }
+  }
   /** Drifting pieces that haven't gotten closer to their king, in drift steps. */
   private driftStuck = new Map<number, number>();
   private strayRoutedAt = new Map<number, number>();

@@ -4,7 +4,7 @@ import { Chess, type Square } from 'chess.js';
 import { FACTIONS, creatureName, type BattlePublic, type PieceKind } from '@owc/shared';
 import { commands, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
-import { creatureUrl, pieceUrl } from '../game/textures.ts';
+import { ascendedUrl, creatureUrl, pieceUrl } from '../game/textures.ts';
 import { ROLE_NAME } from './Inspect.tsx';
 import { audio } from '../audio/audio.ts';
 
@@ -62,6 +62,8 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
   useEffect(() => { if (myTurn && myClock < 10_000 && myClock > 0 && Math.floor(myClock / 1000) !== Math.floor((myClock + 100) / 1000)) audio.lowClock(); }, [myClock, myTurn]);
 
   const legalFrom = useMemo(() => (sel ? chess.moves({ square: sel as Square, verbose: true }).map((m) => m.to) : []), [sel, chess]);
+  // En passant lands on an empty square but captures: show it as a capture.
+  const epTargets = useMemo(() => (sel ? chess.moves({ square: sel as Square, verbose: true }).filter((m) => m.flags.includes('e')).map((m) => m.to as string) : []), [sel, chess]);
   const inCheckSq = useMemo(() => {
     if (!chess.inCheck()) return null;
     for (let f = 0; f < 8; f++) for (let r = 1; r <= 8; r++) { const sq = FILES[f] + r; const p = chess.get(sq as Square); if (p && p.type === 'k' && p.color === chess.turn()) return sq; }
@@ -98,6 +100,8 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
     const pid = battle.pieceMap[sq];
     const emperor = !!(pid && mirror.pieces.get(pid)?.emperor);
     const wild = mirror.players.get(white ? battle.white.playerId : battle.black.playerId)?.wild;
+    // A promoted pawn wears its new piece like a borrowed spirit, for this battle only.
+    if (pid != null && type !== 'p' && battle.promoted?.includes(pid)) return ascendedUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, wild);
     if (wild) return creatureUrl(wild, type.toUpperCase() as PieceKind);
     return pieceUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, emperor);
   };
@@ -105,9 +109,11 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
   // Creatures glow faintly in their faction's color, so they never blend with your pieces.
   const wildOf = (color: string) => mirror.players.get(color === 'w' ? battle.white.playerId : battle.black.playerId)?.wild;
   // Creatures are named on hover, so nobody wonders what a Wolf Rider does.
-  const pieceTitle = (type: string, color: string) => {
+  const pieceTitle = (type: string, color: string, sq: string) => {
     const wild = mirror.players.get(color === 'w' ? battle.white.playerId : battle.black.playerId)?.wild;
     const kind = type.toUpperCase() as PieceKind;
+    const pid = battle.pieceMap[sq];
+    if (pid != null && type !== 'p' && battle.promoted?.includes(pid)) return `${wild ? creatureName(wild, 'P') : 'Pawn'}, fighting as a ${ROLE_NAME[kind].toLowerCase()} for this battle only`;
     return wild ? `${creatureName(wild, kind)} (${ROLE_NAME[kind]})` : undefined;
   };
 
@@ -135,8 +141,8 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
           }}>
           {f === 0 && <span className="coord r">{sq[1]}</span>}
           {rk === 7 && <span className="coord f">{sq[0]}</span>}
-          {legalFrom.includes(sq as Square) && <span className={p ? 'hint cap' : 'hint'} />}
-          {p && <img src={pieceImg(p.type, p.color, sq)} className={dragging ? 'ghosted' : wildOf(p.color) ? 'wild' : ''} style={wildOf(p.color) ? { ['--glow' as string]: FACTIONS[wildOf(p.color)!]?.art.accent } : undefined} draggable={false} alt="" title={pieceTitle(p.type, p.color)} />}
+          {legalFrom.includes(sq as Square) && <span className={p || epTargets.includes(sq) ? 'hint cap' : 'hint'} />}
+          {p && <img src={pieceImg(p.type, p.color, sq)} className={dragging ? 'ghosted' : wildOf(p.color) ? 'wild' : ''} style={wildOf(p.color) ? { ['--glow' as string]: FACTIONS[wildOf(p.color)!]?.art.accent } : undefined} draggable={false} alt="" title={pieceTitle(p.type, p.color, sq)} />}
         </div>,
       );
     }

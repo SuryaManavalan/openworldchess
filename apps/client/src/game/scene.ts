@@ -5,7 +5,7 @@ import { CHUNK, REACH, cheb, chunkKey, key, type Building, type NodeState, type 
 import { biomeAt, hash01 } from '@owc/worldgen';
 import { Chess } from 'chess.js';
 import type { Mirror, MoveEvent } from '@owc/client-core';
-import { buildingTexture, campTexture, creatureTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
+import { ascendedTexture, buildingTexture, campTexture, creatureTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
 import { nodeArt } from './biomeArt.ts';
 import { paintChunk, paintChunkFar, terrainCodes, biomeCodes, textureFrom, TPX, FAR_TPX } from './terrain.ts';
 import { Fx } from './fx.ts';
@@ -818,7 +818,9 @@ export class Scene {
         // A camp of the wilds fights as its creatures.
         const wild = m.players.get(white ? b.white.playerId : b.black.playerId)?.wild;
         const kind = pc.type.toUpperCase() as PieceKind;
-        const tex = wild ? creatureTexture(wild, kind) : pieceTexture(kind, white ? 'light' : 'dark', white ? b.white.color : b.black.color, !!(pid && m.pieces.get(pid)?.emperor));
+        const side = white ? 'light' : 'dark', team = white ? b.white.color : b.black.color;
+        const tex = pid != null && kind !== 'P' && b.promoted?.includes(pid) ? ascendedTexture(kind, side, team, wild)
+          : wild ? creatureTexture(wild, kind) : pieceTexture(kind, side, team, !!(pid && m.pieces.get(pid)?.emperor));
         if (tex) s.texture = tex;
         const [x, y] = sq(f, r);
         const th = this.theta, wx = (x + 0.5) * S, wy = (y + 0.5) * S;
