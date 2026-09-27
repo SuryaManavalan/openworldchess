@@ -36,7 +36,7 @@ A faction also has a **minimum area rating** (the Orc Warhost needs 900, the Dra
 - **Sites** are deterministic: one potential camp per 56×56 cell, jittered like resource clusters.
   - The site's biome and area rating choose the faction, weighted by rarity and preferring the faction's first biome.
   - The camp stands 3–9 squares from a node of the kind it lives on: goblins by rock, wolves by trees, kobolds by ore, lizardfolk and frogfolk by water. A site with no such node has no camp.
-- **The wilds fill in over time.** When players first come within 220 squares of a cell, 45% of cells hold a camp. That share rises to 80% over the next 6 hours, so land people live near keeps getting wilder.
+- **The wilds fill in over time.** When players first come within 220 squares of a cell, 60% of cells hold a camp. That share rises to 85% over the next 6 hours, so land people live near keeps getting wilder.
 - **Camps appear only where players are,** never within 36 squares of a player's building or 18 of a player's piece. A camp is forgotten after 2 hours with no player king within 360 squares. A scattered camp's site stays empty for 3 hours.
 - **Awake or asleep (only what someone views is simulated):**
   - A camp is **awake** only while a person (not a bot) is viewing its area, meaning a subscribed chunk within one chunk of it.
@@ -48,9 +48,11 @@ A faction also has a **minimum area rating** (the Orc Warhost needs 900, the Dra
   - Sleeping camps aren't sent to clients.
 - **Growth: from a king and a pawn toward a full set.** A new piece joins every 4 minutes (sped up with the game's speed) in a fixed order: K, P, P, N, P, P, B, P, R, P, Q, N, B, R, P, P. It stops at the camp's size limit:
 
-  `size limit = min(16, 3 + ⌊0.75 × player buildings within 110⌋ + ⌊age / 40 min⌋ + strength bonus)`
+  `size limit = min(16, 6 + ⌊0.75 × player buildings within 110⌋ + ⌊age / 40 min⌋ + strength bonus)`
 
-- **Stronger players meet bigger bands.** The strength bonus is one piece per 120 rating above 900 (up to 8), for the best-rated player with a king within 220 squares. A new camp also *starts* with that many extra pieces. A 1000-rated newcomer meets a king and a pawn; a 1500-rated player meets bands of 7 that grow to full sets.
+  A new camp starts with 3 to 5 pieces (a king and pawns, then a knight), plus the strength bonus. If the picked faction's resource isn't near a site, another faction of that biome that fits camps there instead. New sites are checked on a budget: 10 every 5 seconds, **online people's lands first**, with bots' lands getting what's left.
+
+- **Stronger players meet bigger bands.** The strength bonus is one piece per 120 rating above 900 (up to 8), for the best-rated player with a king within 220 squares. A new camp also *starts* with that many extra pieces. A 1000-rated newcomer meets bands of 3–5 that grow to 6 or more; a 1500-rated player meets bands of 7–9 that grow to full sets.
 
   So the more you build near a camp, the fuller the hordes around you become, and an old camp in the deep wilds eventually fills out too.
 - **Rating: starts below the area's rating and grows into it.** `rating = areaElo − 320 × (1 − size / 16)`. A two-piece camp in 1000 land plays at 740; a full set plays at the area's rating.

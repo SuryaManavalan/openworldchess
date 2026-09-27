@@ -25,8 +25,8 @@ import type { Game, PlayerRec } from './game.ts';
 /** One potential camp per cell of this many squares. */
 export const CAMP_CELL = 56;
 /** Share of cells with a camp when players first arrive, rising to the most after CELL_FILL_MS. */
-const CELL_CHANCE = 0.45;
-const CELL_CHANCE_MAX = 0.8;
+const CELL_CHANCE = 0.6;
+const CELL_CHANCE_MAX = 0.85;
 const CELL_FILL_MS = 6 * 60 * 60_000;
 /** Camps appear within this distance of a player's king... */
 const SPAWN_NEAR = 220;
@@ -128,22 +128,28 @@ export class Wilds {
     // Most at home in its first biome; rarer factions are picked less often.
     const weight = (f: Faction) => RARITY_WEIGHT[f.rarity] * (f.biomes[0] === biome ? 1.6 : 1);
     let pick = r() * options.reduce((s, f) => s + weight(f), 0);
-    let faction = options[0];
-    for (const f of options) { pick -= weight(f); if (pick < 0) { faction = f; break; } }
-    // Camps sit by what they live on: a goblin camp by rock, wolves by trees.
-    let anchor: [number, number] | null = null;
-    if (faction.near === 'water') {
-      for (let d = 1; d <= 16 && !anchor; d++)
-        for (let k = 0; k < 16 && !anchor; k++) {
-          const a = (k / 16) * Math.PI * 2, x = Math.round(cx + Math.cos(a) * d), y = Math.round(cy + Math.sin(a) * d);
-          if (terrainAt(seed, x, y) === 'water') anchor = [x, y];
-        }
-    } else {
-      const nodes = resourcesInRect(seed, cx - 16, cy - 16, cx + 16, cy + 16, [faction.near]);
-      if (nodes.length) {
-        const n = nodes.reduce((a, b) => (cheb(a.x, a.y, cx, cy) <= cheb(b.x, b.y, cx, cy) ? a : b));
-        anchor = [n.x, n.y];
+    let first = options[0];
+    for (const f of options) { pick -= weight(f); if (pick < 0) { first = f; break; } }
+    // Camps sit by what they live on: a goblin camp by rock, wolves by trees. If the
+    // picked faction's resource isn't here, another faction of this biome that fits may be.
+    const anchorFor = (f: Faction): [number, number] | null => {
+      if (f.near === 'water') {
+        for (let d = 1; d <= 16; d++)
+          for (let k = 0; k < 16; k++) {
+            const a = (k / 16) * Math.PI * 2, x = Math.round(cx + Math.cos(a) * d), y = Math.round(cy + Math.sin(a) * d);
+            if (terrainAt(seed, x, y) === 'water') return [x, y];
+          }
+        return null;
       }
+      const nodes = resourcesInRect(seed, cx - 16, cy - 16, cx + 16, cy + 16, [f.near]);
+      if (!nodes.length) return null;
+      const n = nodes.reduce((a, b) => (cheb(a.x, a.y, cx, cy) <= cheb(b.x, b.y, cx, cy) ? a : b));
+      return [n.x, n.y];
+    };
+    let faction = first, anchor = anchorFor(first);
+    for (const f of options.filter((o) => o !== first).sort((a, b) => weight(b) - weight(a))) {
+      if (anchor) break;
+      anchor = anchorFor(f); faction = f;
     }
     if (!anchor) return null;
     // A 2x2 open spot a few squares from the anchor.
@@ -202,8 +208,13 @@ export class Wilds {
     if (camps.length >= MAX_CAMPS) { this.flush(); return; }
     // New camps where players are. Cells fill in the longer players have been around.
     const seen = new Set<string>();
-    let siteBudget = 4;
-    for (const k of kings) {
+    // Worldgen for new sites costs CPU, so it's budgeted, and people come first: the
+    // kings of online players get most of it, bots' lands fill in slowly (performance.md §4).
+    const person = (k: Piece) => { const pl = g.players.get(k.owner!); return !!pl && !pl.isBot && pl.online; };
+    const ordered = [...kings.filter(person), ...kings.filter((k) => !person(k))];
+    let siteBudget = 10;
+    for (const k of ordered) {
+      if (!person(k) && siteBudget > 3) siteBudget = 3;
       const i0 = Math.floor((k.x - SPAWN_NEAR) / CAMP_CELL), i1 = Math.floor((k.x + SPAWN_NEAR) / CAMP_CELL);
       const j0 = Math.floor((k.y - SPAWN_NEAR) / CAMP_CELL), j1 = Math.floor((k.y + SPAWN_NEAR) / CAMP_CELL);
       for (let j = j0; j <= j1; j++)
@@ -263,7 +274,8 @@ export class Wilds {
     const g = this.game, w = this.w, f = s.faction;
     const id = 'w' + randomBytes(5).toString('hex');
     const areaElo = w.elo(s.x, s.y);
-    const roster = rosterOf(2 + this.strengthBonus(strength));
+    // A band, not two lost pieces: 3–5 to start, more near stronger players.
+    const roster = rosterOf(3 + Math.floor(s.roll * 5) % 3 + this.strengthBonus(strength));
     const rec: PlayerRec = {
       id, token: randomBytes(16).toString('hex'), name: f.name, color: f.art.accent, emblem: 0,
       rating: this.ratingFor(areaElo, roster.length), rd: 80, vol: 0.06, emperorId: null, shieldUntil: 0, home: [s.x, s.y],
@@ -354,7 +366,7 @@ export class Wilds {
     let dev = 0;
     for (const b of this.w.buildingsNear(info.x, info.y, 110)) if (b.owner && !this.campOf(b.owner) && b.type !== 'ruin' && b.built >= 1) dev++;
     const ageSteps = Math.floor((now - info.bornAt) / (40 * 60_000));
-    return Math.min(16, 3 + Math.floor(dev * 0.75) + ageSteps + this.strengthBonus(this.strengthNear(info.x, info.y, kings)));
+    return Math.min(16, 6 + Math.floor(dev * 0.75) + ageSteps + this.strengthBonus(this.strengthNear(info.x, info.y, kings)));
   }
 
   /** One more piece now and then, in the growth order. Asleep, only the roster grows. */

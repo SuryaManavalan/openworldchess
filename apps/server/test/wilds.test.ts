@@ -28,14 +28,18 @@ describe('wilds', () => {
     expect(found).toBeGreaterThan(20);
   });
 
-  it('camps appear near players with a king and a pawn, in creature form', () => {
+  it('camps appear near players as small bands, in creature form', () => {
     join('Ranger');
     tick();
     const camps = game.wilds.camps();
     expect(camps.length).toBeGreaterThan(0);
     for (const c of camps) {
       const pieces = game.wilds.piecesOf(c);
-      expect(pieces.map((p) => p.kind).sort().join('')).toBe('KP');
+      // A band: a king and pawns (and maybe a knight), 3–5 strong for a new player.
+      const kinds = pieces.map((p) => p.kind);
+      expect(kinds.filter((k) => k === 'K').length).toBe(1);
+      expect(kinds.length).toBeGreaterThanOrEqual(3);
+      expect(kinds.length).toBeLessThanOrEqual(5);
       expect(pieces.every((p) => p.wild === c.wild!.faction)).toBe(true);
       const b = game.world.buildings.get(c.wild!.buildingId)!;
       expect(b.type).toBe('camp');
