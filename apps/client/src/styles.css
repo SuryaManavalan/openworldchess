@@ -333,3 +333,38 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .layout-phone .topbar .top-actions .icon-btn { width: 36px; height: 36px; }
 .layout-phone .topbar .top-actions .icon-btn[aria-label="Place a flag"] { display: none; }
 .layout-phone .topbar .stats { min-width: 0; overflow: hidden; }
+
+/* Civilization showcase (cosmetics.md §5) */
+.showcase { position: absolute; right: 16px; bottom: calc(110px + var(--safe-bottom)); width: min(360px, calc(100vw - 24px)); background: var(--panel-2); border: 1px solid var(--line); border-top: 4px solid var(--civ); border-radius: 18px; overflow: hidden; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(243, 210, 122, 0.12); animation: showcase-in 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2); z-index: 55; pointer-events: auto; }
+.showcase.leaving { animation: showcase-out 0.25s ease-in forwards; }
+.showcase .x { position: absolute; top: 8px; right: 8px; z-index: 2; background: rgba(0, 0, 0, 0.35); border: 0; color: #fff; width: 26px; height: 26px; border-radius: 99px; display: grid; place-items: center; cursor: pointer; }
+.showcase .stage { position: relative; height: 150px; overflow: hidden; background: radial-gradient(120% 90% at 50% 100%, color-mix(in srgb, var(--civ) 55%, #23211f) 0%, #1b1917 70%); }
+.showcase .rays { position: absolute; inset: -60%; background: repeating-conic-gradient(from 0deg, rgba(243, 210, 122, 0.10) 0deg 8deg, transparent 8deg 22deg); animation: rays 22s linear infinite; }
+.showcase .palace { position: absolute; left: 50%; bottom: 20px; width: 118px; transform: translateX(-72%); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45)); animation: rise 0.7s 0.1s both cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.showcase .temple { position: absolute; left: 50%; bottom: 26px; width: 84px; transform: translateX(28%); filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45)); animation: rise 0.7s 0.2s both cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.showcase .pieces { position: absolute; left: 0; right: 0; bottom: 2px; display: flex; justify-content: center; gap: 2px; }
+.showcase .pieces img { width: 46px; height: 46px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5)); animation: pop 0.45s both cubic-bezier(0.2, 0.9, 0.3, 1.5), bob 3.2s 1s ease-in-out infinite; }
+.showcase .pieces img:nth-child(2) { animation-duration: 0.45s, 3.6s; }
+.showcase .pieces img:nth-child(3) { animation-duration: 0.45s, 2.9s; }
+.showcase .spark { position: absolute; width: 10px; height: 10px; background: #fff6c9; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: twinkle 2.4s ease-in-out infinite; }
+.showcase .s1 { left: 16%; top: 22%; } .showcase .s2 { right: 18%; top: 14%; animation-delay: 0.8s; width: 7px; height: 7px; } .showcase .s3 { right: 30%; top: 48%; animation-delay: 1.5s; width: 6px; height: 6px; }
+.showcase .new { position: absolute; left: 10px; top: 10px; background: #95b957; color: #23211f; font-weight: 900; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; }
+.showcase .copy { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; }
+.showcase .kicker { font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--civ) 45%, #f3d27a); }
+.showcase .copy b { font-size: 19px; line-height: 1.2; }
+.showcase .copy .muted { font-size: 13px; line-height: 1.4; }
+.showcase .row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.showcase .btn.gold { background: linear-gradient(180deg, #f7d774, #e3b23c); color: #23211f; font-weight: 900; padding: 9px 18px; border-radius: 99px; box-shadow: 0 4px 0 #a97f1f, 0 8px 18px rgba(227, 178, 60, 0.35); }
+.showcase .price { display: inline-flex; align-items: center; gap: 5px; font-weight: 900; color: #f3d27a; }
+.layout-phone .showcase { right: 12px; left: 12px; width: auto; bottom: calc(150px + var(--safe-bottom)); }
+@keyframes showcase-in { from { opacity: 0; transform: translateY(24px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes showcase-out { to { opacity: 0; transform: translateY(16px) scale(0.97); } }
+@keyframes rays { to { transform: rotate(360deg); } }
+@keyframes rise { from { opacity: 0; translate: 0 26px; } to { opacity: 1; translate: 0 0; } }
+@keyframes pop { from { opacity: 0; transform: translateY(14px) scale(0.6); } to { opacity: 1; transform: none; } }
+@keyframes bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -3px; } }
+@keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); } 50% { opacity: 1; transform: scale(1) rotate(45deg); } }
+/* The shop scrolls to a showcased civilization and makes it glow. */
+.shop .civ.focus { box-shadow: 0 0 0 2px var(--civ), 0 0 24px color-mix(in srgb, var(--civ) 55%, transparent); animation: focus-glow 1.6s ease-in-out 2; }
+@keyframes focus-glow { 50% { box-shadow: 0 0 0 3px var(--civ), 0 0 38px var(--civ); } }
+.layout-desktop .showcase { right: 330px; bottom: 24px; }

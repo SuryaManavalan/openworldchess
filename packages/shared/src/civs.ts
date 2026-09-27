@@ -10,13 +10,17 @@ export interface Civ {
   price: number;
   /** Shop card accent. */
   color: string;
+  /** Showcase line: the invitation (cosmetics.md §5). */
+  pitch: string;
+  /** Recently added: shown first, with a New badge. */
+  isNew?: boolean;
 }
 
 export const CIVS: Civ[] = [
-  { id: 'dravidian', name: 'Dravidian', tagline: 'Granite gopurams, temple bells and war elephants in gold nettipattam.', price: 500, color: '#c8742e' },
-  { id: 'roman', name: 'Roman', tagline: 'Marble porticoes, legionaries and an emperor crowned in gold laurel.', price: 500, color: '#8e2f3f' },
-  { id: 'chinese', name: 'Chinese', tagline: 'Vermilion halls under golden roofs, pagodas and phoenix crowns.', price: 500, color: '#c23b2b' },
-  { id: 'egyptian', name: 'Egyptian', tagline: 'Pylon gates, obelisks and a pharaoh in the double crown.', price: 500, color: '#2f6fa8' },
+  { id: 'dravidian', name: 'Dravidian', tagline: 'Granite gopurams, temple bells and war elephants in gold nettipattam.', price: 500, color: '#c8742e', pitch: 'Raise gopurams over your cities' },
+  { id: 'roman', name: 'Roman', tagline: 'Marble porticoes, legionaries and an emperor crowned in gold laurel.', price: 500, color: '#8e2f3f', pitch: 'Rule as Rome ruled' },
+  { id: 'chinese', name: 'Chinese', tagline: 'Vermilion halls under golden roofs, pagodas and phoenix crowns.', price: 500, color: '#c23b2b', pitch: 'Build under golden roofs' },
+  { id: 'egyptian', name: 'Egyptian', tagline: 'Pylon gates, obelisks and a pharaoh in the double crown.', price: 500, color: '#2f6fa8', pitch: 'Reign as a pharaoh' },
 ];
 
 /**

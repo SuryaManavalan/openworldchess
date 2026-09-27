@@ -64,3 +64,11 @@ Civilizations cost **500 Crowns**. Crowns come in packs through Stripe:
    Then `sudo systemctl restart owc-server`. Until both are set, the shop shows "opens soon" and nothing can be charged.
 5. **Check it:** buy a pack in test mode with card `4242 4242 4242 4242`; the Crowns should arrive within seconds.
 6. **Refunds and disputes** are handled in the Stripe dashboard. To take back Crowns after a refund, edit the player record (`crowns`), for now.
+
+## 5. The showcase
+
+Now and then, one civilization appears in a corner card with the player's own empire already wearing it (palace, temple and four pieces in their color), a line of invitation, and **Take a look**, which opens the shop scrolled to that civilization and makes its card glow (`apps/client/src/ui/CivShowcase.tsx`).
+
+- **Rarely:** first after 20 minutes of active play (tab visible), then at most every 45 minutes. It never appears during a battle or onboarding, with a sheet or card open, or once the player owns every civilization. Closing it just lets it go until next time.
+- **One at a time,** rotating, and skipping ones the player owns. A civilization marked `isNew` in `CIVS` is shown first, once. So future civilizations get their moment automatically: add art, add a `CIVS` entry with a `pitch`, and set `isNew`.
+- **Checking it:** `?showcase` in the URL shows one right away.

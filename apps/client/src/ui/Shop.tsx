@@ -4,7 +4,7 @@
 // that style, and unlocking with Crowns you have is one tap. Only if you're
 // short does the Crown packs step appear, and only a pack button leaves the
 // game, for Stripe's own checkout page (Apple Pay, Google Pay and cards).
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CIVS, CROWN_PACKS, type Civ, type PieceKind } from '@owc/shared';
 import { commands, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
@@ -40,6 +40,16 @@ export function Shop() {
   const [confirm, setConfirm] = useState<Civ | null>(null);
   const [packs, setPacks] = useState<{ need?: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Opened from the showcase: scroll to that civilization and make it glow.
+  const listRef = useRef<HTMLDivElement>(null);
+  const focus = ui.shopFocus;
+  useEffect(() => {
+    if (!focus) return;
+    const el = listRef.current?.querySelector(`[data-civ="${focus}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const t = setTimeout(() => useUI.getState().set({ shopFocus: null }), 4000);
+    return () => clearTimeout(t);
+  }, [focus]);
 
   const unlock = async (c: Civ) => {
     setBusy(c.id);
@@ -86,7 +96,7 @@ export function Shop() {
         <button className="balance" onClick={() => setPacks({})}><Coin /> {crowns.toLocaleString()} <span className="plus">+</span></button>
       </div>
       <p className="muted">Restyle every piece and building in your empire. Everyone who visits your lands sees it. Looks only: it never changes how anything plays.</p>
-      <div className="civs">
+      <div className="civs" ref={listRef}>
         <div className={`civ ${!self?.civ ? 'on' : ''}`}>
           <Preview />
           <div className="info"><b>Classic</b><span className="muted">The original look.</span></div>
@@ -95,7 +105,7 @@ export function Shop() {
         {CIVS.map((c) => {
           const has = owned.has(c.id), inUse = self?.civ === c.id;
           return (
-            <div key={c.id} className={`civ ${inUse ? 'on' : ''}`} style={{ ['--civ' as string]: c.color }}>
+            <div key={c.id} data-civ={c.id} className={`civ ${inUse ? 'on' : ''} ${focus === c.id ? 'focus' : ''}`} style={{ ['--civ' as string]: c.color }}>
               <Preview civ={c.id} />
               <div className="info"><b>{c.name}</b><span className="muted">{c.tagline}</span></div>
               {has

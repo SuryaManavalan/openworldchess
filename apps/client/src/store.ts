@@ -28,6 +28,8 @@ interface UIState {
   toasts: Toast[];
   battleFocus: number | null;
   pendingAttack: { pieceIds: number[]; targetKingId: number; name: string; siege: boolean } | null;
+  /** A civilization to scroll to and highlight when the shop opens. */
+  shopFocus: string | null;
   /** Something that isn't yours, being looked at (Inspect card). */
   inspect: { piece?: number; building?: number } | null;
   layout: 'phone' | 'desktop';
@@ -64,6 +66,7 @@ export const useUI = create<UIState>((set, get) => ({
   version: 0,
   selection: [],
   inspect: null,
+  shopFocus: null,
   sheet: null,
   buildType: null,
   ghost: null,

@@ -12,6 +12,7 @@ import { BattleView } from './BattleView.tsx';
 import { AwayReport, Guide, SignIn, SignInNudge, Welcome } from './Onboarding.tsx';
 import { Inspect, HoverTag } from './Inspect.tsx';
 import { Shop, Coin } from './Shop.tsx';
+import { CivShowcase } from './CivShowcase.tsx';
 import { PerfOverlay, perfOn } from './PerfOverlay.tsx';
 import { Markers } from './Markers.tsx';
 import { Icon, type IconName } from './Icon.tsx';
@@ -40,6 +41,7 @@ export function HUD() {
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
       <AwayReport />
       <SignInNudge />
+      <CivShowcase />
       <SignIn />
       <Welcome />
       {ui.watching && <div className="watch-pill">Watching your lands · touch to take over</div>}
