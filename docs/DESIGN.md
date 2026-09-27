@@ -74,21 +74,36 @@ An online multiplayer "open world" chess game. The world is a chessboard that go
   - Example: a city holding 3 queens and 20 pawns fields its king, 1 queen, and 8 pawns.
 - **The cooldown locks both the winning army and the attacked city,** so the same city can't be hit again right away.
 - **Losing as the attacker works the same way as losing as the defender.** If the attacker's king falls, their surviving pieces flee, and their reserves (pieces they brought that weren't in the battle) convert to the defender.
+- **Battle clock:** 5 minutes + 3 seconds per move.
+- **An Emperor kill takes only what's nearby:** the winner takes the battle's pieces and that city. The loser's other holdings become **masterless**, and any king can claim them. (See [progression.md](specs/progression.md) §3.)
 - **Reserves let you chain battles.** An army that travels with spare pieces (for example 3 kings and 3 queens) can start battle after battle, because the spares cover what was lost.
 
 ### 3. Spectating a battle from the open world
 
 - If a third player comes across a battle in progress, it works like **Wizard101**: the battle is visible, but they can't really interact with it or do anything about it.
 
-## Open questions
+## Direction set later (your words, 2026-09-26)
 
-- **Tick model.** Does the open world run in real time, or in discrete server ticks where every piece takes one step per tick? Ticks fit chess naturally and are much easier to keep in sync across players.
-- **Battle trigger.** What starts a battle: moving onto an enemy square, getting within some radius, or an explicit "attack" command? Can a player decline?
-- **Where the battle board is.** Is it a separate 8x8 instance, or a patch of the real world board that gets sealed off (which would fit the Wizard101 bubble)?
-- **The pre-battle countdown.** During the ~60 second warning, can the defender move reinforcements into the city, or pull valuable pieces out? Can the attacker still back out?
-- **Reserves and cooldown.** How exactly do the attacker's reserves cover their losses so they can skip the cooldown?
-- **Offline defense.** What happens when a city is attacked while its owner is offline or AFK? Options: an AI (engine) defender, protection windows, or scheduled sieges. This matters a lot for an MMO.
-- **Pawn promotion.** Where does promotion happen: only on the battle board, or also in the open world?
-- **Captures in the open world.** Can pieces capture each other outside of a battle?
-- **Elo zones.** Is a zone's elo just where a player spawns or respawns, or does it also restrict or reward being there?
-- **Emperor vs. city kings.** Can the Emperor serve as a city's anchor king, or is it separate from city kings?
+- **High elo should draw players in.** Players should move deeper slowly, building villages and cities further in, and even moving their Emperor settlement to settlement toward the heart of their empire. That's dangerous. It must **not** be a railroaded feature. It works the same way as selecting a group of pieces and dragging them somewhere. *"We don't want to bake features in, we want gameplay to emerge from first principles."* See [PRINCIPLES.md](PRINCIPLES.md) and [migration.md](specs/migration.md).
+- **Mobile-friendly and desktop-friendly from day 0.** Use intuitive native mobile gestures, interactions and placements for everything; don't just scale down the desktop version. See [ux.md](specs/ux.md).
+- **AI players from day 0.** Bots that can't be told apart from real players, for testing and for early players before the player base is big. Phase them out slowly as more people join. See [bots.md](specs/bots.md).
+- **A world that's alive.** Beautiful, eye-catching animation that's almost hypnotic to watch, *"brain rot style"*. Pieces in a city walk around and live their own lives. It's the small touches someone catches and thinks "wow, this world is alive." See [visuals.md](specs/visuals.md).
+- **Sound as the cherry on top.** It adds to the living, breathing world; every interaction should feel satisfying, with *"almost casino-like noises"*. It should be immersive and match the world, so players feel they've entered it. See [audio.md](specs/audio.md).
+
+## Open questions → proposals
+
+Each of these now has a proposed answer in the specs. [ROADMAP.md](ROADMAP.md) lists the ones that need your sign-off.
+
+| Question | Proposal | Where |
+|---|---|---|
+| Tick model | Discrete world turns (600ms); every piece moves at most once per turn | [TECH.md](TECH.md) T7, [movement.md](specs/movement.md) §1 |
+| Battle trigger | An explicit attack order within 3 squares; the defender can't decline (except by resigning a field battle during its countdown) | [battle.md](specs/battle.md) §2 |
+| Where the battle board is | An 8×8 arena drawn over the world at the engagement point and sealed under a dome; the terrain underneath is ignored | [battle.md](specs/battle.md) §3 |
+| Pre-battle countdown | The city roster freezes; the attacker may cancel (and gets a 2-minute cooldown) | [battle.md](specs/battle.md) §2 |
+| Resources | Your idea: buildings draw from resource nodes near them. There's no gathering and no stockpile | [economy.md](specs/economy.md) §1 |
+| Reserves and cooldown | The cooldown locks only the pieces that fought, so spare pieces around a fresh king can attack again right away | [battle.md](specs/battle.md) §8 |
+| Offline defense | Stockfish plays for you at your rating; spawn shield for new players | [battle.md](specs/battle.md) §5, [progression.md](specs/progression.md) §4 |
+| Pawn promotion | Only in battles, and it's permanent afterward | [battle.md](specs/battle.md) §5 |
+| Captures in the open world | None; captures happen only in battles | [movement.md](specs/movement.md) §3 |
+| Elo zones | They set spawn and respawn location, AI strength and resource richness; they never block movement | [world.md](specs/world.md) §4 |
+| Emperor vs. city kings | The Emperor is a king: it anchors whatever it stands near. There is no capital rule | [economy.md](specs/economy.md) §2, [progression.md](specs/progression.md) §3 |
