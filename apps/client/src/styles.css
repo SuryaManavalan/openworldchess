@@ -200,3 +200,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .away-list li { margin-bottom: 6px; }
 .away-list li.attacked, .away-list li.emperor-lost { color: #ffb0a6; }
 .layout-phone .alerts { top: calc(104px + var(--safe-top)); }
+
+.badge.guest { border: 0; background: rgba(227, 178, 60, 0.2); color: #f3d27a; cursor: pointer; }
+.field-error { color: #ffb0a6 !important; font-weight: 800; }
+.welcome .note { color: #f3d27a; font-weight: 800; }
+a.btn { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.btn.google { background: #fff; color: #2b2622; }
+
+.topbar .me b { max-width: 34vw; }
+.layout-phone .topbar { gap: 8px; }
+.layout-phone .topbar .me b { max-width: 26vw; }
+.layout-phone .topbar .me .muted { display: none; }
+.layout-phone .topbar .stats { gap: 7px; font-size: 14px; }

@@ -79,6 +79,10 @@ export interface PlayerPublic {
 }
 
 export interface PlayerSelf extends PlayerPublic {
+  /** Not signed in: the empire falls this long after the player leaves. */
+  guest: boolean;
+  guestGraceMs: number;
+  email?: string;
   emperorId: number | null;
   shieldUntil: number;
   home: [number, number];

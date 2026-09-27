@@ -49,7 +49,7 @@ art                   code-generated SVG art (used by the client at runtime)
 | movement.md | World turns; all six gaits (knights jump, pawns turn in place, sliders cover up to 8); troops with chess-line formation, the lead point and the waiting rule; A*; drifting toward the nearest king when out of reach; the one reach rule |
 | battle.md | Attack orders and engagement range; 60s siege / 15s field countdowns with frozen rosters; calling off an attack (with cooldown); surrendering during the countdown; the arena sealed in the world; set picking (nearest pieces, bishop square colors, castling rights); 5+3 clocks; AI takeover after 20s offline; promotion kept permanently; aftermath (deaths, fleeing, conversions, building transfer, Emperor fall); cooldowns from regeneration time; ratings when 75% or more of moves were made by humans; spectating |
 | economy.md | Adjacency production; construction drawn from within 10 squares; production rate scaled by richness; the anchor rule with grace and decay to ruins; population cap; palace modes; alternating bishop colors; wheat and trees regrow, stone and gold run out |
-| progression.md | Guest accounts with a token; Glicko-2; Emperor fall with option (b) (masterless holdings claimed by nearby kings, vanishing after 2h); respawn at a lower-elo area; spawn shield; "While you were away" report |
+| progression.md | Unique usernames; guest empires fall 15 minutes after the player leaves unsigned (name freed); Google sign-in links the empire and works across devices;  Glicko-2; Emperor fall with option (b) (masterless holdings claimed by nearby kings, vanishing after 2h); respawn at a lower-elo area; spawn shield; "While you were away" report |
 | migration.md | Emergent. Bots expand toward higher elo using only richness utility |
 | ux.md | Phone and desktop layouts; touch gestures (pan, pinch, two-finger twist rotate, long-press lasso, double-tap group, drag-to-command, two-step tap-and-Move); mouse and keyboard (box select, right-click command, wheel zoom, WASD, Q/E, H, S, B, Esc); bottom sheets; troop bar; attack confirmation; alerts with jump-to; placement preview with its work area and reasons; welcome; guide; PWA manifest and service worker; haptics where supported |
 | visuals.md | 100 BPM heartbeat; gait animations (knight arc, queen glide, elephant stomp, pawn step and about-face); idle breathing; idle routines (pawn drill, knight's circuit, bishop procession, elephant patrol, queen survey, king pacing); births; construction; nodes shrinking; decay tint; wind field (trees and wheat sway in gusts); birds that scatter from troops; water glints; day and night with lit windows and lanterns; worn paths from traffic; plaza ground; selection pop; path preview; ripples; dust; conversion wave; checkmate flood; watch mode |
@@ -59,6 +59,10 @@ art                   code-generated SVG art (used by the client at runtime)
 Additions not in the original specs:
 - **Practice battles vs AI.** Full sets, unrated, no world effect. Useful onboarding, and a battle-UI test bed.
 - **Pause production on any building.** Found by the bot simulation: houses otherwise fill the population cap and starve stables and barracks.
+
+## Production
+
+Deployed on AWS: Lightsail ($7/mo) behind CloudFront, with DNS in Route 53. See [deploy/README.md](../deploy/README.md).
 
 ## Deviations
 
@@ -78,4 +82,4 @@ Additions not in the original specs:
 - Rare moments, crowds drifting toward battle domes, weather (visuals.md).
 - Recorded audio assets (all audio is synthesized, as planned for day 0).
 - Sharding (T12); a guaranteed walkable path between chunks (world.md §2, step 6).
-- Lichess OAuth and rating import.
+- Lichess OAuth and rating import. (Google sign-in is built.)

@@ -12,10 +12,17 @@ export const conn = new Connection({
   url: `${proto}://${location.host}/play`,
   WebSocket: WebSocket as never,
   token: readToken(),
-  name: (() => { try { return localStorage.getItem('owc.name') ?? undefined; } catch { return undefined; } })(),
+  autoStart: false,
   onToken: (t) => { try { localStorage.setItem(tokenKey, t); } catch { /* ignore */ } },
   onStatus: (s) => useUI.getState().set({ status: s }),
+  onHelloError: (msg, code) => {
+    // A saved token that no longer works means the guest empire fell.
+    try { if (localStorage.getItem(tokenKey)) { localStorage.removeItem(tokenKey); useUI.getState().set({ welcomeNote: 'Your last empire fell while you were away. Choose a name to rise again.' }); } } catch { /* ignore */ }
+    useUI.getState().set({ needName: true, nameError: code === 'need-name' ? null : msg });
+  },
 });
+// Returning players reconnect at once; new players choose a name first.
+if (readToken()) conn.start(); else useUI.getState().set({ needName: true });
 export const mirror = conn.mirror;
 
 /** The commands (ux.md §9): everything input produces goes through these. */

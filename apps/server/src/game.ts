@@ -23,6 +23,11 @@ export interface PlayerRec {
   shieldUntil: number;
   home: [number, number];
   isBot: boolean;
+  /** Google account id once signed in (then the empire never falls for being offline). */
+  googleSub?: string;
+  email?: string;
+  /** When a guest's last session ended. */
+  leftAt?: number;
   createdAt: number;
   lastSeen: number;
   online: boolean;
@@ -43,8 +48,6 @@ export interface GameOptions {
 
 export type Alert = { kind: 'attacked' | 'battle-soon' | 'decay' | 'emperor-lost' | 'respawned' | 'info'; text: string; battleId?: number; at?: [number, number] };
 
-const NAMES_A = ['Iron', 'Quiet', 'Grey', 'Amber', 'North', 'Old', 'Stone', 'Ash', 'River', 'Oak', 'Vale', 'Frost', 'Ember', 'Moor'];
-const NAMES_B = ['Rook', 'Crown', 'Gambit', 'Fianchetto', 'Warden', 'Bishop', 'Marshal', 'Squire', 'Tempo', 'Vanguard', 'Castle', 'Zugzwang'];
 
 export class Game {
   world: World;
@@ -138,22 +141,45 @@ export class Game {
     return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), online: p.online };
   }
   selfPlayer(p: PlayerRec): PlayerSelf {
-    return { ...this.publicPlayer(p), emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home };
+    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home };
   }
 
-  join(token: string | undefined, name: string | undefined, isBot = false): PlayerRec {
+  isGuest(p: PlayerRec) { return !p.googleSub && !p.isBot; }
+
+  /** Names are unique, ignoring case. Returns an error message or null. */
+  checkName(name: string, except?: PlayerRec): string | null {
+    if (!/^[\p{L}\p{N}_ .-]{2,20}$/u.test(name) || !/[\p{L}\p{N}]/u.test(name)) return 'Use 2–20 letters, numbers, spaces, dots, dashes or underscores';
+    const lower = name.toLowerCase();
+    for (const o of this.players.values()) if (o !== except && o.name.toLowerCase() === lower) return 'That name is taken';
+    return null;
+  }
+
+  /** Guests' empires fall this long after they leave (overridable for tests). */
+  guestGraceMs = 15 * 60_000;
+
+  join(token: string | undefined, name: string | undefined, isBot = false): PlayerRec | { error: string; code: 'need-name' | 'name-taken' | 'bad-name' } {
     const existing = token ? this.tokens.get(token) : undefined;
     if (existing) {
       const p = this.players.get(existing)!;
       if (!this.kingsOf(p.id).length && p.emperorId == null) this.spawn(p);
       return p;
     }
+    // New players choose their own unique name (bots bring theirs).
+    name = name?.trim();
+    if (!name) return { error: 'Pick a name to start', code: 'need-name' };
+    if (isBot) { name = name.replace(/^bot:/, ''); while (this.checkName(name)) name = name.slice(0, 17) + Math.floor(Math.random() * 99); }
+    const bad = this.checkName(name);
+    if (bad) return { error: bad, code: bad.includes('taken') ? 'name-taken' : 'bad-name' };
+    return this.create(name, isBot);
+  }
+
+  create(name: string, isBot = false, googleSub?: string, email?: string): PlayerRec {
     const id = randomBytes(6).toString('hex');
     const used = new Set([...this.players.values()].map((p) => p.color));
     const color = TEAM_COLORS.find((c) => !used.has(c)) ?? TEAM_COLORS[this.players.size % TEAM_COLORS.length];
     const p: PlayerRec = {
       id, token: randomBytes(16).toString('hex'),
-      name: (name?.trim() || `${NAMES_A[Math.floor(Math.random() * NAMES_A.length)]}${NAMES_B[Math.floor(Math.random() * NAMES_B.length)]}${Math.floor(Math.random() * 90 + 10)}`).slice(0, 24),
+      name: name.slice(0, 20), googleSub, email,
       color, emblem: Math.floor(Math.random() * 8), rating: 1000, rd: 350, vol: 0.06,
       emperorId: null, shieldUntil: 0, home: [0, 0], isBot, createdAt: this.now, lastSeen: this.now, online: false,
     };
@@ -410,6 +436,25 @@ export class Game {
 
     // Idle life in settlements (visuals.md §2).
     this.routines.step(record);
+  }
+
+  /**
+   * A guest who left without signing in: their empire falls. Pieces and
+   * buildings become masterless (nearby kings can claim them) and the name
+   * is free again.
+   */
+  fallOfGuests(now: number) {
+    for (const p of [...this.players.values()]) {
+      if (!this.isGuest(p) || p.online || !p.leftAt || now - p.leftAt < this.guestGraceMs) continue;
+      if ([...this.battles.recs.values()].some((r) => r.pub.phase !== 'over' && (r.white.player === p.id || r.black.player === p.id))) continue;
+      for (const pc of [...this.world.pieces.values()]) if (pc.owner === p.id) this.makeMasterless(pc);
+      for (const b of this.world.buildings.values()) if (b.owner === p.id) { b.owner = null; b.unanchoredSince = now; this.world.dirtyBuildings.add(b.id); }
+      this.players.delete(p.id);
+      this.tokens.delete(p.token);
+      this.kingsByOwner.delete(p.id);
+      this.events.delete(p.id);
+      this.onPlayers();
+    }
   }
 
   makeMasterless(p: Piece) {

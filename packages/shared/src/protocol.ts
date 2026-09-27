@@ -47,7 +47,7 @@ export type ServerMsg =
   | { t: 'emote'; battleId?: number; playerId: string; id: number }
   | { t: 'away'; since: number; events: { at: number; kind: string; text: string }[] }
   | { t: 'ack'; rid: number }
-  | { t: 'err'; rid?: number; msg: string }
+  | { t: 'err'; rid?: number; msg: string; code?: 'need-name' | 'name-taken' | 'bad-name' }
   | { t: 'pong'; at: number; serverTime: number };
 
 export interface BattleSummary {

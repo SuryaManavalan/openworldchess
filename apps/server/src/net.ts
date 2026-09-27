@@ -26,10 +26,10 @@ export class Net {
 
   turnMs: number;
 
-  constructor(game: Game, server: Server, turnMs = TURN_MS) {
+  constructor(game: Game, server: Server, turnMs = TURN_MS, allow: (req: IncomingMessage) => boolean = () => true) {
     this.game = game;
     this.turnMs = turnMs;
-    const wss = new WebSocketServer({ server, path: '/play', maxPayload: 64 * 1024 });
+    const wss = new WebSocketServer({ server, path: '/play', maxPayload: 64 * 1024, verifyClient: ({ req }: { req: IncomingMessage }) => allow(req) });
     wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => this.connect(ws));
     game.onAlert = (pid, a) => { game.logEvent(pid, a.kind, a.text); this.alert(pid, a); };
     game.onPlayers = () => this.broadcastPlayers();
@@ -55,6 +55,7 @@ export class Net {
       if (s.player && ![...this.sessions].some((o) => o.player === s.player)) {
         s.player.online = false;
         s.player.lastSeen = Date.now();
+        s.player.leftAt = Date.now();
         this.game.battles.offlineSince.set(s.player.id, Date.now());
         this.broadcastPlayers();
       }
@@ -78,9 +79,11 @@ export class Net {
     const g = this.game;
     if (msg.t === 'hello') {
       if (msg.v !== PROTOCOL_VERSION) { s.ws.close(4001, 'upgrade-required'); return; }
-      const p = g.join(msg.token, msg.name, msg.name?.startsWith('bot:') ?? false);
+      const joined = g.join(msg.token, msg.name, msg.name?.startsWith('bot:') ?? false);
+      if ('error' in joined) return this.send(s, { t: 'err', msg: joined.error, code: joined.code });
+      const p = joined;
       const lastSeen = p.lastSeen;
-      if (p.isBot && p.name.startsWith('bot:')) p.name = p.name.slice(4);
+      p.leftAt = undefined;
       s.player = p;
       p.online = true; p.lastSeen = now;
       g.battles.offlineSince.delete(p.id);
@@ -113,7 +116,7 @@ export class Net {
       case 'battle.draw': g.battles.draw(p.id, msg.battleId); break;
       case 'battle.watch': s.watching.add(msg.battleId); break;
       case 'battle.unwatch': s.watching.delete(msg.battleId); break;
-      case 'profile': { const n = msg.name.trim().replace(/[^\p{L}\p{N}_ .-]/gu, ''); if (n.length >= 2 && ![...g.players.values()].some((o) => o !== p && o.name.toLowerCase() === n.toLowerCase())) { p.name = n; this.broadcastPlayers(); this.sendMine(s); } else this.send(s, { t: 'err', msg: 'That name is taken' }); break; }
+      case 'profile': { const n = msg.name.trim(); const bad = g.checkName(n, p); if (!bad) { p.name = n; this.broadcastPlayers(); this.sendMine(s); } else this.send(s, { t: 'err', msg: bad }); break; }
       case 'practice': { const e = g.battles.practice(p.id); if (e) this.send(s, { t: 'err', msg: e }); break; }
       case 'emote': this.broadcast({ t: 'emote', battleId: msg.battleId, playerId: p.id, id: msg.id }); break;
     }

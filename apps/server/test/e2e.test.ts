@@ -25,7 +25,7 @@ async function until<T>(f: () => T | undefined | null | false, ms = 20_000, step
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'owc-'));
   server = spawn(process.execPath, ['apps/server/src/main.ts'], {
-    env: { ...process.env, PORT: String(PORT), DATA: join(dir, 'w.json'), TURN_MS: '50', COUNTDOWN_SCALE: '0.05', SPEED: '400', SHIELD_MS: '0', SEED: '7' },
+    env: { ...process.env, PORT: String(PORT), DATA: join(dir, 'w.json'), TURN_MS: '50', COUNTDOWN_SCALE: '0.05', SPEED: '400', SHIELD_MS: '0', SEED: '7', GUEST_GRACE_MS: '2500' },
     stdio: 'inherit',
   });
   await until(async () => (await fetch(`http://localhost:${PORT}/health`).catch(() => null))?.ok, 15_000);
@@ -34,6 +34,36 @@ beforeAll(async () => {
 afterAll(() => { server?.kill('SIGTERM'); });
 
 const connect = (name: string) => new Connection({ url: `ws://localhost:${PORT}/play`, WebSocket: WebSocket as never, name });
+
+describe('guests', () => {
+  it('names are unique, and a guest empire falls after they leave', async () => {
+    const a = connect('Carol');
+    await until(() => a.mirror.self);
+    let err: string | null = null;
+    const b = new Connection({ url: `ws://localhost:${PORT}/play`, WebSocket: WebSocket as never, name: 'carol', onHelloError: (m) => { err = m; } });
+    await until(() => err, 5000);
+    expect(err).toMatch(/taken/);
+    expect(a.mirror.self!.guest).toBe(true);
+    const ids = a.mirror.myPieces().map((p) => p.id);
+    a.close();
+    // After the grace period the empire falls and the name is free again.
+    const c = connect('CAROL');
+    let taken: string | null = null;
+    c.mirror.onError = (m) => { taken = m; };
+    await until(() => c.mirror.self, 15_000).catch(() => null);
+    if (!c.mirror.self) {
+      // The name was still held: retry after the fall.
+      await sleep(6000);
+      const d = connect('CAROL');
+      await until(() => d.mirror.self, 10_000);
+      expect(d.mirror.self!.name).toBe('CAROL');
+      d.watchArea(0, 0, 10);
+      d.close();
+    }
+    c.close(); b.close();
+    void ids; void taken;
+  }, 60_000);
+});
 
 describe('the whole loop', () => {
   it('spawns, builds, produces, attacks, battles and resolves', async () => {

@@ -21,6 +21,10 @@ export interface ConnectionOptions {
   name?: string;
   onToken?: (token: string) => void;
   onStatus?: (s: 'connecting' | 'open' | 'closed') => void;
+  /** Wait for start() instead of connecting immediately. */
+  autoStart?: boolean;
+  /** The server refused to let us in (e.g. the name is taken). The connection stops. */
+  onHelloError?: (msg: string, code: string) => void;
 }
 
 export class Connection {
@@ -43,8 +47,19 @@ export class Connection {
     const prevErr = m.onError.bind(m);
     m.onError = (msg, rid) => { if (rid != null && this.pending.has(rid)) { this.pending.get(rid)!(msg); this.pending.delete(rid); } else prevErr(msg, rid); };
     m.onAck = (rid) => { this.pending.get(rid)?.(null); this.pending.delete(rid); };
+    if (opts.autoStart !== false) this.open();
+  }
+
+  /** Connect (optionally as a new player with this name). */
+  start(name?: string) {
+    if (name) this.opts.name = name;
+    this.closed = false;
+    if (this.ws && this.ws.readyState <= 1) return;
     this.open();
   }
+
+  get hasToken() { return !!this.token; }
+  forgetToken() { this.token = null; }
 
   private setStatus(s: 'connecting' | 'open' | 'closed') { this.status = s; this.opts.onStatus?.(s); }
 
@@ -58,6 +73,13 @@ export class Connection {
     };
     ws.onmessage = (ev) => {
       const m = JSON.parse(String(ev.data)) as ServerMsg;
+      if (m.t === 'err' && m.code && this.status !== 'open') {
+        this.closed = true;
+        this.token = null;
+        ws.close();
+        this.opts.onHelloError?.(m.msg, m.code);
+        return;
+      }
       if (m.t === 'welcome') {
         this.token = m.token;
         this.opts.onToken?.(m.token);

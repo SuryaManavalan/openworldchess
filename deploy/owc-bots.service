@@ -1,0 +1,15 @@
+[Unit]
+Description=Open World Chess bots
+After=owc-server.service
+
+[Service]
+User=owc
+WorkingDirectory=/opt/owc/app
+Environment=NODE_ENV=production SERVER=ws://127.0.0.1/play BOTS=12 ENGINES=1 BOT_FILE=/var/lib/owc/bots.json
+EnvironmentFile=-/etc/owc/bots.env
+ExecStart=/usr/bin/node apps/bots/src/main.ts
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

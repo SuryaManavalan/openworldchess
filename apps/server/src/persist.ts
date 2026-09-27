@@ -42,7 +42,7 @@ export function load(game: Game, file: string): boolean {
   const w = game.world;
   w.nextId = snap.nextId;
   game.turn = snap.turn;
-  for (const p of snap.players) { p.online = false; game.players.set(p.id, p); game.tokens.set(p.token, p.id); }
+  for (const p of snap.players) { p.online = false; p.leftAt ??= Date.now(); game.players.set(p.id, p); game.tokens.set(p.token, p.id); }
   for (const [k, n] of snap.nodes) w.nodeOverlay.set(k, n);
   for (const [k, t] of snap.traffic ?? []) w.traffic.set(k, t);
   for (const [pid, ev] of snap.events ?? []) game.events.set(pid, ev);

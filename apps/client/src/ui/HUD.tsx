@@ -9,7 +9,7 @@ import { scene, input } from './GameView.tsx';
 import { buildingUrl, pieceUrl } from '../game/textures.ts';
 import { audio } from '../audio/audio.ts';
 import { BattleView } from './BattleView.tsx';
-import { AwayReport, Guide, Welcome } from './Onboarding.tsx';
+import { AwayReport, Guide, SignIn, Welcome } from './Onboarding.tsx';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
 const NODE_NAME: Record<string, string> = { tree: 'wood', rock: 'stone', gold: 'gold', wheat: 'wheat' };
@@ -30,6 +30,7 @@ export function HUD() {
       {battle && <BattleView battle={battle} />}
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
       <AwayReport />
+      <SignIn />
       <Welcome />
       {ui.watching && <div className="watch-pill">Watching your lands · touch to take over</div>}
     </div>
@@ -48,7 +49,8 @@ function TopBar() {
         <span className="chip" style={{ background: self?.color ?? '#888' }} />
         <b>{self?.name ?? '…'}</b>
         <span className="muted">{self?.rating ?? ''}</span>
-        {shielded && <span className="badge shield" title="New players can't be attacked for a while">🛡 shielded</span>}
+        {self?.guest && <button className="badge guest" onClick={() => window.dispatchEvent(new Event('owc:signin'))}>{ui.layout === 'phone' ? 'Sign in' : 'Guest · sign in'}</button>}
+        {shielded && <span className="badge shield" title="New players can't be attacked for a while">{ui.layout === 'phone' ? '🛡' : '🛡 shielded'}</span>}
       </div>
       <div className="stats">
         <span title="Pieces">♟ {pieces.length}</span>
@@ -275,7 +277,7 @@ function Settings() {
   const ui = useUI();
   const s = ui.settings;
   useEffect(() => { audio.setVolumes(s); }, [s]);
-  const [name, setName] = useState(() => { try { return localStorage.getItem('owc.name') ?? ''; } catch { return ''; } });
+  const [name, setName] = useState(() => mirror.self?.name ?? '');
   return (
     <div className="settings">
       <h3>Settings</h3>
@@ -286,7 +288,8 @@ function Settings() {
       <label className="row"><span>Reduce motion</span><input id="set-motion" type="checkbox" checked={s.reduceMotion} onChange={(e) => ui.setSettings({ reduceMotion: e.target.checked })} /></label>
       <label className="row"><span>Watch mode when idle</span><input id="set-watch" type="checkbox" checked={s.watchMode} onChange={(e) => ui.setSettings({ watchMode: e.target.checked })} /></label>
       <label className="row"><span>Attack alerts outside the app</span><button className="btn ghost" onClick={() => { try { Notification.requestPermission(); } catch { /* */ } }}>Allow</button></label>
-      <label className="row col"><span>Name (used next time you join as a new player)</span><input id="set-name" value={name} maxLength={24} onChange={(e) => { setName(e.target.value); try { localStorage.setItem('owc.name', e.target.value); } catch { /* */ } }} /></label>
+      <label className="row"><span>{mirror.self?.guest ? 'Playing as a guest' : `Signed in${mirror.self?.email ? ` as ${mirror.self.email}` : ''}`}</span><button className="btn ghost" onClick={() => window.dispatchEvent(new Event('owc:signin'))}>{mirror.self?.guest ? 'Sign in' : 'Account'}</button></label>
+      <label className="row col"><span>Name</span><span style={{ display: 'flex', gap: 8 }}><input id="set-name" value={name} maxLength={20} onChange={(e) => setName(e.target.value)} style={{ flex: 1 }} /><button className="btn ghost" onClick={() => conn.send({ t: 'profile', name: name.trim() })}>Rename</button></span></label>
     </div>
   );
 }

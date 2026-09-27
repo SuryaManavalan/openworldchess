@@ -2,10 +2,15 @@
 
 Covers the player's rating, the Emperor, losing everything and starting over, and protection for new players.
 
-## 1. Accounts
+## 1. Accounts (Decided)
 
-- You play as a guest first and can upgrade to an account later without losing anything ([TECH.md](../TECH.md) T14).
-- A player has: name, color (their team color, chosen from a palette and unique within their area), rating, Emperor state, cities, troops and pieces.
+- **Play instantly as a guest:** you choose a username, and it must be **unique** (ignoring case). No sign-in is needed to start.
+- **Guests are warned in the game:** "If you don't sign in, your empire will fall." There's a "Guest · sign in" chip, a reminder after a few minutes of play, the browser's leave-page prompt, and a sheet explaining what happens.
+- **If a guest leaves without signing in, their empire falls** after a grace period (default 15 minutes, `GUEST_GRACE_MS`):
+  - their pieces and buildings go masterless (nearby kings can claim them, as after an Emperor's fall);
+  - the account is deleted, and **the username becomes available again**.
+- **Signing in with Google** links the current guest empire to the Google account. After that it never falls for being offline (the AI defends it), and it continues on any device. Signing in on a new device with an account that already has an empire resumes that empire. A Google account without an empire starts a new one.
+- Implementation: `apps/server/src/auth.ts` (OAuth code flow). Setup is in [deploy/README.md](../../deploy/README.md).
 
 ## 2. Rating (Proposed)
 

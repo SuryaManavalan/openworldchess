@@ -33,6 +33,10 @@ interface UIState {
   hint: string | null;
   lassoMode: boolean;
   watching: boolean;
+  needName: boolean;
+  nameError: string | null;
+  welcomeNote: string | null;
+  googleEnabled: boolean;
   bump: () => void;
   set: (p: Partial<UIState>) => void;
   select: (ids: number[]) => void;
@@ -65,6 +69,10 @@ export const useUI = create<UIState>((set, get) => ({
   hint: null,
   lassoMode: false,
   watching: false,
+  needName: false,
+  nameError: null,
+  welcomeNote: null,
+  googleEnabled: false,
   bump: () => set({ version: get().version + 1 }),
   set: (p) => set(p),
   select: (ids) => set({ selection: ids }),
