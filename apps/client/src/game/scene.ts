@@ -251,6 +251,9 @@ export class Scene {
 
   // ---------- mirror → views ----------
 
+  /** An owner's cosmetic civilization (cosmetics.md), if they wear one. */
+  civOf(owner: string | null) { return owner ? this.mirror.players.get(owner)?.civ : undefined; }
+
   colorOf(owner: string | null) { return owner ? this.mirror.players.get(owner)?.color ?? '#9a9a9a' : '#8a8a8a'; }
 
   private bindMirror() {
@@ -371,9 +374,10 @@ export class Scene {
       if (hidden && v.cargo) v.cargo.visible = false;
       if (hidden) continue;
       const color = this.colorOf(p.owner);
-      const texKey = p.wild ? `${p.kind}:${p.wild}` : `${p.kind}:${color}:${!!p.emperor}`;
+      const civ = this.civOf(p.owner);
+      const texKey = p.wild ? `${p.kind}:${p.wild}` : `${p.kind}:${color}:${!!p.emperor}:${civ ?? ''}`;
       if (texKey !== v.texKey || !v.sprite.texture || v.sprite.texture.label === 'EMPTY') {
-        const tex = p.wild ? creatureTexture(p.wild, p.kind) : pieceTexture(p.kind, 'light', color, !!p.emperor);
+        const tex = p.wild ? creatureTexture(p.wild, p.kind) : pieceTexture(p.kind, 'light', color, !!p.emperor, undefined, civ);
         if (tex) { v.sprite.texture = tex; v.texKey = texKey; }
       }
       v.kind = p.kind;
@@ -505,8 +509,9 @@ export class Scene {
       this.objects.addChild(v.bar);
     }
     const color = this.colorOf(b.owner);
-    const k = b.camp ? `camp:${b.camp.art}:${b.camp.faction}` : `${b.type}:${color}`;
-    if (k !== v.texKey) { const tex = b.camp ? campTexture(b.camp.art, b.camp.faction) : buildingTexture(b.type, color); if (tex) { v.sprite.texture = tex; v.texKey = k; } }
+    const civ = this.civOf(b.owner);
+    const k = b.camp ? `camp:${b.camp.art}:${b.camp.faction}` : `${b.type}:${color}:${civ ?? ''}`;
+    if (k !== v.texKey) { const tex = b.camp ? campTexture(b.camp.art, b.camp.faction) : buildingTexture(b.type, color, undefined, civ); if (tex) { v.sprite.texture = tex; v.texKey = k; } }
     const th = this.theta;
     const cx = (b.x + b.size / 2) * S, cy = (b.y + b.size / 2) * S;
     const w = b.size * S * (b.size === 1 ? 1.25 : 1.12);
@@ -819,8 +824,9 @@ export class Scene {
         const wild = m.players.get(white ? b.white.playerId : b.black.playerId)?.wild;
         const kind = pc.type.toUpperCase() as PieceKind;
         const side = white ? 'light' : 'dark', team = white ? b.white.color : b.black.color;
-        const tex = pid != null && kind !== 'P' && b.promoted?.includes(pid) ? ascendedTexture(kind, side, team, wild)
-          : wild ? creatureTexture(wild, kind) : pieceTexture(kind, side, team, !!(pid && m.pieces.get(pid)?.emperor));
+        const civ = this.civOf(white ? b.white.playerId : b.black.playerId);
+        const tex = pid != null && kind !== 'P' && b.promoted?.includes(pid) ? ascendedTexture(kind, side, team, wild, undefined, civ)
+          : wild ? creatureTexture(wild, kind) : pieceTexture(kind, side, team, !!(pid && m.pieces.get(pid)?.emperor), undefined, civ);
         if (tex) s.texture = tex;
         const [x, y] = sq(f, r);
         const th = this.theta, wx = (x + 0.5) * S, wy = (y + 0.5) * S;

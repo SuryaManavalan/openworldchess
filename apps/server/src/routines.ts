@@ -17,6 +17,10 @@ interface Life {
   home: [number, number];
   step: number;
   since: number;
+  /** The turn it may act next (each kind has its own pace, PERIOD). */
+  due?: number;
+  /** No trade run before this turn (its last market was out of reach). */
+  noTradeUntil?: number;
   /** Merchants: the two market squares they shuttle between, and their road. */
   trade?: { a: [number, number]; b: [number, number]; toB: boolean; path: [number, number][]; idx: number; stuck: number; wait: number };
 }
@@ -53,9 +57,12 @@ export class Routines {
       if (p.state !== 'idle' || p.groupId || !p.owner || p.wild) { this.lives.delete(p.id); continue; }
       // Idle life is for watching: nobody looking, nothing to animate (performance.md §5).
       if (!g.watched(p.x, p.y)) continue;
-      if ((turn + p.id * 7) % PERIOD[p.kind]) continue;
       let life = this.lives.get(p.id);
-      if (!life) { life = { home: [p.x, p.y], step: 0, since: turn }; this.lives.set(p.id, life); }
+      if (!life) { life = { home: [p.x, p.y], step: 0, since: turn, due: turn + ((p.id * 7) % PERIOD[p.kind]) }; this.lives.set(p.id, life); }
+      // Each piece keeps its own pace. (A pace from the turn number alone let the round-robin
+      // reach the same pieces on their off-turns every time, and they never moved.)
+      if (turn < (life.due ?? 0)) continue;
+      life.due = turn + PERIOD[p.kind];
       if (turn - life.since < 4) continue; // settle for a moment first
       // A caravan on the road may be outside every king's reach; it keeps going.
       if (life.trade && this.trade(p, life, record)) continue;
@@ -157,6 +164,7 @@ export class Routines {
    */
   private trade(p: Piece, life: Life, record: (p: Piece, fx: number, fy: number) => void): boolean {
     const g = this.game, w = g.world, owner = p.owner!;
+    if (!life.trade && (life.noTradeUntil ?? 0) > g.turn) return false;
     if (!life.trade) {
       const ms = this.markets(owner);
       if (ms.length < 2) return false;
@@ -184,7 +192,13 @@ export class Routines {
       this.routes--;
       t.path = findPath(p.x, p.y, dest[0], dest[1], walk, 12000);
       t.idx = 0;
-      if (!t.path.length) { life.trade = undefined; return false; }
+      // No road to that market (a river, a lake): give up on this run and try again much later.
+      const end = t.path.at(-1);
+      if (!end || cheb(end[0], end[1], dest[0], dest[1]) > 2) {
+        life.trade = undefined; life.noTradeUntil = g.turn + 600;
+        if (p.routine?.startsWith('merchant')) { p.routine = undefined; w.touch(p); }
+        return false;
+      }
     }
     // Follow the road a few squares ahead (a pawn turns before it walks).
     const [tx, ty] = t.path[Math.min(t.path.length - 1, t.idx + 3)];

@@ -16,6 +16,11 @@
     "./creatures": "./assets/creatures.mjs",
     "./nature": "./assets/nature.mjs",
     "./camps": "./assets/camps.mjs",
-    "./ascended": "./assets/ascended.mjs"
+    "./ascended": "./assets/ascended.mjs",
+    "./civ-dravidian": "./assets/civ-dravidian.mjs",
+    "./civ-roman": "./assets/civ-roman.mjs",
+    "./civ-chinese": "./assets/civ-chinese.mjs",
+    "./civ-egyptian": "./assets/civ-egyptian.mjs",
+    "./crowns": "./assets/crowns.mjs"
   }
 }

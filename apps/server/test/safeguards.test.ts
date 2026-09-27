@@ -2,7 +2,11 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { cheb, BUILDINGS_PER_KING, HOUSE_POP, HOUSES_PER_KING, KING_POP, PLAYER_PIECE_CAP, RUIN_LIFETIME_MS, type Building } from '@owc/shared';
 import { Game, type PlayerRec } from '../src/game.ts';
+import { findPath } from '@owc/rules';
 
+// Spawn spots and routines use Math.random: seed it so these tests are reproducible.
+let rs = 20260927;
+Math.random = () => { rs = (rs * 1103515245 + 12345) % 2147483648; return rs / 2147483648; };
 const game = new Game({ seed: 3, speed: 1 });
 afterAll(() => game.battles.ai.stop());
 const join = (name: string) => game.join(undefined, name) as PlayerRec;
@@ -52,9 +56,18 @@ describe('living towns', () => {
   it('merchants caravan between two distant towns and wear a road', () => {
     const p = join('Trader');
     const [k1, k2] = game.kingsOf(p.id);
-    // Put the second king 40 squares away (realms don't touch), with a building at each.
-    const spot = game.world.nearestFree(k1.x + 40, k1.y, 10)!;
-    game.world.movePiece(k2, spot[0], spot[1]);
+    // Put the second king 40 squares east (realms don't touch), somewhere a road can
+    // reach (not across a river), with a building at each.
+    let spot: [number, number] | null = null;
+    for (let dy = -30; dy <= 30 && !spot; dy += 6) {
+      const c = game.world.nearestFree(k1.x + 40, k1.y + dy, 6);
+      if (!c) continue;
+      const path = findPath(k1.x, k1.y, c[0], c[1], (x, y) => game.world.walkable(x, y), 12000);
+      const end = path.at(-1);
+      if (end && cheb(end[0], end[1], c[0], c[1]) <= 1) spot = c;
+    }
+    expect(spot).not.toBeNull();
+    game.world.movePiece(k2, spot![0], spot![1]);
     game.world.addBuilding(house(p.id, k1.x - 2, k1.y - 2));
     game.world.addBuilding(house(p.id, k2.x - 2, k2.y - 2));
     // Plenty of idle pawns so some become merchants.
@@ -68,7 +81,8 @@ describe('living towns', () => {
     // The ground between the towns has been walked.
     let walked = 0;
     // ...including the open country between the two realms.
-    for (let x = k1.x + 14; x <= spot[0] - 14; x++) for (let y = k1.y - 8; y <= k1.y + 8; y++) walked += game.world.traffic.get(x * 134217728 + y) ?? 0;
+    // (The road between them, well outside both realms.)
+    for (const [x, y] of findPath(k1.x, k1.y, spot![0], spot![1], (x, y) => game.world.walkable(x, y), 12000)) if (cheb(x, y, k1.x, k1.y) > 14 && cheb(x, y, spot![0], spot![1]) > 14) for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) walked += game.world.traffic.get((x + dx) * 134217728 + y + dy) ?? 0;
     expect(walked).toBeGreaterThan(20);
   });
 
@@ -111,23 +125,24 @@ describe('clearings', () => {
     const p = join('Woodsman');
     const k = game.kingsOf(p.id)[0];
     const w = game.world;
-    // A tree right beside a house.
-    const tree = { x: k.x + 3, y: k.y + 3, kind: 'tree' as const, capacity: 200, remaining: 200 };
-    w.movePiece(k, k.x, k.y);
-    const hx = tree.x - 1, hy = tree.y;
-    for (const q of w.piecesNear(hx, hy, 1)) w.movePiece(q, q.x + 4, q.y + 4);
+    // A real tree near the king, and a house on open ground right beside it.
+    let spot: { n: ReturnType<typeof w.nodeAt>; hx: number; hy: number } | null = null;
+    for (const n of w.nodesNear(k.x, k.y, 1, 30).filter((q) => q.kind === 'tree' && q.remaining > 0)) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const hx = n.x + dx, hy = n.y + dy;
+        if (w.buildable(hx, hy) && w.free(hx, hy) && !w.nodeAt(hx, hy) && w.buildingIdAt(hx, hy) == null) { spot = { n, hx, hy }; break; }
+      }
+      if (spot) break;
+    }
+    expect(spot).not.toBeNull();
+    const { n, hx, hy } = spot!;
     w.addBuilding(house(p.id, hx, hy));
-    w.nodeOverlay.set(tree.x * 134217728 + tree.y, tree);
-    (w as unknown as { nodesByChunk: Map<string, unknown[]> }).nodesByChunk.clear();
-    (w as unknown as { loaded: Set<number> }).loaded.clear();
-    const n = w.nodeAt(tree.x, tree.y)!;
-    expect(n.remaining).toBe(200);
     let t = Date.now();
-    for (let i = 0; i < 400 && n.remaining > 0; i++) { t += 30_001; game.economy(t); }
-    expect(n.remaining).toBe(0);
+    for (let i = 0; i < 400 && n!.remaining > 0; i++) { t += 30_001; game.economy(t); }
+    expect(n!.remaining).toBe(0);
     // Its stump doesn't grow back beside the house: it's dug out.
     game.economy(t + 31 * 60_000);
-    expect(w.nodeAt(tree.x, tree.y)).toBeUndefined();
+    expect(w.nodeAt(n!.x, n!.y)).toBeUndefined();
   });
 });
 

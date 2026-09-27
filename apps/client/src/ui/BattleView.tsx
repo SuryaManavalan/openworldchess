@@ -101,9 +101,10 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
     const emperor = !!(pid && mirror.pieces.get(pid)?.emperor);
     const wild = mirror.players.get(white ? battle.white.playerId : battle.black.playerId)?.wild;
     // A promoted pawn wears its new piece like a borrowed spirit, for this battle only.
-    if (pid != null && type !== 'p' && battle.promoted?.includes(pid)) return ascendedUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, wild);
+    const civ = mirror.players.get(white ? battle.white.playerId : battle.black.playerId)?.civ;
+    if (pid != null && type !== 'p' && battle.promoted?.includes(pid)) return ascendedUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, wild, civ);
     if (wild) return creatureUrl(wild, type.toUpperCase() as PieceKind);
-    return pieceUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, emperor);
+    return pieceUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, emperor, civ);
   };
 
   // Creatures glow faintly in their faction's color, so they never blend with your pieces.

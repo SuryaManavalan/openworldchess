@@ -21,6 +21,7 @@
 | [specs/audio.md](specs/audio.md) | Sound: everything in key and on the beat, armies as rhythm sections, cascading rewards, adaptive music, ambience. |
 | [specs/wilds.md](specs/wilds.md) | Hordes and herds: 32 creature factions, camps, growth, raiding, aftermath, art and names. |
 | [specs/performance.md](specs/performance.md) | Budgets, observability (/metrics, ?perf, live profiling), the replay benchmark, and the optimizations in use. |
+| [specs/cosmetics.md](specs/cosmetics.md) | Cosmetic civilizations (Dravidian, Roman, Chinese, Egyptian), Crowns, the Stripe purchase flow and its setup. |
 | [specs/safeguards.md](specs/safeguards.md) | Runaway loops (piece spam, king breeding, alt farming, server load) and the caps that stop them. |
 | [specs/client.md](specs/client.md) | Screens, rendering layers, HUD, input, performance. |
 | [specs/art.md](specs/art.md) | Art direction, style rules, the asset list, the pipeline. |

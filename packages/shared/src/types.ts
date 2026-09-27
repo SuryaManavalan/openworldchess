@@ -88,6 +88,8 @@ export interface PlayerPublic {
   online: boolean;
   /** A camp of the wilds, not a person (its faction id). */
   wild?: string;
+  /** Cosmetic civilization in use (docs/specs/cosmetics.md). */
+  civ?: string;
 }
 
 export interface PlayerSelf extends PlayerPublic {
@@ -100,6 +102,11 @@ export interface PlayerSelf extends PlayerPublic {
   emperorId: number | null;
   shieldUntil: number;
   home: [number, number];
+  /** Cosmetic civilizations this account owns, and its Crowns (the shop currency). */
+  civsOwned?: string[];
+  crowns?: number;
+  /** Whether the shop can take payments right now. */
+  shopOpen?: boolean;
 }
 
 export type BattleResult = 'white' | 'black' | 'draw' | null;

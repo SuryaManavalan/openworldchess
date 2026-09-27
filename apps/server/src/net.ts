@@ -8,6 +8,7 @@ import {
 } from '@owc/shared';
 import type { Alert, Game, PlayerRec } from './game.ts';
 import { perf } from './perf.ts';
+import { buyCiv, createCheckout } from './shop.ts';
 
 interface Session {
   ws: WebSocket;
@@ -41,6 +42,7 @@ export class Net {
     wss.on('connection', (ws: WebSocket, req: IncomingMessage) => this.connect(ws, req));
     game.onAlert = (pid, a) => { game.logEvent(pid, a.kind, a.text); this.alert(pid, a); };
     game.onPlayers = () => this.broadcastPlayers();
+    game.onSelf = (pid) => { for (const s of this.sessions) if (s.player?.id === pid) this.send(s, { t: 'self', self: game.selfPlayer(s.player) }); };
     // Camps of the wilds are only simulated where people are looking (bots don't count).
     game.wilds.viewed = () => this.viewedChunks();
     game.viewed = () => this.viewedChunks();
@@ -145,6 +147,18 @@ export class Net {
       case 'battle.unwatch': s.watching.delete(msg.battleId); break;
       case 'profile': { if (now - (this.renamedAt.get(p.id) ?? 0) < 600_000) { this.send(s, { t: 'err', msg: 'You can rename once every 10 minutes' }); break; } const n = msg.name.trim(); const bad = g.checkName(n, p); if (!bad) this.renamedAt.set(p.id, now); if (!bad) { p.name = n; this.broadcastPlayers(); this.sendMine(s); } else this.send(s, { t: 'err', msg: bad }); break; }
       case 'practice': { const e = g.battles.practice(p.id); if (e) this.send(s, { t: 'err', msg: e }); break; }
+      case 'shop.checkout': {
+        const rid = msg.rid;
+        createCheckout(p, msg.pack).then((r) => { if ('url' in r) this.send(s, { t: 'shop.url', rid, url: r.url }); else this.send(s, { t: 'err', rid, msg: r.error }); });
+        break;
+      }
+      case 'civ.buy': reply(msg.rid, buyCiv(g, p, msg.civ)); break;
+      case 'civ.equip': {
+        // Only one you own (or null for the classic look).
+        if (msg.civ === null || p.civs?.includes(msg.civ)) { p.civ = msg.civ ?? undefined; this.broadcastPlayers(); this.send(s, { t: 'self', self: g.selfPlayer(p) }); }
+        else this.send(s, { t: 'err', msg: 'You do not own that civilization' });
+        break;
+      }
       case 'emote': this.broadcast({ t: 'emote', battleId: msg.battleId, playerId: p.id, id: msg.id }); break;
     }
   }

@@ -25,6 +25,10 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('battle.unwatch'), battleId: z.number().int() }),
   z.object({ t: z.literal('emote'), battleId: z.number().int().optional(), id: z.number().int().min(0).max(15) }),
   z.object({ t: z.literal('practice') }),
+  // Cosmetics (cosmetics.md): buy Crowns (Stripe checkout), spend them on a civilization, choose which to show.
+  z.object({ t: z.literal('shop.checkout'), rid: z.number().optional(), pack: z.string().max(20) }),
+  z.object({ t: z.literal('civ.buy'), rid: z.number().optional(), civ: z.string().max(20) }),
+  z.object({ t: z.literal('civ.equip'), civ: z.string().max(20).nullable() }),
   z.object({ t: z.literal('profile'), name: z.string().min(2).max(20) }),
   z.object({ t: z.literal('ping'), at: z.number() }),
 ]);
@@ -48,7 +52,8 @@ export type ServerMsg =
   | { t: 'away'; since: number; events: { at: number; kind: string; text: string }[] }
   | { t: 'ack'; rid: number }
   | { t: 'err'; rid?: number; msg: string; code?: 'need-name' | 'name-taken' | 'bad-name' }
-  | { t: 'pong'; at: number; serverTime: number };
+  | { t: 'pong'; at: number; serverTime: number }
+  | { t: 'shop.url'; rid?: number; url: string };
 
 export interface BattleSummary {
   winner: string | null;

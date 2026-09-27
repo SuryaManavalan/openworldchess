@@ -12,6 +12,7 @@ import { Battles } from './battles.ts';
 import { Routines } from './routines.ts';
 import { Wilds, type CampInfo } from './wilds.ts';
 import { perf } from './perf.ts';
+import { shopOpen } from './shop.ts';
 
 export interface PlayerRec {
   id: string;
@@ -36,6 +37,13 @@ export interface PlayerRec {
   online: boolean;
   /** A camp of the wilds (an NPC owner), not a person. */
   wild?: CampInfo;
+  /** Cosmetic civilizations bought (cosmetics.md), and the one in use. */
+  civs?: string[];
+  civ?: string;
+  /** Crowns: the shop currency. */
+  crowns?: number;
+  /** Stripe checkout sessions already credited (each pays out once). */
+  receipts?: string[];
 }
 
 export interface GroupRec {
@@ -95,6 +103,8 @@ export class Game {
     this.events.set(player, list);
   }
   onPlayers: () => void = () => {};
+  /** Send a player their own record again (after a purchase). */
+  onSelf: (playerId: string) => void = () => {};
   /**
    * Chunks people (not bots) are looking at, set by the network layer. Detail that
    * only matters to the eye (idle life, tidy formations) is simulated only there
@@ -189,10 +199,10 @@ export class Game {
   // ---------- players ----------
 
   publicPlayer(p: PlayerRec): PlayerPublic {
-    return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), online: p.online, wild: p.wild?.faction };
+    return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), online: p.online, wild: p.wild?.faction, civ: p.civ };
   }
   selfPlayer(p: PlayerRec): PlayerSelf {
-    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home };
+    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen() };
   }
 
   isGuest(p: PlayerRec) { return !p.googleSub && !p.isBot; }

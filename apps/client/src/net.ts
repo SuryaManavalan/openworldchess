@@ -24,6 +24,8 @@ export const conn = new Connection({
 // Returning players reconnect at once; new players choose a name first.
 if (readToken()) conn.start(); else useUI.getState().set({ needName: true });
 export const mirror = conn.mirror;
+// Off to Stripe's secure checkout page.
+mirror.onShopUrl = (url) => { location.href = url; };
 
 /** The commands (ux.md §9): everything input produces goes through these. */
 export const commands = {
@@ -52,4 +54,8 @@ export const commands = {
   watch(battleId: number) { conn.send({ t: 'battle.watch', battleId }); },
   practice() { conn.send({ t: 'practice' }); },
   emote(id: number, battleId?: number) { conn.send({ t: 'emote', id, battleId }); },
+  // Shop (cosmetics.md): Crowns via Stripe, civilizations via Crowns.
+  checkout(pack: string) { return conn.request({ t: 'shop.checkout', pack }); },
+  buyCiv(civ: string) { return conn.request({ t: 'civ.buy', civ }); },
+  equipCiv(civ: string | null) { conn.send({ t: 'civ.equip', civ }); },
 };

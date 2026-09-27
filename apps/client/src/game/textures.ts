@@ -9,6 +9,10 @@ import * as creatureArt from 'owc-art/creatures';
 import * as natureArt from 'owc-art/nature';
 import * as campsArt from 'owc-art/camps';
 import * as ascendedArt from 'owc-art/ascended';
+import * as dravidianArt from 'owc-art/civ-dravidian';
+import * as romanArt from 'owc-art/civ-roman';
+import * as chineseArt from 'owc-art/civ-chinese';
+import * as egyptianArt from 'owc-art/civ-egyptian';
 import { FACTIONS, type PieceKind } from '@owc/shared';
 
 type ArtFn = (o?: { side?: string; team?: string; emperor?: boolean }) => string;
@@ -20,6 +24,12 @@ type Art0 = Record<string, () => string>;
 const NATURE: Record<string, Art0> = { tree: natureArt.TREES as unknown as Art0, rock: natureArt.ROCKS as unknown as Art0, ore: natureArt.ORES as unknown as Art0, crop: natureArt.CROPS as unknown as Art0 };
 const creature = creatureArt.creature as unknown as (f: unknown, kind: PieceKind) => string;
 const campArt = campsArt.campArt as unknown as (name: string, f: unknown) => string;
+/** Cosmetic civilizations (cosmetics.md): each replaces every piece and building. */
+const CIV_ART: Record<string, { PIECES: Record<string, ArtFn>; BUILDINGS: Record<string, ArtFn> }> = {
+  dravidian: dravidianArt as never, roman: romanArt as never, chinese: chineseArt as never, egyptian: egyptianArt as never,
+};
+const piecesOf = (civ?: string) => (civ && CIV_ART[civ]?.PIECES) || PIECES;
+const buildingsOf = (civ?: string) => (civ && CIV_ART[civ]?.BUILDINGS) || BUILDINGS;
 const ART_NAME: Record<PieceKind, string> = { K: 'king', Q: 'queen', R: 'elephant', B: 'bishop', N: 'knight', P: 'pawn' };
 export const RES = 128; // raster size per 100x100 art unit
 
@@ -51,14 +61,15 @@ function get(key: string, make: () => string, size = RES, onReady?: () => void):
   return null;
 }
 
-export function pieceTexture(kind: PieceKind, side: 'light' | 'dark', team: string, emperor = false, onReady?: () => void) {
-  return get(`p:${kind}:${side}:${team}:${emperor}`, () =>
-    kind === 'K' ? PIECES.king({ side, team, emperor }) : PIECES[ART_NAME[kind]]({ side, team }), RES, onReady);
+export function pieceTexture(kind: PieceKind, side: 'light' | 'dark', team: string, emperor = false, onReady?: () => void, civ?: string) {
+  const P = piecesOf(civ);
+  return get(`p:${kind}:${side}:${team}:${emperor}:${civ ?? ''}`, () =>
+    kind === 'K' ? P.king({ side, team, emperor }) : P[ART_NAME[kind]]({ side, team }), RES, onReady);
 }
 
-export function buildingTexture(type: string, team: string, onReady?: () => void) {
+export function buildingTexture(type: string, team: string, onReady?: () => void, civ?: string) {
   if (type === 'ruin') return get('b:ruin', ruinArt, 192, onReady);
-  return get(`b:${type}:${team}`, () => BUILDINGS[type]({ team }), 192, onReady);
+  return get(`b:${type}:${team}:${civ ?? ''}`, () => buildingsOf(civ)[type]({ team }), 192, onReady);
 }
 
 const NODE_ART: Record<string, string> = { tree: 'tree', pine: 'pine', rock: 'rock', ore: 'goldOre', wheat: 'wheat' };
@@ -86,21 +97,21 @@ export function creatureUrl(faction: string, kind: PieceKind): string {
 
 const ascended = ascendedArt.ascended as unknown as (ghost: string, pawn: string) => string;
 /** Markup of a piece as drawn in battle: a player's piece or a creature. */
-const pieceMarkup = (kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, emperor = false) =>
-  wild ? creature(FACTIONS[wild], kind) : kind === 'K' ? PIECES.king({ side, team, emperor }) : PIECES[ART_NAME[kind]]({ side, team });
+const pieceMarkup = (kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, emperor = false, civ?: string) =>
+  wild ? creature(FACTIONS[wild], kind) : kind === 'K' ? piecesOf(civ).king({ side, team, emperor }) : piecesOf(civ)[ART_NAME[kind]]({ side, team });
 
 /** A promoted pawn (battle.md §5): the pawn inside a glowing spirit of the piece it's acting as. */
-function ascendedMarkup(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string) {
-  return ascended(pieceMarkup(kind, side, team, wild), pieceMarkup('P', side, team, wild));
+function ascendedMarkup(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, civ?: string) {
+  return ascended(pieceMarkup(kind, side, team, wild, false, civ), pieceMarkup('P', side, team, wild, false, civ));
 }
-export function ascendedTexture(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, onReady?: () => void) {
-  return get(`asc:${kind}:${side}:${team}:${wild ?? ''}`, () => ascendedMarkup(kind, side, team, wild), RES, onReady);
+export function ascendedTexture(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, onReady?: () => void, civ?: string) {
+  return get(`asc:${kind}:${side}:${team}:${wild ?? ''}:${civ ?? ''}`, () => ascendedMarkup(kind, side, team, wild, civ), RES, onReady);
 }
-export function ascendedUrl(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string): string {
-  const k = `asc:${kind}:${side}:${team}:${wild ?? ''}`;
+export function ascendedUrl(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, civ?: string): string {
+  const k = `asc:${kind}:${side}:${team}:${wild ?? ''}:${civ ?? ''}`;
   let u = urlCache.get(k);
   if (!u) {
-    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${ascendedMarkup(kind, side, team, wild)}</svg>`);
+    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${ascendedMarkup(kind, side, team, wild, civ)}</svg>`);
     urlCache.set(k, u);
   }
   return u;
@@ -126,22 +137,23 @@ function ruinArt() {
 
 /** Piece art as a data URL, for the React battle board. */
 const urlCache = new Map<string, string>();
-export function pieceUrl(kind: PieceKind, side: 'light' | 'dark', team: string, emperor = false): string {
-  const k = `${kind}:${side}:${team}:${emperor}`;
+export function pieceUrl(kind: PieceKind, side: 'light' | 'dark', team: string, emperor = false, civ?: string): string {
+  const k = `${kind}:${side}:${team}:${emperor}:${civ ?? ''}`;
   let u = urlCache.get(k);
   if (!u) {
-    const markup = kind === 'K' ? PIECES.king({ side, team, emperor }) : PIECES[ART_NAME[kind]]({ side, team });
+    const P = piecesOf(civ);
+    const markup = kind === 'K' ? P.king({ side, team, emperor }) : P[ART_NAME[kind]]({ side, team });
     u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${markup}</svg>`);
     urlCache.set(k, u);
   }
   return u;
 }
 
-export function buildingUrl(type: string, team: string): string {
-  const k = `b:${type}:${team}`;
+export function buildingUrl(type: string, team: string, civ?: string): string {
+  const k = `b:${type}:${team}:${civ ?? ''}`;
   let u = urlCache.get(k);
   if (!u) {
-    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${BUILDINGS[type]({ team })}</svg>`);
+    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${buildingsOf(civ)[type]({ team })}</svg>`);
     urlCache.set(k, u);
   }
   return u;

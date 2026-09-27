@@ -35,11 +35,11 @@ export function Inspect() {
   const faction = p?.wild ? FACTIONS[p.wild] : b?.camp ? FACTIONS[b.camp.faction] : pl?.wild ? FACTIONS[pl.wild] : undefined;
   let art = '', title = '', sub = '';
   if (p) {
-    art = p.wild ? creatureUrl(p.wild, p.kind) : pieceUrl(p.kind, 'light', pl?.color ?? '#9a9a9a', !!p.emperor);
+    art = p.wild ? creatureUrl(p.wild, p.kind) : pieceUrl(p.kind, 'light', pl?.color ?? '#9a9a9a', !!p.emperor, pl?.civ);
     title = pieceLabel(p);
     sub = faction ? `${ROLE_NAME[p.kind]} of the ${faction.name}` : p.emperor ? `Emperor of ${pl?.name ?? '?'}` : pl ? `${ROLE_NAME[p.kind]} · ${pl.name}` : 'Masterless';
   } else if (b) {
-    art = b.camp && faction ? creatureUrl(faction.id, 'K') : buildingUrl(b.type === 'ruin' || b.type === 'camp' ? 'house' : b.type, pl?.color ?? '#9a9a9a');
+    art = b.camp && faction ? creatureUrl(faction.id, 'K') : buildingUrl(b.type === 'ruin' || b.type === 'camp' ? 'house' : b.type, pl?.color ?? '#9a9a9a', pl?.civ);
     title = b.camp?.name ?? (b.type === 'ruin' ? 'Ruin' : b.type[0].toUpperCase() + b.type.slice(1));
     sub = faction ? `Home of the ${faction.name}` : pl ? pl.name : 'Masterless';
   }

@@ -62,6 +62,9 @@ ns-1218.awsdns-24.org
    # add these lines (keep the existing ORIGIN_SECRET line):
    GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
    GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
+   # Shop (docs/specs/cosmetics.md §4): both are needed before anything can be sold.
+   STRIPE_SECRET_KEY=sk_live_xxxxxxxx
+   STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxx
    sudo systemctl restart owc-server
    ```
 

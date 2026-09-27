@@ -8,6 +8,7 @@ import { Net } from './net.ts';
 import { load, save } from './persist.ts';
 import { handleAuth } from './auth.ts';
 import { perf } from './perf.ts';
+import { handleShop } from './shop.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const SEED = Number(process.env.SEED ?? 1);
@@ -44,6 +45,7 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ last: perf.last, live: perf.snapshot() }, null, 1));
     return;
   }
+  if (req.url?.startsWith('/shop/') || req.url?.startsWith('/stripe/')) { handleShop(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { res.statusCode = 500; res.end('shop error'); }); return; }
   if (req.url?.startsWith('/auth/')) { handleAuth(game, req, res).catch(() => { res.statusCode = 500; res.end('auth error'); }); return; }
   let path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^(\.\.[/\\])+/, '');
   if (path === '/' || !extname(path)) path = '/index.html';

@@ -11,6 +11,7 @@ import { audio } from '../audio/audio.ts';
 import { BattleView } from './BattleView.tsx';
 import { AwayReport, Guide, SignIn, SignInNudge, Welcome } from './Onboarding.tsx';
 import { Inspect, HoverTag } from './Inspect.tsx';
+import { Shop, Coin } from './Shop.tsx';
 import { PerfOverlay, perfOn } from './PerfOverlay.tsx';
 import { Markers } from './Markers.tsx';
 import { Icon, type IconName } from './Icon.tsx';
@@ -62,14 +63,15 @@ function TopBar() {
         {shielded && <span className="badge shield" title="New players can't be attacked for a while"><Icon name="shield" size={13} />{ui.layout === 'phone' ? '' : ' shielded'}</span>}
       </div>
       <div className="stats">
-        <span className="stat" title="Pieces / population cap"><img src={pieceUrl('P', 'light', self?.color ?? '#888')} alt="" />{pieces.length}{self?.popCap ? <span className="muted">/{self.popCap}</span> : null}</span>
-        <span className="stat kstat" title="Kings"><img src={pieceUrl('K', 'light', self?.color ?? '#888')} alt="" />{pieces.filter((p) => p.kind === 'K').length}</span>
+        <span className="stat" title="Pieces / population cap"><img src={pieceUrl('P', 'light', self?.color ?? '#888', false, self?.civ)} alt="" />{pieces.length}{self?.popCap ? <span className="muted">/{self.popCap}</span> : null}</span>
+        <span className="stat kstat" title="Kings"><img src={pieceUrl('K', 'light', self?.color ?? '#888', false, self?.civ)} alt="" />{pieces.filter((p) => p.kind === 'K').length}</span>
         <span className="stat bstat" title="Buildings"><Icon name="house" size={16} />{mirror.myBuildings().filter((b) => b.type !== 'ruin').length}</span>
         <DayClock />
         <button className="link stat" aria-label="Battles" onClick={() => ui.set({ sheet: 'battles' })}><Icon name="swords" size={17} />{live.length || ''}</button>
       </div>
       <div className="top-actions">
         <button className={`icon-btn ${ui.flagMode ? 'on' : ''}`} aria-label="Place a flag" title="Place a flag (F)" onClick={() => { ui.set({ flagMode: !ui.flagMode }); if (!ui.flagMode) ui.toast(ui.layout === 'phone' ? 'Tap the map to place a flag' : 'Click the map to place a flag', 'info', 'flag'); }}><Icon name="flag" size={19} /></button>
+        <button className="icon-btn shop-btn" aria-label="Civilizations shop" title="Civilizations" onClick={() => ui.set({ sheet: ui.sheet === 'shop' ? null : 'shop' })}><Coin size={19} /></button>
         <button className="icon-btn" aria-label="Help" onClick={() => ui.set({ sheet: ui.sheet === 'help' ? null : 'help' })}><Icon name="help" size={19} /></button>
         <button className="icon-btn" aria-label="Settings" onClick={() => ui.set({ sheet: ui.sheet === 'settings' ? null : 'settings' })}><Icon name="menu" size={19} /></button>
       </div>
@@ -138,7 +140,7 @@ function KingChip({ k, compact }: { k: Piece; compact?: boolean }) {
         ui.select(g); g.slice(0, 12).forEach((_, i) => audio.select(i));
         scene?.centerOn(k.x, k.y);
       }}>
-      <img src={pieceUrl('K', 'light', color, !!k.emperor)} alt="" />
+      <img src={pieceUrl('K', 'light', color, !!k.emperor, mirror.self?.civ)} alt="" />
       <span className="count">{groupCount(k)}</span>
       {!compact && <span className="label">{k.emperor ? 'Emperor' : `King ${k.id % 1000}`}</span>}
       {cd > 0 && <span className="cd" style={{ ['--p' as string]: `${Math.min(1, cd / 600_000) * 360}deg` }} />}
@@ -164,7 +166,7 @@ function BottomDock() {
       {!ui.buildType && sel.length > 0 && (
         <div className="action-row">
           <span className="sel-summary">
-            {KIND_ORDER.map((k) => { const n = sel.filter((p) => p.kind === k).length; return n ? <span key={k} className="kc"><img src={pieceUrl(k, 'light', mirror.self?.color ?? '#888', k === 'K' && sel.some((p) => p.emperor))} alt="" />{n > 1 && n}</span> : null; })}
+            {KIND_ORDER.map((k) => { const n = sel.filter((p) => p.kind === k).length; return n ? <span key={k} className="kc"><img src={pieceUrl(k, 'light', mirror.self?.color ?? '#888', k === 'K' && sel.some((p) => p.emperor), mirror.self?.civ)} alt="" />{n > 1 && n}</span> : null; })}
           </span>
           {pending ? <>
             <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>Move here</button>
@@ -222,7 +224,7 @@ function BuildList() {
             // Drop the ghost where the player is looking (phones), ready to drag.
             if (scene) input?.updateGhost([scene.cam.x, scene.cam.y]);
           }}>
-            <img src={buildingUrl(t, color)} alt="" />
+            <img src={buildingUrl(t, color, mirror.self?.civ)} alt="" />
             <span className="bname">{t[0].toUpperCase() + t.slice(1)}</span>
             <span className="bmeta">{s.produces.map((k) => PIECE_NAME[k]).join(' / ')} · needs {s.needs.map((n) => NODE_NAME[n]).join(' + ')} nearby</span>
             <span className="bcost">{Object.entries(s.cost).map(([k, v]) => `${v} ${NODE_NAME[k]}`).join(', ')}</span>
@@ -269,6 +271,7 @@ function Sheet() {
         {ui.sheet === 'battles' && <BattleList />}
         {ui.sheet === 'settings' && <Settings />}
         {ui.sheet === 'help' && <Help />}
+        {ui.sheet === 'shop' && <Shop />}
         {ui.layout === 'phone' && ui.sheet === 'build' && <Minimap />}
       </div>
     </div>

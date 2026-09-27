@@ -296,3 +296,40 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .hover-tag { position: fixed; left: 0; top: 0; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-size: 13px; font-weight: 800; white-space: nowrap; z-index: 40; }
 .board img.wild { filter: drop-shadow(0 0 2px var(--glow)) drop-shadow(0 0 5px var(--glow)); }
 .perf-overlay { position: absolute; left: 8px; bottom: calc(8px + var(--safe-bottom)); margin: 0; padding: 6px 8px; background: rgba(0, 0, 0, 0.72); color: #cfe6a4; font: 11px/1.4 ui-monospace, monospace; border-radius: 6px; pointer-events: none; z-index: 80; white-space: pre; }
+
+/* Shop (cosmetics.md) */
+.coin { vertical-align: -3px; }
+.shop-btn img { display: block; }
+.shop .shop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.shop .balance { display: inline-flex; align-items: center; gap: 6px; background: rgba(243, 210, 122, 0.14); color: #f3d27a; border: 1px solid rgba(243, 210, 122, 0.35); border-radius: 99px; padding: 5px 10px; font-weight: 800; cursor: pointer; }
+.shop .balance .plus { background: #f3d27a; color: #23211f; border-radius: 99px; width: 18px; height: 18px; display: grid; place-items: center; font-size: 14px; line-height: 1; }
+.shop .civs { display: grid; gap: 10px; margin-top: 10px; }
+.shop .civ { display: grid; grid-template-columns: 150px 1fr auto; align-items: center; gap: 12px; padding: 10px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-left: 4px solid var(--civ, #777); }
+.shop .civ.on { background: rgba(149, 185, 87, 0.12); }
+.shop .civ .info b { display: block; font-size: 17px; }
+.shop .civ .info span { font-size: 13px; line-height: 1.35; }
+.shop .civ .btn { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.shop .confirm-row { display: flex; flex-direction: column; gap: 6px; }
+.shop .civ-preview { position: relative; height: 90px; }
+.shop .civ-preview .bld { position: absolute; width: 74px; height: 74px; top: 0; }
+.shop .civ-preview .bld:first-child { left: 0; }
+.shop .civ-preview .bld:nth-child(2) { left: 70px; width: 64px; height: 64px; top: 8px; }
+.shop .civ-preview .pcs { position: absolute; left: 4px; bottom: 0; display: flex; }
+.shop .civ-preview .pcs img { width: 34px; height: 34px; margin-right: -4px; }
+.shop .back { background: none; border: 0; color: var(--ink); opacity: 0.8; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0; margin-bottom: 4px; }
+.shop .packs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.shop .pack { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); color: var(--ink); cursor: pointer; }
+.shop .pack:disabled { opacity: 0.55; cursor: default; }
+.shop .pack img { width: 100%; max-width: 110px; aspect-ratio: 1; border-radius: 10px; }
+.shop .pack b { font-size: 16px; display: inline-flex; align-items: center; gap: 4px; }
+.shop .pack .bonus { position: absolute; top: 6px; right: 6px; background: #95b957; color: #23211f; font-size: 11px; font-weight: 800; border-radius: 99px; padding: 2px 6px; }
+.shop .pack .price { background: #f3d27a; color: #23211f; border-radius: 99px; padding: 4px 12px; font-weight: 800; }
+.shop .small { font-size: 12px; }
+.shop .secure { display: flex; align-items: center; gap: 5px; margin-top: 10px; }
+.layout-phone .shop .civ { grid-template-columns: 1fr auto; }
+.layout-phone .shop .civ .civ-preview { grid-column: 1 / -1; }
+/* Phone top bar with the shop button: tighter buttons, the flag lives on long-press there. */
+.layout-phone .topbar .top-actions { gap: 4px; flex: none; }
+.layout-phone .topbar .top-actions .icon-btn { width: 36px; height: 36px; }
+.layout-phone .topbar .top-actions .icon-btn[aria-label="Place a flag"] { display: none; }
+.layout-phone .topbar .stats { min-width: 0; overflow: hidden; }
