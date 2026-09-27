@@ -1,0 +1,22 @@
+{
+  "name": "openworldchess",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "pnpm --filter @owc/server dev",
+    "dev:client": "pnpm --filter @owc/client dev",
+    "bots": "pnpm --filter @owc/bots start",
+    "build": "pnpm --filter @owc/client build",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "balance": "pnpm --filter @owc/worldgen balance",
+    "art": "pnpm --filter owc-art build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -2,6 +2,7 @@
 
 | Doc | What it covers |
 |---|---|
+| [STATUS.md](STATUS.md) | What's built against each spec, deviations and why, how to run. |
 | [DESIGN.md](DESIGN.md) | The game vision in your own words, and the rules you've decided. |
 | [PRINCIPLES.md](PRINCIPLES.md) | Emergence over features, one interaction model, mobile and desktop from day 0; an audit of the specs against these. |
 | [TECH.md](TECH.md) | Every technical decision: the options, the tradeoffs, and a recommendation. |

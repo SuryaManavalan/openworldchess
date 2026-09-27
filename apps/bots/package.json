@@ -1,0 +1,20 @@
+{
+  "name": "@owc/bots",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@owc/client-core": "workspace:*",
+    "@owc/engine": "workspace:*",
+    "@owc/rules": "workspace:*",
+    "@owc/shared": "workspace:*",
+    "@owc/worldgen": "workspace:*",
+    "chess.js": "1.4.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12"
+  }
+}

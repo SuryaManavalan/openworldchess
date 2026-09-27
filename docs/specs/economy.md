@@ -81,6 +81,7 @@ New pieces appear at the building's door.
 - Several buildings of the same type stack their output. Two stables produce two knights every 4 minutes.
 - **Sharing:** if two buildings draw from the same node, they take turns, so crowding buildings around one wheat field slows all of them.
 - The palace alternates king, queen, king, queen. The owner can pin it to only kings or only queens.
+- **Any building can be paused** by its owner. Without this, houses (the fastest producers) fill the population cap and starve every other building. Found by the bot simulation.
 - **Temple bishops** alternate square color; the building's door is placed so both colors can leave.
 - When a node runs out, the building shows an "exhausted" icon and waits. Renewable nodes regrow; for stone and gold, the player needs a new site.
 - **Node size** scales with the area's elo ([world.md](world.md) §4). Mines in high-elo pockets last much longer.

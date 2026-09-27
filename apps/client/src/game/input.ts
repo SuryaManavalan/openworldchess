@@ -1,0 +1,380 @@
+// Input (ux.md §3): touch gestures and mouse/keyboard both turn into the same
+// commands. One model everywhere: select, then direct.
+import { REACH, cheb, type Piece } from '@owc/shared';
+import type { Scene } from './scene.ts';
+import { commands, mirror } from '../net.ts';
+import { useUI } from '../store.ts';
+import { audio } from '../audio/audio.ts';
+import { checkPlacement } from './placement.ts';
+
+interface Ptr { id: number; x: number; y: number; sx: number; sy: number; t0: number; type: string; button: number }
+
+const TAP_MOVE = 10;
+const LONG_PRESS = 420;
+
+const haptic = (ms = 10) => { try { navigator.vibrate?.(ms); } catch { /* not supported */ } };
+
+export class Input {
+  scene: Scene;
+  private ptrs = new Map<number, Ptr>();
+  private mode: 'none' | 'pan' | 'command' | 'lasso' | 'box' | 'pinch' | 'ghost' = 'none';
+  private longTimer: ReturnType<typeof setTimeout> | null = null;
+  private longFired = false;
+  private lastTap = { t: 0, x: 0, y: 0 };
+  private pinch = { d: 0, a: 0, mx: 0, my: 0, rotAcc: 0 };
+  private vel = { x: 0, y: 0 };
+  private keys = new Set<string>();
+  private lassoPts: [number, number][] = [];
+  pendingMove: [number, number] | null = null;
+
+  constructor(scene: Scene) {
+    this.scene = scene;
+    const el = scene.app.canvas;
+    el.addEventListener('pointerdown', (e) => this.down(e));
+    window.addEventListener('pointermove', (e) => this.move(e));
+    window.addEventListener('pointerup', (e) => this.up(e));
+    window.addEventListener('pointercancel', (e) => this.up(e, true));
+    el.addEventListener('wheel', (e) => { e.preventDefault(); this.touched(); scene.zoomBy(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('keydown', (e) => this.key(e, true));
+    window.addEventListener('keyup', (e) => this.key(e, false));
+    scene.app.ticker.add(() => this.tick());
+  }
+
+  private touched() {
+    this.scene.lastInput = Date.now();
+    if (useUI.getState().watching) useUI.getState().set({ watching: false });
+    audio.unlock().then(() => audio.setVolumes(useUI.getState().settings));
+  }
+
+  private sq(e: { offsetX: number; offsetY: number } | Ptr): [number, number] {
+    const [x, y] = 'offsetX' in e ? this.scene.toSquare(e.offsetX, e.offsetY) : this.scene.toSquare(e.x, e.y);
+    return [x, y];
+  }
+  private local(e: PointerEvent) {
+    const r = this.scene.app.canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  // ---------- pointer ----------
+
+  private down(e: PointerEvent) {
+    this.touched();
+    const { x, y } = this.local(e);
+    const p: Ptr = { id: e.pointerId, x, y, sx: x, sy: y, t0: performance.now(), type: e.pointerType, button: e.button };
+    this.ptrs.set(e.pointerId, p);
+    this.vel = { x: 0, y: 0 };
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    if (this.ptrs.size === 2) {
+      this.cancelLong();
+      const [a, b] = [...this.ptrs.values()];
+      this.mode = 'pinch';
+      this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), a: Math.atan2(b.y - a.y, b.x - a.x), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, rotAcc: 0 };
+      this.scene.pathPreview = null; this.scene.lasso = null; this.scene.box = null;
+      return;
+    }
+    if (this.ptrs.size > 2) return;
+    this.mode = 'none';
+    this.longFired = false;
+    const ui = useUI.getState();
+    if (ui.buildType) { this.mode = 'ghost'; this.updateGhost(this.sq(p)); return; }
+    if (e.pointerType === 'mouse') {
+      if (e.button === 1) this.mode = 'pan';
+      return;
+    }
+    // touch: long-press starts a lasso (ux.md §3)
+    this.longTimer = setTimeout(() => {
+      this.longFired = true;
+      if (this.mode === 'none') {
+        haptic(15);
+        this.mode = 'lasso';
+        this.lassoPts = [this.sq(p)];
+        this.scene.lasso = this.lassoPts;
+      }
+    }, LONG_PRESS);
+  }
+
+  private cancelLong() { if (this.longTimer) clearTimeout(this.longTimer); this.longTimer = null; }
+
+  private move(e: PointerEvent) {
+    const { x, y } = this.local(e);
+    const p = this.ptrs.get(e.pointerId);
+    if (!p) {
+      if (e.pointerType === 'mouse') {
+        const [sx, sy] = this.scene.toSquare(x, y);
+        this.scene.hover = [Math.round(sx), Math.round(sy)];
+        if (useUI.getState().buildType) this.updateGhost([sx, sy]);
+      }
+      return;
+    }
+    const dx = x - p.x, dy = y - p.y;
+    p.x = x; p.y = y;
+    const moved = Math.hypot(x - p.sx, y - p.sy);
+    const sc = this.scene;
+    if (this.mode === 'pinch' && this.ptrs.size >= 2) {
+      const [a, b] = [...this.ptrs.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      sc.zoomBy(d / Math.max(1, this.pinch.d), mx, my);
+      this.panScreen(mx - this.pinch.mx, my - this.pinch.my);
+      // Two-finger twist rotates in 90° steps with a haptic tick (ux.md §3).
+      let da = ang - this.pinch.a;
+      if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
+      this.pinch.rotAcc += da;
+      if (Math.abs(this.pinch.rotAcc) > 0.6) { sc.rotate(this.pinch.rotAcc > 0 ? -1 : 1); this.pinch.rotAcc = 0; haptic(12); }
+      this.pinch.d = d; this.pinch.a = ang; this.pinch.mx = mx; this.pinch.my = my;
+      return;
+    }
+    if (this.mode === 'ghost') { this.updateGhost(this.sq(p)); return; }
+    if (this.mode === 'none' && moved > TAP_MOVE) {
+      this.cancelLong();
+      const [wx, wy] = this.sq({ ...p, x: p.sx, y: p.sy });
+      const under = sc.pickPiece(wx, wy, 0.75);
+      const sel = useUI.getState().selection;
+      if (p.type === 'mouse') {
+        if (p.button === 2 || p.button === 1) this.mode = 'pan';
+        else if (under && sel.includes(under.id)) this.mode = 'command';
+        else { this.mode = 'box'; sc.box = { a: [wx, wy], b: [wx, wy] }; }
+      } else this.mode = under && sel.includes(under.id) ? 'command' : 'pan';
+    }
+    if (this.mode === 'pan') { this.panScreen(dx, dy); this.vel = { x: dx, y: dy }; }
+    else if (this.mode === 'command') this.previewCommand(this.sq(p));
+    else if (this.mode === 'lasso') {
+      const s = this.sq(p);
+      const last = this.lassoPts[this.lassoPts.length - 1];
+      if (Math.hypot(s[0] - last[0], s[1] - last[1]) > 0.3) this.lassoPts.push(s);
+    } else if (this.mode === 'box' && sc.box) sc.box.b = this.sq(p);
+  }
+
+  private up(e: PointerEvent, cancelled = false) {
+    const p = this.ptrs.get(e.pointerId);
+    if (!p) return;
+    this.ptrs.delete(e.pointerId);
+    this.cancelLong();
+    const sc = this.scene;
+    if (this.mode === 'pinch') { if (this.ptrs.size === 0) this.mode = 'none'; return; }
+    const moved = Math.hypot(p.x - p.sx, p.y - p.sy);
+    const at = this.sq(p);
+    if (cancelled) { this.reset(); return; }
+    switch (this.mode) {
+      case 'command': this.finishCommand(at); break;
+      case 'lasso': this.finishLasso(); break;
+      case 'box': this.finishBox(); break;
+      case 'ghost':
+        if (p.type === 'mouse') this.placeBuilding();
+        break;
+      case 'pan': break;
+      default:
+        if (moved <= TAP_MOVE) {
+          if (p.type === 'mouse' && p.button === 2) this.rightClick(at);
+          else if (this.longFired) this.longPress(at);
+          else this.tap(at, p.type);
+        }
+    }
+    this.reset();
+  }
+
+  private reset() {
+    this.mode = 'none';
+    this.scene.pathPreview = null; this.scene.lasso = null; this.scene.box = null;
+  }
+
+  private panScreen(dx: number, dy: number) {
+    const sc = this.scene;
+    const th = sc.theta, z = sc.cam.zoom * 64;
+    // screen delta → world delta (inverse rotation)
+    const wx = (dx * Math.cos(th) + dy * Math.sin(th)) / z, wy = (-dx * Math.sin(th) + dy * Math.cos(th)) / z;
+    sc.cam.x -= wx; sc.cam.y -= wy;
+  }
+
+  // ---------- gestures → commands ----------
+
+  private myPiece(x: number, y: number) {
+    const p = this.scene.pickPiece(x, y, 0.75);
+    return p && p.owner === mirror.me ? p : undefined;
+  }
+
+  /** The group a king leads: your pieces within its reach (movement.md §4). */
+  groupOf(p: Piece): number[] {
+    const king = p.kind === 'K' ? p : mirror.myKings().filter((k) => cheb(k.x, k.y, p.x, p.y) <= REACH).sort((a, b) => cheb(a.x, a.y, p.x, p.y) - cheb(b.x, b.y, p.x, p.y))[0];
+    if (!king) return [p.id];
+    return mirror.myPieces().filter((q) => q.state !== 'battle' && cheb(q.x, q.y, king.x, king.y) <= REACH && (q.kind !== 'K' || q.id === king.id)).map((q) => q.id);
+  }
+
+  private tap(at: [number, number], type: string) {
+    const ui = useUI.getState(), sc = this.scene;
+    const now = performance.now();
+    const dbl = now - this.lastTap.t < 320 && Math.hypot(at[0] - this.lastTap.x, at[1] - this.lastTap.y) < 1.2;
+    this.lastTap = { t: now, x: at[0], y: at[1] };
+    const mine = this.myPiece(at[0], at[1]);
+    if (mine) {
+      this.pendingMove = null;
+      if (dbl) { const g = this.groupOf(mine); this.selectWithSound(g); haptic(); return; }
+      const shift = this.keys.has('Shift');
+      const sel = ui.selection;
+      if (shift || (type !== 'mouse' && sel.length && ui.lassoMode)) this.selectWithSound(sel.includes(mine.id) ? sel.filter((i) => i !== mine.id) : [...sel, mine.id]);
+      else this.selectWithSound([mine.id]);
+      return;
+    }
+    const arena = sc.pickArena(at[0], at[1]);
+    if (arena) { useUI.getState().set({ battleFocus: arena.id }); return; }
+    const other = sc.pickPiece(at[0], at[1], 0.75);
+    if (other && ui.selection.length && type !== 'mouse') { this.issue(at, other); return; }
+    if (other) { const pl = other.owner ? mirror.players.get(other.owner) : null; ui.toast(pl ? `${pl.name} · ${pl.rating}` : 'Masterless'); return; }
+    const b = sc.pickBuilding(at[0], at[1]);
+    if (b && b.owner === mirror.me && !ui.selection.length) { ui.set({ sheet: 'details', selection: [] }); useUI.getState().set({ hint: `building:${b.id}` }); return; }
+    if (ui.selection.length) {
+      if (type === 'mouse') { ui.select([]); return; }
+      // Two-step command for touch: tap the ground to place, then confirm (ux.md §3).
+      this.pendingMove = [Math.round(at[0]), Math.round(at[1])];
+      sc.pathPreview = null;
+      ui.bump();
+      return;
+    }
+  }
+
+  private longPress(at: [number, number]) {
+    const mine = this.myPiece(at[0], at[1]);
+    if (mine) { this.selectWithSound(this.groupOf(mine)); haptic(); }
+  }
+
+  private rightClick(at: [number, number]) {
+    const sel = useUI.getState().selection;
+    if (!sel.length) return;
+    this.issue(at, this.scene.pickPiece(at[0], at[1], 0.75));
+  }
+
+  private previewCommand(at: [number, number]) {
+    const sel = useUI.getState().selection.map((id) => mirror.pieces.get(id)).filter(Boolean) as Piece[];
+    if (!sel.length) return;
+    const lead = sel.find((p) => p.kind === 'K') ?? sel[0];
+    const target = this.scene.pickPiece(at[0], at[1], 0.75);
+    const enemy = !!target && target.owner !== mirror.me;
+    const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
+    const ok = sel.some((p) => p.kind === 'K') || mirror.myKings().some((k) => cheb(k.x, k.y, to[0], to[1]) <= REACH);
+    this.scene.pathPreview = { from: [lead.x, lead.y], to, ok, attack: enemy };
+  }
+
+  private finishCommand(at: [number, number]) {
+    const target = this.scene.pickPiece(at[0], at[1], 0.75);
+    this.issue(at, target);
+  }
+
+  /** Move there, or attack whatever king holds the thing there. */
+  issue(at: [number, number], target?: Piece) {
+    const ui = useUI.getState();
+    const sel = ui.selection;
+    if (!sel.length) return;
+    const b = !target ? this.scene.pickBuilding(at[0], at[1]) : undefined;
+    const enemyOwner = target && target.owner !== mirror.me ? target.owner : b && b.owner && b.owner !== mirror.me ? b.owner : null;
+    if (enemyOwner) {
+      const ref = target ?? { x: b!.x, y: b!.y };
+      const king = target?.kind === 'K' ? target : [...mirror.pieces.values()]
+        .filter((p) => p.owner === enemyOwner && p.kind === 'K' && p.state !== 'battle')
+        .sort((a, c) => cheb(a.x, a.y, ref.x, ref.y) - cheb(c.x, c.y, ref.x, ref.y))[0];
+      if (!king) { ui.toast('No enemy king there to challenge', 'error'); return; }
+      if (!sel.some((id) => mirror.pieces.get(id)?.kind === 'K')) { ui.toast('An attack needs a king in your selection', 'error'); audio.error(); return; }
+      const siege = [...mirror.buildings.values()].some((bl) => bl.owner === enemyOwner && cheb(bl.x, bl.y, king.x, king.y) <= REACH);
+      ui.set({ pendingAttack: { pieceIds: sel, targetKingId: king.id, name: mirror.players.get(enemyOwner)?.name ?? 'enemy', siege } });
+      audio.attack(); haptic(20);
+      return;
+    }
+    const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
+    this.scene.fx.ripple(to[0], to[1], 0xffffff);
+    audio.commit(); haptic();
+    this.pendingMove = null;
+    commands.move(sel, to).then((err) => { if (err) audio.error(); });
+  }
+
+  private selectWithSound(ids: number[]) {
+    useUI.getState().select(ids);
+    ids.slice(0, 14).forEach((_, i) => audio.select(i));
+  }
+
+  private finishLasso() {
+    const pts = this.lassoPts;
+    if (pts.length < 3) return;
+    const inside = (x: number, y: number) => {
+      let c = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i], [xj, yj] = pts[j];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+      }
+      return c;
+    };
+    const ids = mirror.myPieces().filter((p) => p.state !== 'battle' && inside(p.x, p.y)).map((p) => p.id);
+    // Pop one after another along the loop (visuals.md §5).
+    ids.forEach((id, i) => this.scene.fx.schedule(i * 45, () => { const v = this.scene.pieces.get(id); if (v) v.pop = performance.now(); }));
+    this.selectWithSound(ids);
+    if (ids.length) haptic(12);
+  }
+
+  private finishBox() {
+    const b = this.scene.box;
+    if (!b) return;
+    const [x0, x1] = [Math.min(b.a[0], b.b[0]), Math.max(b.a[0], b.b[0])], [y0, y1] = [Math.min(b.a[1], b.b[1]), Math.max(b.a[1], b.b[1])];
+    const ids = mirror.myPieces().filter((p) => p.state !== 'battle' && p.x >= x0 - 0.5 && p.x <= x1 + 0.5 && p.y >= y0 - 0.5 && p.y <= y1 + 0.5).map((p) => p.id);
+    const sel = this.keys.has('Shift') ? [...new Set([...useUI.getState().selection, ...ids])] : ids;
+    this.selectWithSound(sel);
+  }
+
+  // ---------- building ----------
+
+  updateGhost(at: [number, number]) {
+    const ui = useUI.getState();
+    if (!ui.buildType) return;
+    const size = ({ house: 1, stable: 2, temple: 2, barracks: 2, palace: 3 } as const)[ui.buildType];
+    const x = Math.round(at[0] - (size - 1) / 2), y = Math.round(at[1] - (size - 1) / 2);
+    const res = checkPlacement(ui.buildType, x, y);
+    ui.set({ ghost: { x, y, ok: res.ok, reason: res.reason } });
+  }
+
+  placeBuilding() {
+    const ui = useUI.getState();
+    if (!ui.buildType || !ui.ghost) return;
+    const { x, y, ok, reason } = ui.ghost;
+    if (!ok) { ui.toast(reason, 'error'); audio.error(); return; }
+    const type = ui.buildType;
+    commands.build(type, [x, y]).then((err) => {
+      if (!err) { audio.build(); this.scene.fx.dust(x, y, 12); haptic(15); ui.set({ buildType: null, ghost: null }); }
+      else audio.error();
+    });
+  }
+
+  // ---------- keyboard ----------
+
+  private key(e: KeyboardEvent, down: boolean) {
+    if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (down) this.keys.add(k); else this.keys.delete(k);
+    if (!down) return;
+    this.touched();
+    const ui = useUI.getState(), sc = this.scene;
+    if (k === 'q') sc.rotate(-1);
+    else if (k === 'e') sc.rotate(1);
+    else if (k === 'Escape') { if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else ui.select([]); }
+    else if (k === 's' && !e.ctrlKey) { if (ui.selection.length) commands.stop(ui.selection); }
+    else if (k === 'b') ui.set({ sheet: ui.sheet === 'build' ? null : 'build' });
+    else if (k === 'h' || k === 'Home') { const emp = mirror.myPieces().find((p) => p.emperor); if (emp) sc.centerOn(emp.x, emp.y); }
+    else if (k === '+' || k === '=') sc.zoomBy(1.15);
+    else if (k === '-') sc.zoomBy(1 / 1.15);
+    else if (k === 'a' && e.ctrlKey) { e.preventDefault(); this.selectWithSound(mirror.myPieces().filter((p) => p.state !== 'battle').map((p) => p.id)); }
+  }
+
+  private tick() {
+    const sc = this.scene, dt = sc.app.ticker.deltaMS;
+    const speed = (0.5 * dt) / Math.max(0.3, sc.cam.zoom);
+    let dx = 0, dy = 0;
+    if (this.keys.has('w') || this.keys.has('ArrowUp')) dy -= 1;
+    if (this.keys.has('s') && !this.keys.has('Control') && !useUI.getState().selection.length) dy += 1;
+    if (this.keys.has('ArrowDown')) dy += 1;
+    if (this.keys.has('a') && !this.keys.has('Control') || this.keys.has('ArrowLeft')) dx -= 1;
+    if (this.keys.has('d') || this.keys.has('ArrowRight')) dx += 1;
+    if (dx || dy) { this.panScreen(-dx * speed * 1.8, -dy * speed * 1.8); sc.lastInput = Date.now(); }
+    // inertia after a touch pan
+    if (this.mode === 'none' && (Math.abs(this.vel.x) > 0.1 || Math.abs(this.vel.y) > 0.1)) {
+      this.panScreen(this.vel.x, this.vel.y);
+      this.vel.x *= 0.92; this.vel.y *= 0.92;
+    }
+  }
+}

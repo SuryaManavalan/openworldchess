@@ -1,0 +1,22 @@
+{
+  "name": "@owc/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@owc/shared": "workspace:*",
+    "@owc/rules": "workspace:*",
+    "@owc/worldgen": "workspace:*",
+    "chess.js": "1.4.0",
+    "ws": "^8.18.0",
+    "zod": "^3.25.0",
+    "@owc/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12",
+    "@owc/client-core": "workspace:*"
+  }
+}

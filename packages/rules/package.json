@@ -1,0 +1,13 @@
+{
+  "name": "@owc/rules",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@owc/shared": "workspace:*",
+    "@owc/worldgen": "workspace:*",
+    "chess.js": "1.4.0"
+  }
+}

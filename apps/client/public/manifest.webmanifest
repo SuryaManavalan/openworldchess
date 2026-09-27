@@ -1,0 +1,10 @@
+{
+  "name": "Open World Chess",
+  "short_name": "OW Chess",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#23211f",
+  "theme_color": "#23211f",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

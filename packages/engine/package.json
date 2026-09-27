@@ -1,0 +1,7 @@
+{
+  "name": "@owc/engine",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "stockfish": "19.0.0" }
+}

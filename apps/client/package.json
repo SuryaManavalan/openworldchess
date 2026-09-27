@@ -1,0 +1,29 @@
+{
+  "name": "@owc/client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@owc/client-core": "workspace:*",
+    "@owc/rules": "workspace:*",
+    "@owc/shared": "workspace:*",
+    "@owc/worldgen": "workspace:*",
+    "owc-art": "workspace:*",
+    "chess.js": "1.4.0",
+    "pixi.js": "^8.13.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tone": "^15.1.22",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.1.0"
+  }
+}
