@@ -212,9 +212,11 @@ export class Wilds {
     // kings of online players get most of it, bots' lands fill in slowly (performance.md §4).
     const person = (k: Piece) => { const pl = g.players.get(k.owner!); return !!pl && !pl.isBot && pl.online; };
     const ordered = [...kings.filter(person), ...kings.filter((k) => !person(k))];
-    let siteBudget = 10;
+    // Time, not a count: some sites cost far more than others. People's lands get most of it.
+    const t0 = performance.now();
+    let siteMs = 40;
     for (const k of ordered) {
-      if (!person(k) && siteBudget > 3) siteBudget = 3;
+      if (!person(k)) siteMs = Math.min(siteMs, 12);
       const i0 = Math.floor((k.x - SPAWN_NEAR) / CAMP_CELL), i1 = Math.floor((k.x + SPAWN_NEAR) / CAMP_CELL);
       const j0 = Math.floor((k.y - SPAWN_NEAR) / CAMP_CELL), j1 = Math.floor((k.y + SPAWN_NEAR) / CAMP_CELL);
       for (let j = j0; j <= j1; j++)
@@ -225,7 +227,7 @@ export class Wilds {
           if (!this.cellSeen.has(cell)) this.cellSeen.set(cell, now);
           if (active.has(cell) || (this.cleared.get(cell) ?? 0) > now) continue;
           // New sites cost CPU (worldgen): a few dozen per tick, the rest next time.
-          if (!this.sites.has(cell) && siteBudget-- <= 0) continue;
+          if (!this.sites.has(cell) && performance.now() - t0 > siteMs) continue;
           const s = this.site(i, j);
           if (!s) continue;
           const age = Math.min(1, (now - this.cellSeen.get(cell)!) / CELL_FILL_MS);

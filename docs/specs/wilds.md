@@ -50,7 +50,7 @@ A faction also has a **minimum area rating** (the Orc Warhost needs 900, the Dra
 
   `size limit = min(16, 6 + ⌊0.75 × player buildings within 110⌋ + ⌊age / 40 min⌋ + strength bonus)`
 
-  A new camp starts with 3 to 5 pieces (a king and pawns, then a knight), plus the strength bonus. If the picked faction's resource isn't near a site, another faction of that biome that fits camps there instead. New sites are checked on a budget: 10 every 5 seconds, **online people's lands first**, with bots' lands getting what's left.
+  A new camp starts with 3 to 5 pieces (a king and pawns, then a knight), plus the strength bonus. If the picked faction's resource isn't near a site, another faction of that biome that fits camps there instead. New sites are checked on a time budget: 40 ms every 5 seconds, **online people's lands first**; bots' lands get a sliver.
 
 - **Stronger players meet bigger bands.** The strength bonus is one piece per 120 rating above 900 (up to 8), for the best-rated player with a king within 220 squares. A new camp also *starts* with that many extra pieces. A 1000-rated newcomer meets bands of 3–5 that grow to 6 or more; a 1500-rated player meets bands of 7–9 that grow to full sets.
 
