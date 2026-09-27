@@ -44,6 +44,7 @@ Covers the player's rating, the Emperor, losing everything and starting over, an
 
 ## 4. Protection for new players (Proposed)
 
+- **Where new players start (Decided after playtesting):** a short ride from an existing empire, a person's or a bot's. The start is 70 to 220 squares from a random empire's home, with no other empire's king within 60 squares, in the new-player area (area rating ≤ 1050), on a viable site (wood and wheat in reach). So everyone has neighbors to find, trade roads to build and rivals to fight, without starting on top of anyone. Wild camps don't count as empires: an earlier version counted them, and new players spawned about 2,000 squares from everyone.
 - **Spawn shield:** a new or respawned player can't be attacked for **2 hours of online play** or until they attack someone, whichever comes first. A visible bubble shows over their buildings.
 - Elo areas already separate strong players from new ones. The shield covers the gap before that separation settles.
 - The shield covers only the new-player zone. Pieces that leave it aren't shielded, which keeps early scouting interesting.

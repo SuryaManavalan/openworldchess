@@ -19,7 +19,8 @@ const COUNTDOWN_SCALE = Number(process.env.COUNTDOWN_SCALE ?? 1);
 const DATA = process.env.DATA ?? new URL('../../../data/world.json', import.meta.url).pathname;
 const STATIC = process.env.STATIC ?? new URL('../../client/dist/', import.meta.url).pathname;
 
-const game = new Game({ seed: SEED, speed: SPEED });
+// WILDS=0 turns the wilds off (the end-to-end test checks the core loop without raids).
+const game = new Game({ seed: SEED, speed: SPEED, wilds: process.env.WILDS !== '0' });
 /** Full holdings resync (turn deltas already carry your own pieces); saving is a big synchronous write. */
 const MINE_EVERY_MS = 30_000;
 const SAVE_EVERY_MS = 60_000;

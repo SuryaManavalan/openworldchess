@@ -70,6 +70,8 @@ describe('wilds', () => {
   it('a horde raids an online troop that comes close, but never an Emperor', () => {
     const horde = game.wilds.camps().find((c) => FACTIONS[c.wild!.faction].temper !== 'herd' && game.wilds.piecesOf(c).length >= 3);
     if (!horde) return; // no raiders near this spawn in this seed
+    // Everyone else steps away (camps only raid online players), so the Wanderer is the only target.
+    for (const o of game.players.values()) if (!o.wild) o.online = false;
     const p = join('Wanderer');
     const emp = game.kingsOf(p.id).find((k) => k.emperor)!;
     const other = game.kingsOf(p.id).find((k) => !k.emperor)!;

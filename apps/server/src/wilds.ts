@@ -214,7 +214,8 @@ export class Wilds {
     const ordered = [...kings.filter(person), ...kings.filter((k) => !person(k))];
     // Time, not a count: some sites cost far more than others. People's lands get most of it.
     const t0 = performance.now();
-    let siteMs = 40;
+    // (Without a network layer, as in tests, everything counts as viewed: no time limit, so results don't depend on CPU speed.)
+    let siteMs = this.viewed ? 40 : Infinity;
     for (const k of ordered) {
       if (!person(k)) siteMs = Math.min(siteMs, 12);
       const i0 = Math.floor((k.x - SPAWN_NEAR) / CAMP_CELL), i1 = Math.floor((k.x + SPAWN_NEAR) / CAMP_CELL);

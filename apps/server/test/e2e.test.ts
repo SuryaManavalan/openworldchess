@@ -25,7 +25,7 @@ async function until<T>(f: () => T | undefined | null | false, ms = 20_000, step
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'owc-'));
   server = spawn(process.execPath, ['apps/server/src/main.ts'], {
-    env: { ...process.env, PORT: String(PORT), DATA: join(dir, 'w.json'), TURN_MS: '50', COUNTDOWN_SCALE: '0.05', SPEED: '400', SHIELD_MS: '0', SEED: '7', GUEST_GRACE_MS: '2500' },
+    env: { ...process.env, PORT: String(PORT), DATA: join(dir, 'w.json'), TURN_MS: '50', COUNTDOWN_SCALE: '0.05', SPEED: '400', SHIELD_MS: '0', SEED: '7', GUEST_GRACE_MS: '2500', WILDS: '0' },
     stdio: 'inherit',
   });
   await until(async () => (await fetch(`http://localhost:${PORT}/health`).catch(() => null))?.ok, 15_000);

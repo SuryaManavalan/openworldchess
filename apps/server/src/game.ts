@@ -268,14 +268,26 @@ export class Game {
   spawn(p: PlayerRec, targetElo?: number, awayFrom?: [number, number]) {
     const w = this.world;
     let site: [number, number] | null = null;
+    // New players settle a short ride from an existing empire (70–220 squares): neighbors
+    // to find and fight, never on top of anyone (viableSite keeps 40 from buildings,
+    // 14 from pieces). Empires are people and bots; the wilds' camps don't count.
+    const empires = [...this.players.values()].filter((o) => o !== p && !o.wild && this.kingsByOwner.get(o.id)?.size);
+    const settled = empires.length;
     for (let i = 0; i < 1500 && !site; i++) {
       const a = Math.random() * Math.PI * 2;
-      // New players settle near each other so the world feels populated (and fights happen).
-      const r = targetElo == null ? 60 + Math.random() * Math.min(2400, 140 + this.players.size * 20) : 3000 + Math.random() * 12000;
-      const x = Math.round(Math.cos(a) * r), y = Math.round(Math.sin(a) * r);
+      let ox = 0, oy = 0, r: number;
+      if (targetElo != null) r = 3000 + Math.random() * 12000;
+      else if (settled && i < 1000) {
+        // Around a random empire's home (a fresh one each try, so we find open land).
+        const e = empires[Math.floor(Math.random() * settled)];
+        [ox, oy] = e.home; r = 70 + Math.random() * 150;
+      } else r = 60 + Math.random() * Math.min(2400, 140 + settled * 20);
+      const x = Math.round(ox + Math.cos(a) * r), y = Math.round(oy + Math.sin(a) * r);
       if (awayFrom && cheb(x, y, awayFrom[0], awayFrom[1]) < 500) continue;
       const e = w.elo(x, y);
       if (targetElo == null ? e > 1050 : Math.abs(e - targetElo) > 200) continue;
+      // Neighbors, not roommates: no other empire's king within 60 squares.
+      if (targetElo == null && i < 1200 && w.piecesNear(x, y, 60).some((q) => q.kind === 'K' && q.owner && q.owner !== p.id && !this.players.get(q.owner)?.wild)) continue;
       if (this.viableSite(x, y)) site = [x, y];
     }
     site ??= [Math.round((Math.random() - 0.5) * 400), Math.round((Math.random() - 0.5) * 400)];
@@ -329,7 +341,9 @@ export class Game {
     for (const p of pieces) if (p.groupId) this.leaveGroup(p);
     const leader = king ?? pieces.reduce((a, b) => (cheb(a.x, a.y, tx, ty) <= cheb(b.x, b.y, tx, ty) ? a : b));
     const endPath = perf.start('path.order');
-    const path = findPathLong(leader.x, leader.y, tx, ty, (x, y) => this.world.walkable(x, y), 40000, this.players.get(player)?.isBot || this.players.get(player)?.wild ? 80 : 250);
+    // Time limits keep a live server responsive; without one (tests) results mustn't depend on CPU speed.
+    const live = !!this.viewed;
+    const path = findPathLong(leader.x, leader.y, tx, ty, (x, y) => this.world.walkable(x, y), 40000, !live ? 5000 : this.players.get(player)?.isBot || this.players.get(player)?.wild ? 80 : 250);
     endPath();
     const gid = this.world.id();
     const state = newGroup(gid, pieces, path, [leader.x, leader.y]);
@@ -451,7 +465,7 @@ export class Game {
     this.watchedNow = this.viewed?.() ?? null;
     let endPhase = perf.start('turn.groups');
     // Long-route planning inside a turn shares one time budget; the rest waits a turn.
-    let legMs = 60;
+    let legMs = this.viewed ? 60 : Infinity;
     for (const [gid, g] of [...this.groups].sort((a, b) => a[0] - b[0])) {
       const pieces = [...w.pieces.values()].filter((p) => p.groupId === gid && p.state === 'moving');
       if (!pieces.length) { this.groups.delete(gid); continue; }
@@ -529,7 +543,7 @@ export class Game {
         g.legs = g.legFrom != null && left < g.legFrom - 4 ? 0 : (g.legs ?? 0) + 1;
         g.legFrom = left;
         const t0 = performance.now();
-        const leg = findPathLong(g.state.lead[0], g.state.lead[1], goal[0], goal[1], (x, y) => w.walkable(x, y), 40000, Math.min(60, legMs));
+        const leg = findPathLong(g.state.lead[0], g.state.lead[1], goal[0], goal[1], (x, y) => w.walkable(x, y), 40000, Math.min(this.viewed ? 60 : 5000, legMs));
         legMs -= performance.now() - t0;
         if (leg.length) { g.state.path = [...g.state.path, ...leg]; g.state.done = false; }
       }
