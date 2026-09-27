@@ -37,6 +37,7 @@ export class Connection {
   private rid = 1;
   private pending = new Map<number, (err: string | null) => void>();
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private resubTimer: ReturnType<typeof setInterval> | null = null;
   closed = false;
   status: 'connecting' | 'open' | 'closed' = 'connecting';
 
@@ -88,6 +89,10 @@ export class Connection {
         this.mirror.chunks.clear();
         if (this.subs.length) this.sendRaw({ t: 'sub', chunks: this.subs });
         this.pingTimer = setInterval(() => this.sendRaw({ t: 'ping', at: Date.now() }), 10_000);
+        // The server sends at most ~30 new chunks per request: ask again for any still missing.
+        this.resubTimer ??= setInterval(() => {
+          if (this.status === 'open' && this.subs.some(([x, y]) => !this.mirror.chunks.has(chunkKey(x, y)))) this.sendRaw({ t: 'sub', chunks: this.subs });
+        }, 700);
       }
       this.mirror.handle(m);
     };
@@ -136,5 +141,5 @@ export class Connection {
     this.sendRaw({ t: 'sub', chunks });
   }
 
-  close() { this.closed = true; this.ws?.close(); }
+  close() { this.closed = true; if (this.resubTimer) clearInterval(this.resubTimer); this.ws?.close(); }
 }

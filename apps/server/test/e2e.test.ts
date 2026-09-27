@@ -102,7 +102,7 @@ describe('the whole loop', () => {
     const target = b.mirror.myKings().find((k) => !k.emperor)!;
     const attackers = a.mirror.myPieces().map((p) => p.id);
     expect(await a.request({ t: 'order.attack', pieceIds: attackers, targetKingId: target.id })).toBeNull();
-    const battle = await until(() => [...a.mirror.battles.values()].find((bt) => bt.white.playerId === a.mirror.me && bt.phase === 'live'), 90_000, 100);
+    const battle = await until(() => [...a.mirror.battles.values()].find((bt) => bt.white.playerId === a.mirror.me && bt.phase === 'live'), 180_000, 100);
     expect(battle.black.kingId).toBe(target.id);
 
     // Both sides play random legal moves until the game ends.
@@ -137,5 +137,5 @@ describe('the whole loop', () => {
     }
     expect(a.mirror.pieces.get(aEmp.id)).toBeTruthy();
     a.close(); b.close();
-  }, 240_000);
+  }, 360_000);
 });

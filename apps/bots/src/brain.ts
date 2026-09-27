@@ -221,7 +221,8 @@ export class Bot {
     // Sample directions; prefer higher area elo within a day's march.
     let best: [number, number] | null = null, bestScore = -Infinity;
     for (let i = 0; i < 24; i++) {
-      const a = Math.random() * Math.PI * 2, d = 24 + Math.random() * 40;
+      // Stay close enough that the realms touch: trade roads need a connected realm.
+      const a = Math.random() * Math.PI * 2, d = 14 + Math.random() * 12;
       const x = Math.round(mover.x + Math.cos(a) * d), y = Math.round(mover.y + Math.sin(a) * d);
       if (!buildable(terrainAt(m.seed, x, y))) continue;
       const score = eloAt(m.seed, x, y) / 100 - d / 30 + Math.random();

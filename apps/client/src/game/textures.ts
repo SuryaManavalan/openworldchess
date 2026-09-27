@@ -4,12 +4,14 @@
 import { Texture } from 'pixi.js';
 import * as piecesArt from 'owc-art/pieces';
 import * as worldArt from 'owc-art/world';
+import * as decorArt from 'owc-art/decor';
 import type { PieceKind } from '@owc/shared';
 
 type ArtFn = (o?: { side?: string; team?: string; emperor?: boolean }) => string;
 const PIECES = piecesArt.PIECES as unknown as Record<string, ArtFn>;
 const BUILDINGS = worldArt.BUILDINGS as unknown as Record<string, ArtFn>;
 const RESOURCES = worldArt.RESOURCES as unknown as Record<string, ArtFn>;
+const DECOR = decorArt.DECOR as unknown as Record<string, (o?: { team?: string; awning?: string }) => string>;
 const ART_NAME: Record<PieceKind, string> = { K: 'king', Q: 'queen', R: 'elephant', B: 'bishop', N: 'knight', P: 'pawn' };
 export const RES = 128; // raster size per 100x100 art unit
 
@@ -90,4 +92,8 @@ export function buildingUrl(type: string, team: string): string {
     urlCache.set(k, u);
   }
   return u;
+}
+
+export function decorTexture(kind: string, color = '#d9534a', variant?: string, onReady?: () => void) {
+  return get(`d:${kind}:${color}:${variant ?? ''}`, () => DECOR[kind]({ team: color, awning: variant ?? color }), 96, onReady);
 }

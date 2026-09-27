@@ -212,3 +212,13 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .layout-phone .topbar .me b { max-width: 26vw; }
 .layout-phone .topbar .me .muted { display: none; }
 .layout-phone .topbar .stats { gap: 7px; font-size: 14px; }
+
+.layout-phone .topbar .stats .day { display: none; }
+
+.nudge { position: absolute; left: 50%; transform: translateX(-50%); top: calc(58px + var(--safe-top)); width: min(520px, calc(100% - 24px)); display: flex; gap: 10px; align-items: center; background: var(--panel); border: 1px solid var(--gold); border-radius: 14px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); animation: drop 0.3s; }
+.nudge-text { flex: 1; font-size: 14px; line-height: 1.4; }
+.nudge-text b { color: #f3d27a; }
+.nudge-actions { display: flex; flex-direction: column; gap: 6px; }
+.layout-phone .nudge { top: auto; bottom: calc(150px + var(--safe-bottom)); flex-direction: column; align-items: stretch; }
+.layout-phone .nudge-actions { flex-direction: row; }
+.layout-phone .nudge-actions .btn { flex: 1; }

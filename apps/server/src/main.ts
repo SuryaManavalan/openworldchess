@@ -45,7 +45,7 @@ const server = createServer((req, res) => {
 const net = new Net(game, server, TURN, originOk);
 
 let nextTurnAt = Date.now() + TURN;
-let lastEconomy = 0, lastMine = 0, lastSave = Date.now(), lastFall = 0;
+let lastEconomy = 0, lastMine = 0, lastSave = Date.now(), lastFall = 0, lastMaintain = Date.now(), lastFade = Date.now();
 net.nextTurnAt = nextTurnAt;
 
 setInterval(() => {
@@ -62,6 +62,12 @@ setInterval(() => {
   if (now - lastEconomy >= 1000) { lastEconomy = now; game.economy(now); }
   if (now - lastMine >= 2500) { lastMine = now; net.sendAllMine(); }
   if (now - lastFall >= Math.min(30_000, game.guestGraceMs / 2)) { lastFall = now; game.fallOfGuests(now); }
+  if (now - lastMaintain >= 60_000) {
+    lastMaintain = now;
+    const fade = now - lastFade >= 3_600_000;
+    if (fade) lastFade = now;
+    game.world.maintain(net.watchedChunks(), fade);
+  }
   if (now - lastSave >= 15_000) { lastSave = now; save(game, DATA); }
 }, Math.min(1000 / TICK_HZ, TURN / 2));
 

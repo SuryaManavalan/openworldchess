@@ -52,14 +52,12 @@ export function SignIn() {
   useEffect(() => {
     const onOpen = () => setOpen(true);
     window.addEventListener('owc:signin', onOpen);
-    // Remind guests once after a few minutes of play.
-    const t = setTimeout(() => { if (mirror.self?.guest && !sessionStorage.getItem('owc.reminded')) { sessionStorage.setItem('owc.reminded', '1'); setOpen(true); } }, 4 * 60_000);
     // Leaving as a guest: the browser shows its own "leave site?" prompt.
     const beforeUnload = (e: BeforeUnloadEvent) => { if (mirror.self?.guest && mirror.myPieces().length) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('beforeunload', beforeUnload);
     fetch('/auth/config').then((r) => r.json()).then((c) => ui.set({ googleEnabled: !!c.google })).catch(() => {});
     if (get('owc.signedin') === '1' && !sessionStorage.getItem('owc.signedin.toast')) { sessionStorage.setItem('owc.signedin.toast', '1'); setTimeout(() => ui.toast('Signed in. Your empire is safe.', 'good'), 1500); }
-    return () => { window.removeEventListener('owc:signin', onOpen); window.removeEventListener('beforeunload', beforeUnload); clearTimeout(t); };
+    return () => { window.removeEventListener('owc:signin', onOpen); window.removeEventListener('beforeunload', beforeUnload); };
   }, []);
   if (!open || !self) return null;
   const mins = Math.round((self.guestGraceMs ?? 900_000) / 60_000);
@@ -97,6 +95,70 @@ export function AwayReport() {
         <h3>While you were away <span className="muted small">({mins < 90 ? `${mins} min` : `${Math.round(mins / 60)} h`})</span></h3>
         <ul className="away-list">{report.events.slice(-12).reverse().map((e, i) => <li key={i} className={e.kind}>{e.text}</li>)}</ul>
         <button className="btn" style={{ width: '100%' }} onClick={() => setReport(null)}>Back to the world</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A gentle, recurring nudge for guests to sign in: first after a few minutes,
+ * then every so often while they actively play, and at moments that make the
+ * empire feel worth keeping (a building finished, a battle won, a village).
+ * "Later" snoozes it. Never more often than every 5 minutes.
+ */
+// (owc.nudgeFirst in localStorage shortens the first delay, for testing.)
+const NUDGE_FIRST = Number(get('owc.nudgeFirst')) || 3 * 60_000, NUDGE_EVERY = 12 * 60_000, NUDGE_MIN_GAP = 5 * 60_000;
+
+export function SignInNudge() {
+  const ui = useUI();
+  const [show, setShow] = useState<string | null>(null);
+  const [played, setPlayed] = useState(0);
+  const [lastNudge, setLastNudge] = useState(() => Number(get('owc.nudgeAt') ?? 0));
+  const [seen, setSeen] = useState({ built: false, won: false, village: false });
+  // Count only active play (tab visible).
+  useEffect(() => {
+    const t = setInterval(() => { if (!document.hidden) setPlayed((p) => p + 5000); }, 5000);
+    return () => clearInterval(t);
+  }, []);
+  const self = mirror.self;
+  const eligible = !!self?.guest && ui.googleEnabled && !ui.needName && !ui.battleFocus;
+  const nudge = (why: string) => {
+    if (!eligible || show) return;
+    if (Date.now() - lastNudge < NUDGE_MIN_GAP) return;
+    setShow(why);
+  };
+  // Time-based.
+  useEffect(() => {
+    if (!eligible) return;
+    const due = lastNudge ? played >= NUDGE_FIRST && Date.now() - lastNudge >= NUDGE_EVERY : played >= NUDGE_FIRST;
+    if (due) nudge('time');
+  }, [played, eligible]);
+  // Milestones.
+  useEffect(() => {
+    if (!eligible) return;
+    const built = mirror.myBuildings().some((b) => b.type !== 'ruin' && b.built >= 1);
+    if (built && !seen.built) { setSeen((s) => ({ ...s, built: true })); nudge('built'); }
+    const house = mirror.myBuildings().filter((b) => b.type !== 'ruin').length >= 3;
+    if (house && !seen.village) { setSeen((s) => ({ ...s, village: true })); nudge('village'); }
+  }, [ui.version, eligible]);
+  useEffect(() => {
+    const prev = mirror.onBattleEnd;
+    mirror.onBattleEnd = (id, s, r, t) => { prev(id, s, r, t); if (s.winner === mirror.me && !seen.won) { setSeen((x) => ({ ...x, won: true })); setTimeout(() => nudge('won'), 4000); } };
+    return () => { mirror.onBattleEnd = prev; };
+  }, [eligible, seen.won, lastNudge]);
+  if (!show || !self) return null;
+  const pieces = mirror.myPieces().length, buildings = mirror.myBuildings().filter((b) => b.type !== 'ruin').length;
+  const mins = Math.round((self.guestGraceMs ?? 900_000) / 60_000);
+  const lead = show === 'won' ? 'A victory worth keeping.' : show === 'built' ? 'Your first building stands.' : show === 'village' ? 'Your settlement is becoming a village.' : 'Still playing as a guest.';
+  const dismiss = () => { const now = Date.now(); setLastNudge(now); put('owc.nudgeAt', String(now)); setShow(null); };
+  return (
+    <div className="nudge" role="status">
+      <div className="nudge-text">
+        <b>{lead}</b> Your empire: {pieces} pieces{buildings ? `, ${buildings} building${buildings > 1 ? 's' : ''}` : ''}. Sign in so it doesn't fall {mins} minutes after you leave.
+      </div>
+      <div className="nudge-actions">
+        <a className="btn google small" href={`/auth/google/start?token=${encodeURIComponent(get('owc.token') ?? '')}`} onClick={dismiss}>Sign in</a>
+        <button className="btn ghost small" onClick={dismiss}>Later</button>
       </div>
     </div>
   );

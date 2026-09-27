@@ -13,6 +13,12 @@ export function fields(seed: number, x: number, y: number) {
   };
 }
 
+/** Is (x, y) part of a river's bed (water or a shallow ford)? Bridges form here. */
+export function riverBed(seed: number, x: number, y: number): boolean {
+  const { height } = fields(seed, x, y);
+  return height < 0.4 && height >= -0.3 && Math.abs(fbm(seed, x, y, 700, SALT.river, 3)) < 0.007;
+}
+
 function isWaterRaw(seed: number, x: number, y: number, height: number): boolean {
   if (height < -0.3) return true; // lakes
   // Rivers: a thin band where a large-scale noise field crosses zero.

@@ -113,6 +113,53 @@ These are seeded and deterministic (§1.6): everyone watching sees the same mome
 - Each tier gets a frame-time budget: ambient work takes at most 3ms a frame on mid-range phones. It's measured continuously, and the tier drops automatically.
 - **Reduce motion** ([ux.md](ux.md) §8) turns off camera shake, afterimages and watch mode, and softens flocking.
 
+## 10. Growing a civilization (added after playtesting)
+
+A settlement should visibly grow from a camp into a city, and the growth should come from what actually happens there.
+
+- **Tiers from size:** hamlet (1–2 buildings), village (3–5), town (6–9), city (10+).
+  - The settled ground spreads further with each tier and changes material: packed earth, then pebbled earth, then cobblestones.
+  - **A city's heart becomes a real chessboard.** The more civilized the land, the more it looks like the board.
+- **Roads from real footsteps:**
+  - Pawns **haul goods** between each working building and the resource it draws from, so roads trace real supply lines: farm to house, quarry to barracks, and between neighboring towns.
+  - Traffic upgrades a square from worn trail (4 steps) to dirt road (12) to cobbled street (60); squares surrounded by streets pave over into small squares. Roads are drawn as connected, rounded strokes, not tinted squares.
+  - Unused roads fade by half every hour and grass returns.
+- **Names:** every settlement gets a name drawn from its land (water gives "-ford"/"-bridge", mountains "-crag", forest "-wood"), shown with its tier as a label when zoomed out.
+- **Props from state, seeded so everyone sees the same town:**
+  - a village gets a well with benches;
+  - stables get haystacks, barracks training dummies, temples and palaces flower beds, houses crates and barrels;
+  - a town adds market stalls in the owner's colors, and **street lamps** along its roads that glow at night;
+  - a city raises banners at its edges.
+- **Chimney smoke** rises from buildings while they're producing, so a working town looks busy.
+- Implementation: `apps/client/src/game/settlements.ts` (tiers, names, props), `terrain.ts` (ground and roads), `apps/server/src/routines.ts` (hauling).
+
+### Built after the first pass
+
+- **Walls that remember sieges:** every siege is recorded on the besieged settlement's buildings.
+  - Once besieged: a timber palisade traces the edge of its settled ground, with the odd wooden watchtower.
+  - 3 sieges: stone walls, with towers on some corners.
+  - 6 or more: towers on every corner.
+  - Where roads pass through, the wall opens into an arched **gate**. The gates **shut while the settlement is under attack** and open again after.
+  - Walls are drawn, never simulated: they don't block anyone ([PRINCIPLES.md](../PRINCIPLES.md) §5).
+- **Bridges:** where a road crosses a river's ford, the crossing gets a plank bridge with rails and posts. Once the road is a busy street, it becomes a stone bridge.
+  - Fords now show as the river's dry, pebbled bed with puddles, so rivers read as one continuous course.
+  - A bridge only forms where the road crosses the riverbed, not where a road runs along it.
+- **Merchants and trade roads:** about one pawn in six in a realm with more than one town becomes a merchant, with a pack on its back.
+  - A merchant shuttles along a real path between two of its owner's towns, pauses at each market, and heads back.
+  - Every step stays within reach of the owner's kings, so **only towns whose realms connect can trade**. That rewards building a connected realm.
+  - Their footsteps wear a trade road between the towns.
+  - Hauling pawns now visibly carry what they gathered on the way back: wheat bundles, logs, stone, gold.
+- **The town bell:** towns and cities get a bell tower near their heart.
+  - **At dawn** (the shared 40-minute day), every bell rings, once per strike for the settlement's tier, with rings of golden light rolling over the rooftops, a low bell voice in the soundtrack, and the birds taking off.
+  - At dusk, one softer toll, and **street lamps light one by one**, each with a little spark.
+  - The top bar shows the day number with a sun or moon.
+
+Ideas for later:
+- lit windows scaled to population;
+- ferries or longer bridges over wide rivers;
+- festivals when a city wins a siege;
+- seasons.
+
 ## 8. Build order
 
 | Milestone | Life and visuals |

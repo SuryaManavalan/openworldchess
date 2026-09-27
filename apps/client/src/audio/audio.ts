@@ -29,6 +29,8 @@ class Audio {
   private drone!: Tone.PolySynth;
   private orn!: Tone.PluckSynth;
   private chirp!: Tone.Synth;
+  private townBellS!: Tone.PolySynth;
+  private townBellPan!: Tone.Panner;
   private wind!: Tone.Noise;
   private windFilter!: Tone.AutoFilter;
   private lastKindAt = new Map<string, number>();
@@ -119,6 +121,9 @@ class Audio {
     this.wind = new Tone.Noise('pink').connect(this.windFilter);
     this.wind.volume.value = -14;
     this.wind.start();
+    // Town bell: a big, low, long-ringing bell (dawn and dusk).
+    this.townBellPan = new Tone.Panner(0).connect(this.fxVol);
+    this.townBellS = new Tone.PolySynth(Tone.FMSynth, { harmonicity: 2.01, modulationIndex: 14, oscillator: { type: 'sine' }, envelope: { attack: 0.002, decay: 4, sustain: 0, release: 3 }, modulationEnvelope: { attack: 0.002, decay: 1.2, sustain: 0.2, release: 2 }, volume: -12 }).connect(this.townBellPan);
     this.chirp = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.05 }, volume: -22 }).connect(this.ambVol);
     setInterval(() => { if (Math.random() < 0.35) this.birds(); }, 3500);
   }
@@ -210,6 +215,15 @@ class Audio {
     this.choir.triggerAttackRelease(chord, '1m', now + 0.1);
   }
   lowClock() { if (this.ready) this.clickS.triggerAttackRelease('64n', Tone.now()); }
+  /** One strike of a town bell; alternates between two pitches, lower at dusk. */
+  townBell(i: number, pan: number, dusk: boolean) {
+    if (!this.ready) return;
+    const now = Tone.now();
+    this.townBellPan.pan.setValueAtTime(pan * 0.7, now);
+    const notes = dusk ? ['A2'] : ['D3', 'A2'];
+    this.townBellS.triggerAttackRelease([notes[i % notes.length], dusk ? 'E3' : 'A3'], '2n', now, 0.9);
+  }
+
   birds() {
     if (!this.ready) return;
     const now = Tone.now();
@@ -223,7 +237,7 @@ class Audio {
 }
 
 // Sound must never break the game: swallow scheduling errors from any cue.
-for (const name of ['select', 'commit', 'error', 'attack', 'build', 'birth', 'cascade', 'clack', 'mate', 'lowClock', 'birds'] as const) {
+for (const name of ['select', 'commit', 'error', 'attack', 'build', 'birth', 'cascade', 'clack', 'mate', 'lowClock', 'birds', 'townBell'] as const) {
   const proto = Audio.prototype as unknown as Record<string, (...a: unknown[]) => unknown>;
   const fn = proto[name];
   proto[name] = function (this: unknown, ...args: unknown[]) { try { return fn.apply(this, args); } catch { return undefined; } };

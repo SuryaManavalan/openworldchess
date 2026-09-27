@@ -68,9 +68,28 @@ export const BUILDINGS: Record<BuildingType, BuildingSpec> = {
   palace: { type: 'palace', size: 3, cost: { tree: 120, rock: 150 }, buildMs: 90_000, needs: ['gold', 'rock'], draw: { gold: 40, rock: 40 }, produces: ['K', 'Q'], baseMs: 1_200_000 },
 };
 
-/** Population: each king supports this many pieces plus HOUSE_POP per house it anchors. */
+/**
+ * Population (docs/specs/safeguards.md §1): each king supports KING_POP pieces,
+ * plus HOUSE_POP per house within its reach, counting at most HOUSES_PER_KING
+ * houses. So one king carries at most 34 pieces, about two chess sets. A hard
+ * per-player cap protects the server whatever else happens.
+ */
 export const KING_POP = 16;
 export const HOUSE_POP = 6;
+export const HOUSES_PER_KING = 3;
+export const PLAYER_PIECE_CAP = 400;
+/** Kings are the scarce resource: a hard cap, and each extra king takes longer to crown. */
+export const PLAYER_KING_CAP = 20;
+export const KING_TIME_PER_KING = 1 / 4; // palace king time × (1 + kings/4)
+/** Buildings per king (counted within its reach) and a hard per-player cap. */
+export const BUILDINGS_PER_KING = 12;
+export const PLAYER_BUILDING_CAP = 160;
+/** Ruins crumble away (freeing the squares) after this long. */
+export const RUIN_LIFETIME_MS = 6 * 60 * 60_000;
+/** A defender gets this long of protection when an attack on them is called off. */
+export const CANCEL_PROTECT_MS = 120_000;
+/** Accounts younger than this don't hand over pieces when they lose (anti-farming). */
+export const FRESH_ACCOUNT_MS = 2 * 60 * 60_000;
 
 /** Player colors (art.md §2). */
 export const TEAM_COLORS = ['#d9534a', '#4a7fd4', '#e3b23c', '#8e5bd1', '#2fa59a', '#e0803a', '#5bb04f', '#c7508f', '#46a6c9', '#8a6d4f'];

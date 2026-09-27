@@ -9,7 +9,7 @@ import { scene, input } from './GameView.tsx';
 import { buildingUrl, pieceUrl } from '../game/textures.ts';
 import { audio } from '../audio/audio.ts';
 import { BattleView } from './BattleView.tsx';
-import { AwayReport, Guide, SignIn, Welcome } from './Onboarding.tsx';
+import { AwayReport, Guide, SignIn, SignInNudge, Welcome } from './Onboarding.tsx';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
 const NODE_NAME: Record<string, string> = { tree: 'wood', rock: 'stone', gold: 'gold', wheat: 'wheat' };
@@ -30,6 +30,7 @@ export function HUD() {
       {battle && <BattleView battle={battle} />}
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
       <AwayReport />
+      <SignInNudge />
       <SignIn />
       <Welcome />
       {ui.watching && <div className="watch-pill">Watching your lands · touch to take over</div>}
@@ -53,9 +54,10 @@ function TopBar() {
         {shielded && <span className="badge shield" title="New players can't be attacked for a while">{ui.layout === 'phone' ? '🛡' : '🛡 shielded'}</span>}
       </div>
       <div className="stats">
-        <span title="Pieces">♟ {pieces.length}</span>
+        <span title="Pieces / population cap">♟ {pieces.length}{self?.popCap ? <span className="muted">/{self.popCap}</span> : null}</span>
         <span title="Kings">♚ {pieces.filter((p) => p.kind === 'K').length}</span>
         <span title="Buildings">⌂ {mirror.myBuildings().filter((b) => b.type !== 'ruin').length}</span>
+        <DayClock />
         <button className="link" onClick={() => ui.set({ sheet: 'battles' })}>⚔ {live.length || ''}</button>
       </div>
       <div className="top-actions">
@@ -64,6 +66,15 @@ function TopBar() {
       </div>
     </div>
   );
+}
+
+/** Day number and sun/moon (the world shares one 40-minute day). */
+function DayClock() {
+  const now = mirror.serverNow(), DAY = 40 * 60_000;
+  const phase = (((now % DAY) + DAY) % DAY) / DAY;
+  const day = Math.floor((now - Date.UTC(2026, 8, 26)) / DAY) + 1;
+  const sun = Math.sin(phase * Math.PI * 2);
+  return <span title={`Day ${day}`} className="day">{sun >= 0 ? '☀' : '☾'} {day}</span>;
 }
 
 function Alerts() {
@@ -219,7 +230,7 @@ function Details() {
   const b = id != null ? mirror.buildings.get(id) : undefined;
   if (!b || b.type === 'ruin') return <p className="muted">Tap one of your buildings to see it here.</p>;
   const spec = BUILDINGS[b.type as BuildingType];
-  const why: Record<string, string> = { unanchored: 'No king nearby: it is decaying', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': 'At your population cap: build houses', building: 'Under construction', paused: 'Paused by you' };
+  const why: Record<string, string> = { unanchored: 'No king nearby: it is decaying', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': 'At your population cap. Each king supports 16 pieces, +6 per nearby house (up to 3). More kings raise it', building: 'Under construction', paused: 'Paused by you' };
   return (
     <div className="details">
       <h3>{b.type[0].toUpperCase() + b.type.slice(1)}</h3>

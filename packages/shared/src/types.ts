@@ -29,6 +29,8 @@ export interface Piece {
   expiresAt?: number;
   /** Current idle routine, for the client's animation choice. */
   routine?: string;
+  /** Part of a starting kit: never changes hands (it perishes instead). */
+  kit?: boolean;
 }
 
 export interface Building {
@@ -58,6 +60,10 @@ export interface Building {
   expiresAt?: number;
   /** Production rate multiplier from node richness (migration.md §3). */
   rate?: number;
+  /** Times this building's settlement has been besieged (walls rise with it). */
+  sieges?: number;
+  /** When a ruin formed (it crumbles away later). */
+  ruinedAt?: number;
 }
 
 /** A resource node's current state (only nodes that differ from worldgen are stored). */
@@ -83,6 +89,8 @@ export interface PlayerSelf extends PlayerPublic {
   guest: boolean;
   guestGraceMs: number;
   email?: string;
+  /** Current population cap (safeguards.md §1). */
+  popCap: number;
   emperorId: number | null;
   shieldUntil: number;
   home: [number, number];

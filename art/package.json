@@ -11,6 +11,7 @@
   "exports": {
     "./pieces": "./assets/pieces.mjs",
     "./world": "./assets/world.mjs",
-    "./style": "./lib/style.mjs"
+    "./style": "./lib/style.mjs",
+    "./decor": "./assets/decor.mjs"
   }
 }

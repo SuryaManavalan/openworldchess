@@ -59,7 +59,7 @@ What this makes possible, without any extra actions:
 
 ### Population
 
-Each king can support **16 pieces, plus 6 per house** that it anchors. At the cap, those buildings pause production. Pieces count toward the king whose buildings produced them, until that king dies (then they're re-counted).
+Each king can support **16 pieces, plus 6 per house** within its reach (counting at most 3 houses), with a hard cap of 400 per player; see [safeguards.md](safeguards.md). At the cap, those buildings pause production. Pieces count toward the king whose buildings produced them, until that king dies (then they're re-counted).
 
 ## 3. Production (Decided pairings; resources and timings Proposed)
 

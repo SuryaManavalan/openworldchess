@@ -10,6 +10,10 @@ import type { Alert, Game, PlayerRec } from './game.ts';
 
 interface Session {
   ws: WebSocket;
+  ip: string;
+  lastSub: number;
+  pathBudget: number;
+  lastPath: number;
   player?: PlayerRec;
   subs: Set<string>;
   watching: Set<number>;
@@ -22,6 +26,8 @@ const inSubs = (s: Session, x: number, y: number) => s.subs.has(chunkKey(...chun
 export class Net {
   game: Game;
   sessions = new Set<Session>();
+  private newAccounts = new Map<string, number[]>();
+  private renamedAt = new Map<string, number>();
   nextTurnAt = 0;
 
   turnMs: number;
@@ -30,7 +36,7 @@ export class Net {
     this.game = game;
     this.turnMs = turnMs;
     const wss = new WebSocketServer({ server, path: '/play', maxPayload: 64 * 1024, verifyClient: ({ req }: { req: IncomingMessage }) => allow(req) });
-    wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => this.connect(ws));
+    wss.on('connection', (ws: WebSocket, req: IncomingMessage) => this.connect(ws, req));
     game.onAlert = (pid, a) => { game.logEvent(pid, a.kind, a.text); this.alert(pid, a); };
     game.onPlayers = () => this.broadcastPlayers();
     game.battles.onUpdate = (b) => this.broadcast({ t: 'battle', battle: b });
@@ -46,8 +52,11 @@ export class Net {
     for (const s of this.sessions) if (s.player && s.ws.readyState === s.ws.OPEN) s.ws.send(data);
   }
 
-  private connect(ws: WebSocket) {
-    const s: Session = { ws, subs: new Set(), watching: new Set(), lastMsg: Date.now(), bucket: 40 };
+  private connect(ws: WebSocket, req: IncomingMessage) {
+    // CloudFront passes the viewer's address in X-Forwarded-For.
+    const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+    const ip = fwd || req.socket.remoteAddress || '?';
+    const s: Session = { ws, ip, subs: new Set(), watching: new Set(), lastMsg: Date.now(), bucket: 40, lastSub: 0, pathBudget: 8, lastPath: Date.now() };
     this.sessions.add(s);
     ws.on('message', (data) => this.onMessage(s, data.toString()));
     ws.on('close', () => {
@@ -79,7 +88,16 @@ export class Net {
     const g = this.game;
     if (msg.t === 'hello') {
       if (msg.v !== PROTOCOL_VERSION) { s.ws.close(4001, 'upgrade-required'); return; }
+      // New accounts per address are limited (safeguards.md §5); local bots are exempt.
+      const isNew = !(msg.token && g.tokens.has(msg.token));
+      const local = /^(::1|127\.0\.0\.1|::ffff:127\.0\.0\.1)$/.test(s.ip);
+      if (isNew && msg.name && !local) {
+        const recent = (this.newAccounts.get(s.ip) ?? []).filter((t) => now - t < 3_600_000);
+        if (recent.length >= 5) return this.send(s, { t: 'err', msg: 'Too many new empires from here. Try again later', code: 'bad-name' });
+        this.newAccounts.set(s.ip, recent);
+      }
       const joined = g.join(msg.token, msg.name, msg.name?.startsWith('bot:') ?? false);
+      if (isNew && !('error' in joined) && !local) this.newAccounts.get(s.ip)?.push(now);
       if ('error' in joined) return this.send(s, { t: 'err', msg: joined.error, code: joined.code });
       const p = joined;
       const lastSeen = p.lastSeen;
@@ -103,10 +121,13 @@ export class Net {
       else if (rid != null) this.send(s, { t: 'ack', rid });
     };
     switch (msg.t) {
-      case 'sub': this.subscribe(s, msg.chunks); break;
-      case 'order.move': reply(msg.rid, g.orderMove(p.id, msg.pieceIds, msg.to)); break;
+      case 'sub':
+        // At most ~4 subscription changes a second, 30 new chunks each (world generation is CPU).
+        if (now - s.lastSub < 250) break;
+        s.lastSub = now; this.subscribe(s, msg.chunks.slice(0, 81)); break;
+      case 'order.move': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderMove(p.id, msg.pieceIds, msg.to)); break;
       case 'order.stop': g.orderStop(p.id, msg.pieceIds); break;
-      case 'order.attack': reply(msg.rid, g.orderAttack(p.id, msg.pieceIds, msg.targetKingId)); break;
+      case 'order.attack': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderAttack(p.id, msg.pieceIds, msg.targetKingId)); break;
       case 'order.cancelAttack': g.battles.cancel(p.id, msg.battleId); break;
       case 'build': reply(msg.rid, g.build(p.id, msg.building, msg.at)); break;
       case 'building.pause': g.setPaused(p.id, msg.buildingId, msg.paused); break;
@@ -116,18 +137,31 @@ export class Net {
       case 'battle.draw': g.battles.draw(p.id, msg.battleId); break;
       case 'battle.watch': s.watching.add(msg.battleId); break;
       case 'battle.unwatch': s.watching.delete(msg.battleId); break;
-      case 'profile': { const n = msg.name.trim(); const bad = g.checkName(n, p); if (!bad) { p.name = n; this.broadcastPlayers(); this.sendMine(s); } else this.send(s, { t: 'err', msg: bad }); break; }
+      case 'profile': { if (now - (this.renamedAt.get(p.id) ?? 0) < 600_000) { this.send(s, { t: 'err', msg: 'You can rename once every 10 minutes' }); break; } const n = msg.name.trim(); const bad = g.checkName(n, p); if (!bad) this.renamedAt.set(p.id, now); if (!bad) { p.name = n; this.broadcastPlayers(); this.sendMine(s); } else this.send(s, { t: 'err', msg: bad }); break; }
       case 'practice': { const e = g.battles.practice(p.id); if (e) this.send(s, { t: 'err', msg: e }); break; }
       case 'emote': this.broadcast({ t: 'emote', battleId: msg.battleId, playerId: p.id, id: msg.id }); break;
     }
   }
 
+  /** Pathfinding costs CPU: each session gets ~4 orders a second, bursts of 8. */
+  private spendPath(s: Session, now: number) {
+    s.pathBudget = Math.min(8, s.pathBudget + ((now - s.lastPath) / 1000) * 4);
+    s.lastPath = now;
+    if (s.pathBudget < 1) return false;
+    s.pathBudget--;
+    return true;
+  }
+
   private subscribe(s: Session, chunks: [number, number][]) {
     const next = new Set(chunks.map(([x, y]) => chunkKey(x, y)));
     const w = this.game.world;
+    let fresh = 0;
+    const kept: string[] = [];
     for (const [cx, cy] of chunks) {
       const k = chunkKey(cx, cy);
-      if (s.subs.has(k)) continue;
+      if (s.subs.has(k)) { kept.push(k); continue; }
+      if (++fresh > 30) continue; // the client asks again next frame
+      kept.push(k);
       this.send(s, {
         t: 'chunk', cx, cy,
         pieces: w.piecesInChunk(cx, cy),
@@ -136,7 +170,8 @@ export class Net {
         traffic: w.trafficInChunk(cx, cy),
       });
     }
-    s.subs = next;
+    s.subs = new Set(kept);
+    void next;
   }
 
   /** After each world turn: send each client what changed in its chunks. */
@@ -164,6 +199,9 @@ export class Net {
       });
     }
   }
+
+  /** Chunks someone is looking at (kept in memory). */
+  watchedChunks() { const out = new Set<string>(); for (const s of this.sessions) for (const k of s.subs) out.add(k); return out; }
 
   sendMine(s: Session) {
     if (!s.player) return;

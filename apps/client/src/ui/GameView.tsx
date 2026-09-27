@@ -69,6 +69,7 @@ function bridge(sc0: Scene) {
       try { navigator.vibrate?.(last.includes('x') ? 18 : 8); } catch { /* */ }
     }
     if (b.fen) seenFen.set(b.id, b.fen);
+    if (scene) scene.settleDirty = true; // gates close/open
     bump();
   };
   mirror.onBattleEnd = (id, s, result) => {

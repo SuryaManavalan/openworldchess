@@ -15,7 +15,7 @@ interface Engine {
   proc: ChildProcess;
 }
 
-interface Job { fen: string; rating: number; movetime: number; resolve: (uci: string | null) => void }
+interface Job { fen: string; rating: number; movetime: number; priority: number; resolve: (uci: string | null) => void }
 
 export class ChessAI {
   private engines: Engine[] = [];
@@ -49,9 +49,15 @@ export class ChessAI {
   stop() { for (const e of this.engines) e.proc.kill(); }
 
   /** Best move in UCI for `fen`, played at roughly `rating` strength. */
-  async bestMove(fen: string, rating: number, movetime = 400): Promise<string | null> {
+  /** Higher priority jobs (real battles) jump ahead of lower ones (practice). */
+  async bestMove(fen: string, rating: number, movetime = 400, priority = 1): Promise<string | null> {
     await this.ready;
-    return new Promise((resolve) => { this.queue.push({ fen, rating, movetime, resolve }); this.pump(); });
+    return new Promise((resolve) => {
+      const job = { fen, rating, movetime, priority, resolve };
+      const i = this.queue.findIndex((j) => j.priority < priority);
+      if (i < 0) this.queue.push(job); else this.queue.splice(i, 0, job);
+      this.pump();
+    });
   }
 
   private pump() {

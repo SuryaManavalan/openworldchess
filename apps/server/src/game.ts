@@ -1,6 +1,7 @@
 // The authoritative game: players, orders, world turns and the economy.
 import {
-  BUILDINGS, BUILD_SPACING, CLAIM_RANGE, ENGAGE_RANGE, HOUSE_POP, KING_POP, MASTERLESS_MS, REACH, SPAWN_SHIELD_MS, TEAM_COLORS,
+  BUILDINGS, BUILD_SPACING, CLAIM_RANGE, ENGAGE_RANGE, HOUSE_POP, KING_POP, HOUSES_PER_KING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
+  BUILDINGS_PER_KING, PLAYER_BUILDING_CAP, RUIN_LIFETIME_MS, MASTERLESS_MS, REACH, SPAWN_SHIELD_MS, TEAM_COLORS,
   ANCHOR_GRACE_MS, DECAY_EVERY_MS, BUILDING_MAX_HP, WORK_AREA, cheb, distToRect, isLight,
   type Building, type BuildingType, type Facing, type NodeKind, type Piece, type PieceKind, type PlayerPublic, type PlayerSelf, type TurnMove,
 } from '@owc/shared';
@@ -123,6 +124,19 @@ export class Game {
     return [...s].map((id) => this.world.pieces.get(id)!).filter((p) => p && p.state !== 'battle');
   }
 
+  /**
+   * Population cap (safeguards.md §1): per king, 16 plus 6 for each house within
+   * its reach (at most 3 count), and never above the per-player hard cap.
+   */
+  popCap(owner: string): number {
+    let cap = 0;
+    for (const k of this.kingsOf(owner)) {
+      const houses = this.world.buildingsNear(k.x, k.y, REACH).filter((b) => b.owner === owner && b.type === 'house' && b.built >= 1 && distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH).length;
+      cap += KING_POP + HOUSE_POP * Math.min(HOUSES_PER_KING, houses);
+    }
+    return Math.min(PLAYER_PIECE_CAP, cap);
+  }
+
   /** The one reach rule (economy.md §2): is (x, y) within reach of one of owner's kings? */
   inReach(owner: string, x: number, y: number, slack = 0): boolean {
     for (const k of this.kingsOf(owner)) if (cheb(k.x, k.y, x, y) <= REACH + slack) return true;
@@ -141,7 +155,7 @@ export class Game {
     return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), online: p.online };
   }
   selfPlayer(p: PlayerRec): PlayerSelf {
-    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home };
+    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home };
   }
 
   isGuest(p: PlayerRec) { return !p.googleSub && !p.isBot; }
@@ -222,7 +236,7 @@ export class Game {
     const place = (kind: PieceKind, dx: number, dy: number, extra: Partial<Piece> = {}) => {
       const at = w.nearestFree(sx + dx, sy + dy, 8);
       if (!at) return null;
-      const piece: Piece = { id: w.id(), owner: p.id, kind, x: at[0], y: at[1], facing: 2, state: 'idle', ...extra };
+      const piece: Piece = { id: w.id(), owner: p.id, kind, x: at[0], y: at[1], facing: 2, state: 'idle', kit: true, ...extra };
       this.addPiece(piece);
       return piece;
     };
@@ -312,6 +326,12 @@ export class Game {
     const size = spec.size;
     const kings = this.kingsOf(player).filter((k) => distToRect(k.x, k.y, x, y, size) <= REACH);
     if (!kings.length) return 'Buildings need a king within 10 squares';
+    // Building caps (safeguards.md §3): per king in reach, and per player.
+    let owned = 0;
+    for (const bl of w.buildings.values()) if (bl.owner === player && bl.type !== 'ruin') owned++;
+    if (owned >= PLAYER_BUILDING_CAP) return `You have the maximum of ${PLAYER_BUILDING_CAP} buildings`;
+    if (kings.every((k) => w.buildingsNear(k.x, k.y, REACH).filter((bl) => bl.owner === player && bl.type !== 'ruin' && distToRect(k.x, k.y, bl.x, bl.y, bl.size) <= REACH).length >= BUILDINGS_PER_KING))
+      return `A king can hold at most ${BUILDINGS_PER_KING} buildings: bring another king`;
     if (type === 'palace' && w.buildingsNear(x, y, REACH).some((b) => b.owner === player && b.type === 'palace' && kings.some((k) => distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH)))
       return 'One palace per king';
     for (let dy = 0; dy < size; dy++)
@@ -458,6 +478,8 @@ export class Game {
   }
 
   makeMasterless(p: Piece) {
+    // Starting-kit pieces never change hands (anti-farming, safeguards.md §5).
+    if (p.kit) { this.removePiece(p.id); return; }
     this.setOwner(p, null);
     p.state = 'masterless';
     p.expiresAt = this.now + MASTERLESS_MS;
@@ -485,22 +507,30 @@ export class Game {
     this.now = now;
     const w = this.world;
     w.regrowNodes(now, dt);
+    // Each node supplies one production at a time: buildings drawing from the same
+    // node split its rate, so crowding one field gains nothing (safeguards.md §3).
+    this.nodeUsers = new Map();
+    for (const b of w.buildings.values())
+      if (b.owner && b.type !== 'ruin' && b.built >= 1 && !b.blocked && b.drawsFrom)
+        for (const [nx, ny] of b.drawsFrom) { const k = nx * 134217728 + ny; this.nodeUsers.set(k, (this.nodeUsers.get(k) ?? 0) + 1); }
     const pop = new Map<string, { count: number; cap: number }>();
     const popOf = (owner: string) => {
       let v = pop.get(owner);
       if (!v) {
         let count = 0;
         for (const p of w.pieces.values()) if (p.owner === owner) count++;
-        let houses = 0;
-        for (const b of w.buildings.values()) if (b.owner === owner && b.type === 'house' && b.built >= 1) houses++;
-        v = { count, cap: this.kingsOf(owner).length * KING_POP + houses * HOUSE_POP };
+        v = { count, cap: this.popCap(owner) };
         pop.set(owner, v);
       }
       return v;
     };
 
     for (const b of [...w.buildings.values()]) {
-      if (b.type === 'ruin') continue;
+      if (b.type === 'ruin') {
+        b.ruinedAt ??= now;
+        if (now - b.ruinedAt > RUIN_LIFETIME_MS) w.removeBuilding(b.id);
+        continue;
+      }
       const before = JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner]);
       const anchored = b.owner ? w.anchorsOf(b, b.owner).length > 0 : false;
       if (!anchored) {
@@ -512,7 +542,7 @@ export class Game {
           if (decays > 0) b.hp = Math.max(0, b.hp - decays);
           b.blocked = 'unanchored';
           if (b.hp <= 0 || (b.expiresAt && now > b.expiresAt)) {
-            b.type = 'ruin'; b.owner = null; b.hp = 0; b.blocked = null; w.dirtyBuildings.add(b.id);
+            b.type = 'ruin'; b.owner = null; b.hp = 0; b.blocked = null; b.ruinedAt = now; w.dirtyBuildings.add(b.id);
             continue;
           }
         }
@@ -528,6 +558,8 @@ export class Game {
     }
   }
 
+  private nodeUsers = new Map<number, number>();
+
   private produce(b: Building, dt: number, pop: { count: number; cap: number }) {
     const spec = BUILDINGS[b.type as BuildingType];
     const w = this.world;
@@ -541,7 +573,16 @@ export class Game {
     // Production rate follows node richness (migration.md §3).
     const rich = Math.min(...chosen.map((n) => richness(w.elo(n!.x, n!.y))));
     b.rate = Math.round(rich * 100) / 100;
-    b.prod += dt / productionMs(b.type as BuildingType, rich, this.speed);
+    // Each extra king takes longer to crown, and there's a hard cap (safeguards.md §2).
+    let slow = 1;
+    if (b.type === 'palace' && (b.palaceNext ?? 'K') === 'K') {
+      const kings = this.kingsOf(b.owner!).length;
+      if (kings >= PLAYER_KING_CAP) { b.palaceNext = 'Q'; if (b.palaceMode === 'K') { b.blocked = 'pop-cap'; return; } }
+      else slow = 1 + kings * KING_TIME_PER_KING;
+    }
+    const sharing = Math.max(1, ...chosen.map((n) => this.nodeUsers.get(n!.x * 134217728 + n!.y) ?? 1));
+    b.rate = Math.round((rich / sharing) * 100) / 100;
+    b.prod += dt / (productionMs(b.type as BuildingType, rich, this.speed) * slow * sharing);
     if (b.prod < 1) return;
     b.prod = 0;
     for (const n of chosen) w.drawNode(n!, spec.draw[n!.kind] ?? 0, this.now);

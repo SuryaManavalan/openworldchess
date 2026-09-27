@@ -1,13 +1,15 @@
 // The world view: camera, chunk streaming, and live views of pieces,
 // buildings and resource nodes, animated from server turns (movement.md §8).
 import { Application, Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
-import { CHUNK, REACH, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
+import { CHUNK, REACH, cheb, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
 import { hash01 } from '@owc/worldgen';
 import { Chess } from 'chess.js';
 import type { Mirror, MoveEvent } from '@owc/client-core';
 import { buildingTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
 import { paintChunk, terrainCodes, textureFrom, TPX } from './terrain.ts';
 import { Fx } from './fx.ts';
+import { computeSettlements, decorate, wallsFor, TIER_NAME, type Decor, type Settlement, type Wall } from './settlements.ts';
+import { decorTexture } from './textures.ts';
 import { useUI } from '../store.ts';
 
 export const S = 64; // world pixels per square
@@ -32,6 +34,8 @@ export class PieceView {
   born = 0;
   flash = 0;
   flashColor = 0xffffff;
+  /** What the piece carries (hauling pawns, merchants). */
+  cargo: Sprite | null = null;
   constructor(p: Piece) { this.id = p.id; this.x = p.x; this.y = p.y; this.sprite.anchor.set(0.5, 0.84); }
 }
 
@@ -58,6 +62,18 @@ export class Scene {
   buildings = new Map<number, BuildingView>();
   nodes = new Map<number, Sprite>();
   kingLabels = new Map<number, Text>();
+  /** Settlements (visuals.md §10), their settled ground, decorations and name labels. */
+  settlements: Settlement[] = [];
+  groundMap = new Map<number, number>();
+  decor: Decor[] = [];
+  private decorSprites = new Map<string, Sprite>();
+  private townLabels = new Map<number, Text>();
+  walls: Wall[] = [];
+  private wallsG = new Graphics();
+  /** Until when a settlement's bell swings (settlement id → time). */
+  bellUntil = new Map<number, number>();
+  settleDirty = true;
+  private lastSettle = 0;
   private chunkViews = new Map<string, { sprite: Sprite; canvas: HTMLCanvasElement; codes: Uint8Array; dirty: boolean }>();
   private requested = new Set<string>();
   private worker: Worker;
@@ -83,7 +99,7 @@ export class Scene {
     await this.app.init({ resizeTo: el, background: '#6f8f4a', antialias: true, resolution: Math.min(2, devicePixelRatio), autoDensity: true });
     el.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
-    this.world.addChild(this.ground, this.decals, this.objects, this.arenas, this.fx.layer, this.labels);
+    this.world.addChild(this.ground, this.wallsG, this.decals, this.objects, this.arenas, this.fx.layer, this.labels);
     this.arenas.addChild(this.arenaG);
     this.arenaG.zIndex = -1e9;
     this.app.stage.addChild(this.world, this.fx.screenLayer, this.overlay);
@@ -172,21 +188,17 @@ export class Scene {
 
   private repaint(k: string, v: { sprite: Sprite; canvas: HTMLCanvasElement; codes: Uint8Array }) {
     const [cx, cy] = k.split(',').map(Number);
-    const plaza = new Set<number>(), traffic = new Map<number, number>();
-    const x0 = cx * CHUNK, y0 = cy * CHUNK;
-    for (const b of this.mirror.buildings.values()) {
-      if (b.type === 'ruin' || b.x + b.size + 2 < x0 || b.x - 2 > x0 + CHUNK || b.y + b.size + 2 < y0 || b.y - 2 > y0 + CHUNK) continue;
-      for (let y = b.y - 1; y <= b.y + b.size; y++) for (let x = b.x - 1; x <= b.x + b.size; x++)
-        if (x >= x0 && x < x0 + CHUNK && y >= y0 && y < y0 + CHUNK) plaza.add((y - y0) * CHUNK + (x - x0));
-    }
-    for (let y = 0; y < CHUNK; y++) for (let x = 0; x < CHUNK; x++) {
-      const t = this.mirror.traffic.get(key(x0 + x, y0 + y));
-      if (t) traffic.set(y * CHUNK + x, t);
-    }
-    paintChunk(this.mirror.seed, cx, cy, { codes: v.codes, plaza, traffic }, v.canvas);
-    const old = v.sprite.texture;
-    v.sprite.texture = textureFrom(v.canvas);
-    if (old && old !== v.sprite.texture) old.destroy(true);
+    const m = this.mirror;
+    paintChunk(m.seed, cx, cy, {
+      codes: v.codes,
+      ground: (x, y) => this.groundMap.get(key(x, y)) ?? 0,
+      traffic: (x, y) => m.traffic.get(key(x, y)) ?? 0,
+    }, v.canvas);
+    // Pixi caches one texture per canvas: re-upload the pixels, don't make a new one.
+    // (Making a new one returned the cached texture, so repaints never reached the GPU:
+    // cities you hadn't watched stayed grass.)
+    if (v.sprite.texture && v.sprite.texture.source?.resource === v.canvas) v.sprite.texture.source.update();
+    else v.sprite.texture = textureFrom(v.canvas);
   }
 
   markChunkDirty(x: number, y: number) {
@@ -215,7 +227,7 @@ export class Scene {
     };
     m.onPieceRemoved = (p) => {
       const v = this.pieces.get(p.id);
-      if (v) { this.fx.dust(v.x, v.y, 10); v.sprite.destroy(); this.pieces.delete(p.id); }
+      if (v) { this.fx.dust(v.x, v.y, 10); v.sprite.destroy(); v.cargo?.destroy(); this.pieces.delete(p.id); }
       this.kingLabels.get(p.id)?.destroy(); this.kingLabels.delete(p.id);
     };
     m.onMoves = (moves: MoveEvent[]) => {
@@ -229,22 +241,25 @@ export class Scene {
       }
     };
     m.onBuildingChange = (b, prev) => {
-      if (!prev || prev.type !== b.type || prev.owner !== b.owner) this.markChunkDirty(b.x, b.y);
+      if (!prev || prev.type !== b.type || prev.owner !== b.owner) this.settleDirty = true;
       if (prev && prev.built < 1 && b.built >= 1) this.fx.ripple(b.x + b.size / 2 - 0.5, b.y + b.size / 2 - 0.5, 0xfff2b0, b.size * 1.2);
     };
-    m.onBuildingRemoved = (id) => { this.buildings.get(id)?.sprite.destroy(); this.buildings.get(id)?.bar.destroy(); this.buildings.delete(id); };
+    m.onBuildingRemoved = (id) => {
+      this.settleDirty = true; this.buildings.get(id)?.sprite.destroy(); this.buildings.get(id)?.bar.destroy(); this.buildings.delete(id); };
     m.onNodeChange = (n) => this.syncNode(n);
     m.onChunk = (cx, cy) => {
       for (const n of m.nodes.values()) if (Math.floor(n.x / CHUNK) === cx && Math.floor(n.y / CHUNK) === cy) this.syncNode(n);
       const v = this.chunkViews.get(chunkKey(cx, cy));
       if (v) v.dirty = true;
+      this.settleDirty = true;
     };
   }
 
   private trafficDirty = new Set<string>();
   private markTraffic(x: number, y: number) {
     const t = this.mirror.traffic.get(key(x, y)) ?? 0;
-    if (t === 4 || t === 12) this.markChunkDirty(x, y);
+    // A square just became a trail, road or street: repaint (and neighbors across chunk edges).
+    if (t === 4 || t === 12 || t === 60) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) this.markChunkDirty(x + dx, y + dy);
   }
 
   private syncNode(n: NodeState) {
@@ -280,6 +295,7 @@ export class Scene {
     c.rotShown += (c.rot - c.rotShown) * Math.min(1, this.app.ticker.deltaMS / 140);
     if (Math.abs(c.rot - c.rotShown) < 0.001) c.rotShown = c.rot;
     this.applyCamera();
+    if ((this.settleDirty && now - this.lastSettle > 800) || now - this.lastSettle > 15_000) this.refreshSettlements(now);
     this.updateChunks();
     const th = this.theta, sin = Math.sin(th), cos = Math.cos(th);
     const zsort = (wx: number, wy: number) => wx * sin + wy * cos;
@@ -348,6 +364,19 @@ export class Scene {
       if (v.born && now - v.born < 900) v.sprite.alpha = Math.min(1, (now - v.born) / 500);
       if (sel.has(id) && !v.pop && v.sprite.visible) v.pop = now;
       if (!sel.has(id)) v.pop = 0;
+      // Goods on the back: gathered wheat, logs, stone or gold; a merchant's pack.
+      const load = p.routine?.startsWith('haul:') ? p.routine.slice(5) : p.routine?.startsWith('merchant') ? 'pack' : null;
+      if (load && this.cam.zoom > 0.35) {
+        if (!v.cargo) { v.cargo = new Sprite(); v.cargo.anchor.set(0.5, 0.7); this.objects.addChild(v.cargo); }
+        const tex = decorTexture('cargo', load);
+        if (tex) v.cargo.texture = tex;
+        const up = S * 0.7 + lift + Math.abs(Math.sin(t * 7 + id)) * 2;
+        v.cargo.width = v.cargo.height = S * 0.58;
+        v.cargo.position.set(wx - Math.sin(th) * (up - S * 0.42), wy - Math.cos(th) * (up - S * 0.42));
+        v.cargo.rotation = counter;
+        v.cargo.zIndex = v.sprite.zIndex + 0.01;
+        v.cargo.visible = v.sprite.visible;
+      } else if (v.cargo) { v.cargo.destroy(); v.cargo = null; }
       // Name banners over other players' kings when zoomed in.
       if (p.kind === 'K' && p.owner !== m.me) this.kingLabel(p, v, wx, wy, th);
     }
@@ -364,6 +393,7 @@ export class Scene {
       s.zIndex = zsort(wx, wy);
       if (n.kind === 'tree' || n.kind === 'wheat') s.skew.x = reduce ? 0 : this.fx.wind(n.wx, n.wy, t) * (n.kind === 'wheat' ? 0.16 : 0.05);
     }
+    this.drawTown(zsort, counter);
     this.drawDecals(now, sel);
     this.drawArenas(now, zsort, counter);
     this.fx.update(now, zsort, counter);
@@ -478,6 +508,104 @@ export class Scene {
     }
     // Hover square on desktop
     if (this.hover && !ui.buildType) g.rect(this.hover[0] * S, this.hover[1] * S, S, S).stroke({ width: 2, color: 0xffffff, alpha: 0.35 });
+  }
+
+  settlementAt(x: number, y: number) { return this.settlements.find((st) => st.ground.has(key(x, y)))?.id ?? -1; }
+
+  /** Recompute settlements: repaint ground that changed tier, re-place decorations. */
+  private refreshSettlements(now: number) {
+    this.settleDirty = false;
+    this.lastSettle = now;
+    const m = this.mirror;
+    this.settlements = computeSettlements(m);
+    const next = new Map<number, number>();
+    for (const st of this.settlements) for (const [k, t] of st.ground) next.set(k, Math.max(next.get(k) ?? 0, t));
+    const touched = new Set<string>();
+    const mark = (k: number) => { const x = Math.round(k / 134217728), y = k - x * 134217728; touched.add(chunkKey(Math.floor(x / CHUNK), Math.floor(y / CHUNK))); };
+    for (const [k, t] of next) if (this.groundMap.get(k) !== t) mark(k);
+    for (const k of this.groundMap.keys()) if (!next.has(k)) mark(k);
+    this.groundMap = next;
+    for (const ck of touched) { const v = this.chunkViews.get(ck); if (v) v.dirty = true; }
+    const traffic = (x: number, y: number) => m.traffic.get(key(x, y)) ?? 0;
+    this.decor = this.settlements.flatMap((st) => decorate(m, st, this.colorOf(st.owner), traffic));
+    // Walls for settlements that have been besieged; gates shut while they're under attack.
+    this.walls = [];
+    for (const st of this.settlements) {
+      const underAttack = [...m.battles.values()].some((b) => b.phase !== 'over' && b.black.playerId === st.owner && cheb(b.cx, b.cy, st.cx, st.cy) <= 20);
+      const { wall, decor } = wallsFor(m, st, this.colorOf(st.owner), traffic, underAttack);
+      if (wall) this.walls.push(wall);
+      this.decor.push(...decor);
+    }
+    this.drawWalls();
+  }
+
+  /** Wall lines along settlement edges: palisade, then stone (visuals.md §10). */
+  private drawWalls() {
+    const g = this.wallsG;
+    g.clear();
+    const seg = (x: number, y: number, side: number): [number, number, number, number] => {
+      const x0 = x * S, y0 = y * S, x1 = (x + 1) * S, y1 = (y + 1) * S;
+      return side === 0 ? [x0, y0, x1, y0] : side === 1 ? [x1, y0, x1, y1] : side === 2 ? [x0, y1, x1, y1] : [x0, y0, x0, y1];
+    };
+    for (const w of this.walls) {
+      const stone = w.tier >= 2;
+      const width = stone ? S * 0.26 : S * 0.16;
+      for (const pass of [0, 1, 2]) {
+        for (const e of w.edges) { const [a, b, c, d] = seg(e.x, e.y, e.side); g.moveTo(a, b).lineTo(c, d); }
+        if (pass === 0) g.stroke({ width: width + 6, color: 0x2b2622, cap: 'square', join: 'miter' });
+        else if (pass === 1) g.stroke({ width, color: stone ? 0xbdb7ab : 0x8a5a34, cap: 'square', join: 'miter' });
+        else g.stroke({ width: width * 0.35, color: stone ? 0xe3dfd6 : 0xb07a48, cap: 'square', join: 'miter', alpha: 0.9 });
+      }
+      // Palisade stakes / stone merlons along the top.
+      for (const e of w.edges) {
+        const [a, b, c, d] = seg(e.x, e.y, e.side);
+        for (const t of [0.25, 0.75]) g.circle(a + (c - a) * t, b + (d - b) * t, stone ? 5 : 4).fill({ color: stone ? 0x9d9689 : 0x6d4526 });
+      }
+    }
+  }
+
+  /** Decorations and settlement name labels. */
+  private drawTown(zsort: (x: number, y: number) => number, counter: number) {
+    const th = this.theta, used = new Set<string>();
+    for (const d of this.decor) {
+      const id = `${d.kind}:${d.x},${d.y}`;
+      used.add(id);
+      let s = this.decorSprites.get(id);
+      if (!s) { s = new Sprite(); s.anchor.set(0.5, 0.86); this.objects.addChild(s); this.decorSprites.set(id, s); }
+      const tex = decorTexture(d.kind, d.color, d.variant);
+      if (tex) s.texture = tex;
+      const wx = (d.x + 0.5) * S, wy = (d.y + 0.5) * S;
+      const size = d.kind === 'gate' || d.kind === 'belltower' ? S * 1.25 : d.kind === 'tower' ? S * 1.1 : d.kind === 'stall' || d.kind === 'well' ? S * 0.95 : S * 0.78;
+      s.width = size; s.height = size;
+      s.position.set(wx + Math.sin(th) * S * 0.36, wy + Math.cos(th) * S * 0.36);
+      // A ringing bell tower sways.
+      const ring = d.kind === 'belltower' ? Math.max(0, (this.bellUntil.get(this.settlementAt(d.x, d.y)) ?? 0) - performance.now()) : 0;
+      s.rotation = counter + (ring > 0 ? Math.sin(performance.now() / 180) * 0.05 * Math.min(1, ring / 1500) : 0);
+      s.zIndex = zsort(wx, wy) - 0.5;
+    }
+    for (const [id, s] of this.decorSprites) if (!used.has(id)) { s.destroy(); this.decorSprites.delete(id); }
+    // Name labels: readable when zoomed out, where they matter most.
+    const seen = new Set<number>();
+    for (const st of this.settlements) {
+      seen.add(st.id);
+      let t = this.townLabels.get(st.id);
+      const text = `${st.name} · ${TIER_NAME[st.tier]}`;
+      if (!t) {
+        t = new Text({ text, style: { fontFamily: 'Nunito, system-ui', fontWeight: '900', fontSize: 26, fill: 0xfff6dc, stroke: { color: 0x2b2622, width: 6 }, letterSpacing: 0.5 } });
+        t.anchor.set(0.5, 1);
+        this.labels.addChild(t);
+        this.townLabels.set(st.id, t);
+      }
+      if (t.text !== text) t.text = text;
+      const top = Math.min(...st.buildings.map((b) => b.y)) - 1.2;
+      const wx = (st.cx + 0.5) * S, wy = top * S;
+      t.visible = this.cam.zoom < 1.4;
+      t.scale.set(Math.min(2.4, 0.75 / this.cam.zoom) * (0.8 + st.tier * 0.12));
+      t.rotation = -th;
+      t.position.set(wx, wy);
+      t.alpha = st.owner === this.mirror.me ? 0.95 : 0.85;
+    }
+    for (const [id, t] of this.townLabels) if (!seen.has(id)) { t.destroy(); this.townLabels.delete(id); }
   }
 
   /** Battle arenas drawn in the world (battle.md §3, §9). */

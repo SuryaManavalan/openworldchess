@@ -5,6 +5,7 @@ import type { PieceKind } from '@owc/shared';
 import type { MoveEvent } from '@owc/client-core';
 import type { Scene } from './scene.ts';
 import { codeAt } from './terrain.ts';
+import { hash01 } from '@owc/worldgen';
 import { audio } from '../audio/audio.ts';
 import { useUI } from '../store.ts';
 
@@ -32,6 +33,8 @@ export class Fx {
   private lastFlock = 0;
   private recentSteps: { x: number; y: number; t: number }[] = [];
   darkness = 0;
+  private prevSun: number | null = null;
+  private lampsLit = new Set<string>();
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -122,7 +125,8 @@ export class Fx {
       const p = this.particles[i];
       p.life += dt;
       if (p.life >= p.max) { this.particles.splice(i, 1); continue; }
-      p.x += p.vx * dt * 0.06; p.y += p.vy * dt * 0.06; p.vy += 0.002 * dt;
+      p.x += p.vx * dt * 0.06; p.y += p.vy * dt * 0.06;
+      if (p.color !== 0xd9d4cc) p.vy += 0.002 * dt; else p.size += dt * 0.004; // smoke rises and spreads
       const a = 1 - p.life / p.max;
       g.circle(p.x, p.y, p.size * (0.6 + 0.4 * a)).fill({ color: p.color, alpha: a * 0.85 });
     }
@@ -131,11 +135,59 @@ export class Fx {
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i], k = (now - r.t0) / r.dur;
       if (k >= 1) { this.rings.splice(i, 1); continue; }
-      g.circle(r.x, r.y, S * r.r * (0.3 + 0.9 * k)).stroke({ width: 6 * (1 - k) + 1, color: r.color, alpha: 1 - k });
+      if (k < 0) continue;
+      g.circle(r.x, r.y, S * r.r * (0.3 + 0.9 * k)).stroke({ width: (r.r > 4 ? 14 : 6) * (1 - k) + 1, color: r.color, alpha: (1 - k) * 0.9 });
     }
+    this.updateSmoke(now);
     this.updateBirds(now, dt);
     this.updateWater(now);
     this.updateNight(now);
+  }
+
+  /** Chimney smoke from buildings that are working (visuals.md §10). */
+  private lastSmoke = 0;
+  private updateSmoke(now: number) {
+    if (now - this.lastSmoke < 280 || useUI.getState().settings.reduceMotion) return;
+    this.lastSmoke = now;
+    const sc = this.scene;
+    for (const b of sc.mirror.buildings.values()) {
+      if (b.type === 'ruin' || b.built < 1 || b.blocked || !(b.type === 'house' || b.type === 'barracks' || b.type === 'palace' || b.type === 'stable')) continue;
+      if (Math.random() > 0.35 || !this.onScreen(b.x, b.y, 1)) continue;
+      const th = sc.theta, h = b.size * S * 0.95;
+      const x = (b.x + b.size * 0.68) * S - Math.sin(th) * h, y = (b.y + b.size * 0.5) * S - Math.cos(th) * h;
+      const up = 0.5 + Math.random() * 0.3;
+      this.particles.push({ x, y, vx: -Math.sin(th) * up + (Math.random() - 0.5) * 0.2 + 0.15, vy: -Math.cos(th) * up, life: 0, max: 1800 + Math.random() * 900, color: 0xd9d4cc, size: 5 + Math.random() * 5 });
+    }
+  }
+
+  /**
+   * Dawn: town bells ring out, once per strike for the town's tier, rippling
+   * gold over the rooftops; the birds take off (visuals.md §10). Dusk: one soft toll.
+   */
+  dawn(dusk: boolean) {
+    const sc = this.scene;
+    let strikes = 0;
+    for (const d of sc.decor) {
+      if (d.kind !== 'belltower') continue;
+      const st = sc.settlementAt(d.x, d.y);
+      const mine = sc.settlements.find((s) => s.id === st)?.owner === sc.mirror.me;
+      if (!this.onScreen(d.x, d.y, 6) && !mine) continue;
+      const n = dusk ? 1 : d.bell ?? 3;
+      sc.bellUntil.set(st, performance.now() + n * 1300 + 1500);
+      for (let i = 0; i < n && strikes < 12; i++, strikes++) {
+        this.schedule(i * 1300 + Math.random() * 200, () => {
+          // Each strike rolls out as two rings of light over the rooftops.
+          const c = dusk ? 0xffb86b : 0xffe08a;
+          this.rings.push({ x: (d.x + 0.5) * S, y: (d.y - 0.6) * S, t0: performance.now(), dur: 2200, color: c, r: 9 });
+          this.rings.push({ x: (d.x + 0.5) * S, y: (d.y - 0.6) * S, t0: performance.now() + 250, dur: 2000, color: 0xffffff, r: 6 });
+          this.sparkle(d.x, d.y - 1.2, c, 10);
+          if (this.onScreen(d.x, d.y, 6)) audio.townBell(i, this.pan(d.x, d.y), dusk);
+        });
+      }
+    }
+    if (!dusk) for (const b of this.birds) { b.scared = 3000; b.vx = (Math.random() - 0.5) * 0.02; b.vy = -0.012; }
+    const day = Math.floor((sc.mirror.serverNow() - Date.UTC(2026, 8, 26)) / DAY_MS) + 1;
+    useUI.getState().toast(dusk ? `☾ Dusk falls · day ${day}` : `☀ Dawn breaks · day ${day + 1}`, 'good');
   }
 
   private updateBirds(now: number, dt: number) {
@@ -190,6 +242,10 @@ export class Fx {
     const sc = this.scene, m = sc.mirror;
     const phase = ((m.serverNow() % DAY_MS) + DAY_MS) % DAY_MS / DAY_MS;
     const sun = Math.sin(phase * Math.PI * 2);
+    // The sun crossing the horizon: bells at dawn, a softer one at dusk.
+    if (this.prevSun != null && this.prevSun < 0 && sun >= 0) this.dawn(false);
+    if (this.prevSun != null && this.prevSun >= 0 && sun < 0) this.dawn(true);
+    this.prevSun = sun;
     this.darkness = Math.max(0, Math.min(1, (-sun - 0.25) * 1.8)) * 0.3;
     const dusk = Math.max(0, 1 - Math.abs(sun) * 4) * 0.18;
     const n = this.night;
@@ -209,6 +265,15 @@ export class Fx {
       const flick = 0.85 + 0.15 * Math.sin(now / 180 + b.id * 3);
       l.circle(bx, by, S * (0.9 + b.size * 0.5)).fill({ color: 0xffb347, alpha: a * 0.28 * flick });
       l.circle(bx, by, S * 0.45 * b.size).fill({ color: 0xffd27a, alpha: a * 0.35 * flick });
+    }
+    // Street lamps light one by one as the dark deepens, each with a little spark.
+    for (const d of sc.decor) {
+      if (!d.light) continue;
+      const id = `${d.x},${d.y}`;
+      const threshold = 0.04 + hash01(sc.mirror.seed, d.x, d.y, 440) * 0.12;
+      if (this.darkness < threshold) { this.lampsLit.delete(id); continue; }
+      if (!this.lampsLit.has(id)) { this.lampsLit.add(id); this.sparkle(d.x, d.y - 0.4, 0xffe3a0, 6); }
+      l.circle((d.x + 0.5) * S, (d.y + 0.5) * S - S * 0.2, S * 0.9).fill({ color: 0xffd27a, alpha: a * 0.35 });
     }
     // Pawns drilling at night carry lanterns.
     for (const [id, v] of sc.pieces) {

@@ -1,7 +1,7 @@
 // Battles (battle.md): engagement, countdown, arena, set picking, play with
 // clocks, AI stand-ins, aftermath, cooldowns and ratings.
 import {
-  AI_TAKEOVER_MS, CANCEL_COOLDOWN_MS, COUNTDOWN_FIELD_MS, COUNTDOWN_SIEGE_MS, MIN_BATTLE_COOLDOWN_MS, REACH, FACING_DELTA,
+  AI_TAKEOVER_MS, CANCEL_COOLDOWN_MS, CANCEL_PROTECT_MS, FRESH_ACCOUNT_MS, COUNTDOWN_FIELD_MS, COUNTDOWN_SIEGE_MS, MIN_BATTLE_COOLDOWN_MS, REACH, FACING_DELTA,
   cheb, distToRect, key, type BattlePublic, type BattleSummary, type BuildingType, type Facing, type Piece, type PieceKind,
 } from '@owc/shared';
 import { assemble, BattleGame, glicko2, headingOf, pickSet, regenMs, type Color } from '@owc/rules';
@@ -75,7 +75,10 @@ export class Battles {
     if ((att.cooldownUntil ?? 0) > g.now) return 'This king is recovering from battle';
     const err = this.canTarget(target, att.owner!);
     if (err) return err;
-    const siege = this.w.buildingsNear(target.x, target.y, REACH).some((b) => b.owner === target.owner && distToRect(target.x, target.y, b.x, b.y, b.size) <= REACH);
+    const held = this.w.buildingsNear(target.x, target.y, REACH).filter((b) => b.owner === target.owner && distToRect(target.x, target.y, b.x, b.y, b.size) <= REACH);
+    const siege = held.length > 0;
+    // Settlements remember being besieged: their walls rise with it (visuals.md §10).
+    for (const b of held) { b.sieges = (b.sieges ?? 0) + 1; this.w.dirtyBuildings.add(b.id); }
     const cx = siege ? target.x : Math.round((att.x + target.x) / 2), cy = siege ? target.y : Math.round((att.y + target.y) / 2);
     const whiteFacing = headingOf(target.x - att.x, target.y - att.y, 0);
     const wp = g.players.get(att.owner!)!, bp = g.players.get(target.owner!)!;
@@ -109,6 +112,9 @@ export class Battles {
     if (!r || r.pub.phase !== 'countdown' || r.white.player !== player) return;
     const k = this.w.pieces.get(r.white.kingId);
     if (k) k.cooldownUntil = this.game.now + CANCEL_COOLDOWN_MS;
+    // Calling off an attack protects the defender for a while (no freeze-and-cancel harassment).
+    const dk = this.w.pieces.get(r.black.kingId);
+    if (dk) dk.protectedUntil = Math.max(dk.protectedUntil ?? 0, this.game.now + CANCEL_PROTECT_MS);
     r.pub.phase = 'over'; r.pub.result = null; r.pub.termination = 'cancelled'; r.endedAt = this.game.now;
     this.onUpdate(r.pub);
     this.game.onAlert(r.black.player, { kind: 'info', text: `${r.pub.white.name} called off the attack` });
@@ -121,6 +127,8 @@ export class Battles {
   practice(player: string): string | null {
     const g = this.game;
     if ([...this.recs.values()].some((r) => r.pub.kind === 'practice' && r.white.player === player && r.pub.phase !== 'over')) return 'You already have a practice battle';
+    // Engines are shared with real battles' AI stand-ins: cap practice games.
+    if ([...this.recs.values()].filter((r) => r.pub.kind === 'practice' && r.pub.phase !== 'over').length >= 4) return 'The practice hall is full. Try again in a minute';
     const p = g.players.get(player);
     const emp = p?.emperorId ? this.w.pieces.get(p.emperorId) : undefined;
     if (!p) return 'Unknown player';
@@ -277,7 +285,7 @@ export class Battles {
     const movetime = Math.max(100, Math.min(1200, left / 60));
     r.aiThinking = true;
     const fen = gm.fen, ply = gm.moves.length;
-    this.ai.bestMove(fen, rating, movetime).then((uci) => {
+    this.ai.bestMove(fen, rating, movetime, r.pub.kind === 'practice' ? 0 : 1).then((uci) => {
       r.aiThinking = false;
       if (!r.game || r.pub.phase !== 'live' || r.game.moves.length !== ply) return;
       const mv = uci ?? r.game.legalMoves()[0];
@@ -336,9 +344,16 @@ export class Battles {
       const loserSurvivors = lose.ids.filter((id) => survivors.has(id) && id !== lose.kingId);
       // Reserves: the loser's other pieces that were within the fallen king's reach.
       const reserves = w.piecesNear(kingAt[0], kingAt[1], REACH).filter((p) => p.owner === lose.player && p.state !== 'battle' && !loserSurvivors.includes(p.id));
-      for (const p of reserves) { g.setOwner(p, win.player); summary.converted.push(p.id); }
+      // Conversions (safeguards.md §5): kit pieces and fresh accounts' pieces perish instead.
+      const loserRec = g.players.get(lose.player);
+      const fresh = !!loserRec && !loserRec.isBot && now - loserRec.createdAt < FRESH_ACCOUNT_MS;
+      const convert = (p: Piece) => {
+        if (p.kit || fresh) { summary.killed.push(p.id); g.removePiece(p.id); return; }
+        g.setOwner(p, win.player); summary.converted.push(p.id);
+      };
+      for (const p of reserves) convert(p);
       if (emperor) {
-        for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) { g.setOwner(p, win.player); summary.converted.push(id); } }
+        for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) convert(p); }
       } else {
         for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) { p.state = 'routed'; w.touch(p); summary.routed.push(id); } }
       }
@@ -354,7 +369,10 @@ export class Battles {
       if (emperor) this.fallOfEmperor(lose.player, kingAt);
       // Cooldown: time for the winner to regenerate what they lost.
       const counts: Partial<Record<BuildingType, number>> = {};
-      for (const b of w.buildings.values()) if (b.owner === win.player && b.built >= 1 && b.type !== 'ruin') counts[b.type] = (counts[b.type] ?? 0) + 1;
+      // Only working buildings count, at most two per king per type (safeguards.md §3).
+      for (const b of w.buildings.values()) if (b.owner === win.player && b.built >= 1 && b.type !== 'ruin' && !b.blocked) counts[b.type] = (counts[b.type] ?? 0) + 1;
+      const cap = 2 * Math.max(1, g.kingsOf(win.player).length);
+      for (const t of Object.keys(counts) as BuildingType[]) counts[t] = Math.min(counts[t]!, cap);
       const lostKinds = win.ids.filter((id) => gm.killed.includes(id)).map((id) => kinds.get(id)!).filter(Boolean);
       summary.cooldownMs = Math.max(MIN_BATTLE_COOLDOWN_MS, lostKinds.reduce((s, k) => s + regenMs(k, counts, g.speed), 0));
       for (const id of win.ids) { const p = w.pieces.get(id); if (p) { p.cooldownUntil = now + summary.cooldownMs; w.touch(p); } }

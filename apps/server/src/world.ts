@@ -259,6 +259,23 @@ export class World {
     );
   }
 
+  /**
+   * Memory upkeep (safeguards.md §6): trails fade, fully regrown nodes stop
+   * being stored, and cached chunks nobody is near get dropped (they
+   * regenerate from the seed plus the stored changes).
+   */
+  maintain(keep: Set<string>, fadeTrails: boolean) {
+    if (fadeTrails) for (const [k, t] of this.traffic) { const n = t >> 1; if (n) this.traffic.set(k, n); else this.traffic.delete(k); }
+    for (const [k, n] of this.nodeOverlay) if (!n.gone && n.remaining >= n.capacity && !n.regrowAt) this.nodeOverlay.delete(k);
+    if (this.nodesByChunk.size > 3000) {
+      for (const ck of [...this.nodesByChunk.keys()]) {
+        if (keep.has(ck) || this.piecesByChunk.get(ck)?.size || this.buildingsByChunk.get(ck)?.size) continue;
+        for (const n of this.nodesByChunk.get(ck)!) this.nodes.delete(key(n.x, n.y));
+        this.nodesByChunk.delete(ck);
+      }
+    }
+  }
+
   trafficInChunk(cx: number, cy: number): number[] {
     const out: number[] = [];
     for (let y = 0; y < CHUNK; y++)
