@@ -2,17 +2,20 @@
 // buildings and resource nodes, animated from server turns (movement.md §8).
 import { Application, Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
 import { CHUNK, REACH, cheb, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
-import { hash01 } from '@owc/worldgen';
+import { biomeAt, hash01 } from '@owc/worldgen';
 import { Chess } from 'chess.js';
 import type { Mirror, MoveEvent } from '@owc/client-core';
-import { buildingTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
-import { paintChunk, terrainCodes, textureFrom, TPX } from './terrain.ts';
+import { buildingTexture, campTexture, creatureTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
+import { nodeArt } from './biomeArt.ts';
+import { paintChunk, paintChunkFar, terrainCodes, biomeCodes, textureFrom, TPX, FAR_TPX } from './terrain.ts';
 import { Fx } from './fx.ts';
 import { computeSettlements, decorate, wallsFor, TIER_NAME, type Decor, type Settlement, type Wall } from './settlements.ts';
 import { decorTexture } from './textures.ts';
 import { useUI } from '../store.ts';
 
 export const S = 64; // world pixels per square
+const MIN_ZOOM = 0.04;
+const FAR_ZOOM = 0.2;
 
 export interface Camera { x: number; y: number; zoom: number; rot: number; rotShown: number }
 
@@ -74,7 +77,10 @@ export class Scene {
   bellUntil = new Map<number, number>();
   settleDirty = true;
   private lastSettle = 0;
-  private chunkViews = new Map<string, { sprite: Sprite; canvas: HTMLCanvasElement; codes: Uint8Array; dirty: boolean }>();
+  private chunkViews = new Map<string, { sprite: Sprite; canvas: HTMLCanvasElement; codes: Uint8Array; biomes: Uint8Array; dirty: boolean; far: boolean }>();
+  /** Zoomed far out: cheap terrain, dots instead of sprites (client.md §2 level of detail). */
+  get far() { return this.cam.zoom < FAR_ZOOM; }
+  private farG = new Graphics();
   private requested = new Set<string>();
   private worker: Worker;
   private arenaG = new Graphics();
@@ -82,6 +88,10 @@ export class Scene {
   private lastSub = '';
   onSubscribe: (chunks: [number, number][]) => void = () => {};
   hover: [number, number] | null = null;
+  /** Smoothed cost of our per-frame work in ms (the ?perf overlay). */
+  frameMs = 0;
+  /** What the mouse is over (for the hover name tag), with its screen position. */
+  hoverInfo: { piece?: number; building?: number; sx: number; sy: number } | null = null;
   pathPreview: { from: [number, number]; to: [number, number]; ok: boolean; attack: boolean } | null = null;
   lasso: [number, number][] | null = null;
   box: { a: [number, number]; b: [number, number] } | null = null;
@@ -92,19 +102,19 @@ export class Scene {
     this.mirror = mirror;
     this.fx = new Fx(this);
     this.worker = new Worker(new URL('./terrainWorker.ts', import.meta.url), { type: 'module' });
-    this.worker.onmessage = (e: MessageEvent<{ cx: number; cy: number; codes: Uint8Array }>) => this.chunkReady(e.data.cx, e.data.cy, e.data.codes);
+    this.worker.onmessage = (e: MessageEvent<{ cx: number; cy: number; codes: Uint8Array; biomes: Uint8Array }>) => this.chunkReady(e.data.cx, e.data.cy, e.data.codes, e.data.biomes);
   }
 
   async init(el: HTMLElement) {
     await this.app.init({ resizeTo: el, background: '#6f8f4a', antialias: true, resolution: Math.min(2, devicePixelRatio), autoDensity: true });
     el.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
-    this.world.addChild(this.ground, this.wallsG, this.decals, this.objects, this.arenas, this.fx.layer, this.labels);
+    this.world.addChild(this.ground, this.wallsG, this.decals, this.objects, this.farG, this.arenas, this.fx.layer, this.labels);
     this.arenas.addChild(this.arenaG);
     this.arenaG.zIndex = -1e9;
     this.app.stage.addChild(this.world, this.fx.screenLayer, this.overlay);
     this.bindMirror();
-    this.app.ticker.add(() => this.frame());
+    this.app.ticker.add(() => { const t0 = performance.now(); this.frame(); this.frameMs = this.frameMs * 0.95 + (performance.now() - t0) * 0.05; });
     this.ready = true;
   }
 
@@ -121,10 +131,15 @@ export class Scene {
   }
   get theta() { return (this.cam.rotShown * Math.PI) / 2; }
 
-  centerOn(x: number, y: number) { this.cam.x = x; this.cam.y = y; }
+  centerOn(x: number, y: number) { this.cam.x = x; this.cam.y = y; this.fly = null; }
+  /** Glide the camera to a square (and zoom), eased over ~0.7s. */
+  flyTo(x: number, y: number, zoom?: number) {
+    this.fly = { fx: this.cam.x, fy: this.cam.y, fz: this.cam.zoom, tx: x, ty: y, tz: zoom ?? this.cam.zoom, t0: performance.now() };
+  }
+  private fly: { fx: number; fy: number; fz: number; tx: number; ty: number; tz: number; t0: number } | null = null;
   zoomBy(f: number, sx?: number, sy?: number) {
     const before = sx != null ? this.toSquare(sx, sy!) : null;
-    this.cam.zoom = clamp(this.cam.zoom * f, 0.22, 2.4);
+    this.cam.zoom = clamp(this.cam.zoom * f, MIN_ZOOM, 2.4);
     this.applyCamera();
     if (before) {
       const after = this.toSquare(sx!, sy!);
@@ -143,6 +158,16 @@ export class Scene {
 
   // ---------- chunks ----------
 
+  /** The world squares on screen (plus a margin), for culling. */
+  viewBounds(margin = 2) {
+    const { width, height } = this.app.screen;
+    const pts = [[0, 0], [width, 0], [0, height], [width, height]].map(([x, y]) => this.toSquare(x, y));
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    return { x0: Math.min(...xs) - margin, x1: Math.max(...xs) + margin, y0: Math.min(...ys) - margin, y1: Math.max(...ys) + margin };
+  }
+
+  private nodesTheta = NaN;
+
   private visibleChunks(): [number, number][] {
     const { width, height } = this.app.screen;
     const pts = [[0, 0], [width, 0], [0, height], [width, height]].map(([x, y]) => this.toSquare(x, y));
@@ -150,7 +175,8 @@ export class Scene {
     let c0x = Math.floor(Math.min(...xs) / CHUNK) - 1, c1x = Math.floor(Math.max(...xs) / CHUNK) + 1;
     let c0y = Math.floor(Math.min(...ys) / CHUNK) - 1, c1y = Math.floor(Math.max(...ys) / CHUNK) + 1;
     const ccx = Math.floor(this.cam.x / CHUNK), ccy = Math.floor(this.cam.y / CHUNK);
-    c0x = Math.max(c0x, ccx - 4); c1x = Math.min(c1x, ccx + 4); c0y = Math.max(c0y, ccy - 4); c1y = Math.min(c1y, ccy + 4);
+    const lim = this.far ? 14 : 5;
+    c0x = Math.max(c0x, ccx - lim); c1x = Math.min(c1x, ccx + lim); c0y = Math.max(c0y, ccy - lim); c1y = Math.min(c1y, ccy + lim);
     const out: [number, number][] = [];
     for (let cy = c0y; cy <= c1y; cy++) for (let cx = c0x; cx <= c1x; cx++) out.push([cx, cy]);
     return out;
@@ -158,8 +184,11 @@ export class Scene {
 
   private updateChunks() {
     const vis = this.visibleChunks();
-    const sig = vis.map((c) => c.join(',')).join(';');
-    if (sig !== this.lastSub) { this.lastSub = sig; this.onSubscribe(vis); }
+    // The server streams pieces and buildings for the area around the camera only.
+    const ccx = Math.floor(this.cam.x / CHUNK), ccy = Math.floor(this.cam.y / CHUNK);
+    const subs = vis.filter(([x, y]) => Math.abs(x - ccx) <= 4 && Math.abs(y - ccy) <= 4);
+    const sig = subs.map((c) => c.join(',')).join(';');
+    if (sig !== this.lastSub) { this.lastSub = sig; this.onSubscribe(subs); }
     const want = new Set(vis.map(([x, y]) => chunkKey(x, y)));
     for (const [cx, cy] of vis) {
       const k = chunkKey(cx, cy);
@@ -169,36 +198,50 @@ export class Scene {
       }
     }
     for (const [k, v] of this.chunkViews) if (!want.has(k)) { v.sprite.destroy({ texture: true, textureSource: true }); this.chunkViews.delete(k); this.requested.delete(k); }
-    for (const [k, v] of this.chunkViews) if (v.dirty) { v.dirty = false; this.repaint(k, v); }
+    // Repaint at the right level of detail (a few per frame, so zooming stays smooth).
+    let budget = 12;
+    for (const [k, v] of this.chunkViews) {
+      if (v.far !== this.far) v.dirty = true;
+      if (v.dirty && budget-- > 0) { v.dirty = false; this.repaint(k, v); }
+    }
   }
 
-  private chunkReady(cx: number, cy: number, codes: Uint8Array) {
+  private chunkReady(cx: number, cy: number, codes: Uint8Array, biomes: Uint8Array) {
     const k = chunkKey(cx, cy);
     terrainCodes.set(k, codes);
+    biomeCodes.set(k, biomes);
     if (!this.requested.has(k)) return;
     const canvas = document.createElement('canvas');
     const sprite = new Sprite();
     sprite.position.set(cx * CHUNK * S, cy * CHUNK * S);
-    sprite.scale.set(S / TPX);
     this.ground.addChild(sprite);
-    const v = { sprite, canvas, codes, dirty: false };
+    const v = { sprite, canvas, codes, biomes, dirty: false, far: this.far };
     this.chunkViews.set(k, v);
     this.repaint(k, v);
   }
 
-  private repaint(k: string, v: { sprite: Sprite; canvas: HTMLCanvasElement; codes: Uint8Array }) {
+  private repaint(k: string, v: { sprite: Sprite; canvas: HTMLCanvasElement; codes: Uint8Array; biomes: Uint8Array; far: boolean }) {
     const [cx, cy] = k.split(',').map(Number);
     const m = this.mirror;
-    paintChunk(m.seed, cx, cy, {
+    v.far = this.far;
+    v.sprite.scale.set(S / (v.far ? FAR_TPX : TPX));
+    // Changing detail level changes the canvas size: start a fresh canvas and texture.
+    const need = CHUNK * (v.far ? FAR_TPX : TPX);
+    let retired: Texture | null = null;
+    if (v.canvas.width && v.canvas.width !== need) { retired = v.sprite.texture; v.canvas = document.createElement('canvas'); }
+    (v.far ? paintChunkFar : paintChunk)(m.seed, cx, cy, {
       codes: v.codes,
+      biomes: v.biomes,
       ground: (x, y) => this.groundMap.get(key(x, y)) ?? 0,
       traffic: (x, y) => m.traffic.get(key(x, y)) ?? 0,
     }, v.canvas);
     // Pixi caches one texture per canvas: re-upload the pixels, don't make a new one.
     // (Making a new one returned the cached texture, so repaints never reached the GPU:
     // cities you hadn't watched stayed grass.)
-    if (v.sprite.texture && v.sprite.texture.source?.resource === v.canvas) v.sprite.texture.source.update();
+    const src = v.sprite.texture?.source;
+    if (src && src.resource === v.canvas) src.update();
     else v.sprite.texture = textureFrom(v.canvas);
+    if (retired && retired !== v.sprite.texture) retired.destroy(true);
   }
 
   markChunkDirty(x: number, y: number) {
@@ -247,6 +290,8 @@ export class Scene {
     m.onBuildingRemoved = (id) => {
       this.settleDirty = true; this.buildings.get(id)?.sprite.destroy(); this.buildings.get(id)?.bar.destroy(); this.buildings.delete(id); };
     m.onNodeChange = (n) => this.syncNode(n);
+    // Forgotten with its chunk: drop the sprite too (they used to pile up as you panned).
+    m.onNodeDropped = (k) => { const s = this.nodes.get(k); if (s) { s.destroy(); this.nodes.delete(k); } };
     m.onChunk = (cx, cy) => {
       for (const n of m.nodes.values()) if (Math.floor(n.x / CHUNK) === cx && Math.floor(n.y / CHUNK) === cy) this.syncNode(n);
       const v = this.chunkViews.get(chunkKey(cx, cy));
@@ -259,7 +304,7 @@ export class Scene {
   private markTraffic(x: number, y: number) {
     const t = this.mirror.traffic.get(key(x, y)) ?? 0;
     // A square just became a trail, road or street: repaint (and neighbors across chunk edges).
-    if (t === 4 || t === 12 || t === 60) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) this.markChunkDirty(x + dx, y + dy);
+    if (t === 12 || t === 60) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) this.markChunkDirty(x + dx, y + dy);
   }
 
   private syncNode(n: NodeState) {
@@ -273,18 +318,20 @@ export class Scene {
       this.objects.addChild(s);
       this.nodes.set(k, s);
     }
-    const variant = n.kind === 'tree' ? (n.remaining <= 0 ? 'stump' : hash01(this.mirror.seed, n.x, n.y, 5) < 0.45 ? 'pine' : 'tree') : n.kind;
+    // Each biome grows its own trees, rock, ore and crops (visuals.md §11).
+    const variant = nodeArt(this.mirror.seed, n.kind, n.x, n.y, biomeAt(this.mirror.seed, n.x, n.y), n.kind === 'tree' && n.remaining <= 0);
     const tex = variant === 'stump' ? stumpTexture(() => this.syncNode(n)) : nodeTexture(variant, () => this.syncNode(n));
     if (tex) s.texture = tex;
     const frac = n.capacity ? n.remaining / n.capacity : 1;
     const base = n.kind === 'wheat' ? 0.95 : n.kind === 'tree' ? 1.05 + hash01(this.mirror.seed, n.x, n.y, 6) * 0.2 : 1;
     // Mines shrink as they're worked (visuals.md §3).
-    const shrink = n.kind === 'rock' || n.kind === 'gold' ? 0.55 + 0.45 * frac : n.kind === 'wheat' ? 0.5 + 0.5 * frac : 1;
+    const shrink = n.kind === 'rock' || n.kind === 'ore' ? 0.55 + 0.45 * frac : n.kind === 'wheat' ? 0.5 + 0.5 * frac : 1;
     s.width = S * base * shrink; s.height = S * base * shrink;
     s.position.set((n.x + 0.5) * S, (n.y + 0.5) * S + S * 0.36);
     (s as Sprite & { wx?: number; wy?: number; kind?: string }).wx = n.x;
     (s as Sprite & { wx?: number; wy?: number; kind?: string }).wy = n.y;
     (s as Sprite & { wx?: number; wy?: number; kind?: string }).kind = n.kind;
+    (s as Sprite & { placed?: boolean }).placed = false;
   }
 
   // ---------- per frame ----------
@@ -292,11 +339,19 @@ export class Scene {
   private frame() {
     const now = performance.now();
     const c = this.cam;
+    if (this.fly) {
+      const f = this.fly, k = Math.min(1, (now - f.t0) / 700), e = 1 - (1 - k) ** 3;
+      c.x = f.fx + (f.tx - f.fx) * e; c.y = f.fy + (f.ty - f.fy) * e;
+      // Zoom out a little mid-flight on long hops, then settle.
+      c.zoom = Math.exp(Math.log(f.fz) + (Math.log(f.tz) - Math.log(f.fz)) * e);
+      if (k >= 1) this.fly = null;
+    }
     c.rotShown += (c.rot - c.rotShown) * Math.min(1, this.app.ticker.deltaMS / 140);
     if (Math.abs(c.rot - c.rotShown) < 0.001) c.rotShown = c.rot;
     this.applyCamera();
     if ((this.settleDirty && now - this.lastSettle > 800) || now - this.lastSettle > 15_000) this.refreshSettlements(now);
     this.updateChunks();
+    const view = this.viewBounds(2);
     const th = this.theta, sin = Math.sin(th), cos = Math.cos(th);
     const zsort = (wx: number, wy: number) => wx * sin + wy * cos;
     const counter = -th;
@@ -309,13 +364,16 @@ export class Scene {
     for (const [id, v] of this.pieces) {
       const p = m.pieces.get(id);
       if (!p) continue;
-      const hidden = p.state === 'battle';
+      // Off screen: not drawn (performance.md §7). It still animates, so it's in place when it comes into view.
+      const hidden = p.state === 'battle' || p.x < view.x0 || p.x > view.x1 || p.y < view.y0 || p.y > view.y1;
       v.sprite.visible = !hidden;
+      if (hidden && v.anim) { v.x = v.anim.tx; v.y = v.anim.ty; v.anim = null; }
+      if (hidden && v.cargo) v.cargo.visible = false;
       if (hidden) continue;
       const color = this.colorOf(p.owner);
-      const texKey = `${p.kind}:${color}:${!!p.emperor}`;
+      const texKey = p.wild ? `${p.kind}:${p.wild}` : `${p.kind}:${color}:${!!p.emperor}`;
       if (texKey !== v.texKey || !v.sprite.texture || v.sprite.texture.label === 'EMPTY') {
-        const tex = pieceTexture(p.kind, 'light', color, !!p.emperor);
+        const tex = p.wild ? creatureTexture(p.wild, p.kind) : pieceTexture(p.kind, 'light', color, !!p.emperor);
         if (tex) { v.sprite.texture = tex; v.texKey = texKey; }
       }
       v.kind = p.kind;
@@ -364,7 +422,7 @@ export class Scene {
       if (v.born && now - v.born < 900) v.sprite.alpha = Math.min(1, (now - v.born) / 500);
       if (sel.has(id) && !v.pop && v.sprite.visible) v.pop = now;
       if (!sel.has(id)) v.pop = 0;
-      // Goods on the back: gathered wheat, logs, stone or gold; a merchant's pack.
+      // Goods on the back: gathered wheat, logs, stone or ore; a merchant's pack.
       const load = p.routine?.startsWith('haul:') ? p.routine.slice(5) : p.routine?.startsWith('merchant') ? 'pack' : null;
       if (load && this.cam.zoom > 0.35) {
         if (!v.cargo) { v.cargo = new Sprite(); v.cargo.anchor.set(0.5, 0.7); this.objects.addChild(v.cargo); }
@@ -382,17 +440,38 @@ export class Scene {
     }
 
     // Buildings
-    for (const b of m.buildings.values()) this.drawBuilding(b, zsort, counter, now);
-    // Nodes: wind sway (visuals.md §4)
+    for (const b of m.buildings.values()) {
+      const off = b.x + b.size < view.x0 || b.x > view.x1 || b.y + b.size < view.y0 || b.y > view.y1;
+      const v = this.buildings.get(b.id);
+      if (off && v) { v.sprite.visible = false; v.bar.visible = false; continue; }
+      if (v) { v.sprite.visible = true; v.bar.visible = true; }
+      this.drawBuilding(b, zsort, counter, now);
+    }
+    // Nodes (performance.md §7): only what's on screen is on the stage, so depth
+    // sorting and drawing scale with the view, not the loaded area. They never
+    // move, so their transform only changes when the camera turns.
+    const turned = th !== this.nodesTheta;
+    this.nodesTheta = th;
     for (const s of this.nodes.values()) {
-      const n = s as Sprite & { wx: number; wy: number; kind: string };
-      s.rotation = counter;
-      const wx = (n.wx + 0.5) * S, wy = (n.wy + 0.5) * S;
-      // keep node feet on the square under rotation
-      s.position.set(wx + Math.sin(th) * S * 0.36, wy + Math.cos(th) * S * 0.36);
-      s.zIndex = zsort(wx, wy);
+      const n = s as Sprite & { wx: number; wy: number; kind: string; placed?: boolean };
+      const vis = !this.far && n.wx >= view.x0 && n.wx <= view.x1 && n.wy >= view.y0 && n.wy <= view.y1;
+      if (!vis) { if (s.parent) this.objects.removeChild(s); continue; }
+      if (!s.parent) this.objects.addChild(s);
+      if (turned || !n.placed) {
+        n.placed = true;
+        s.rotation = counter;
+        const wx = (n.wx + 0.5) * S, wy = (n.wy + 0.5) * S;
+        // keep node feet on the square under rotation
+        s.position.set(wx + Math.sin(th) * S * 0.36, wy + Math.cos(th) * S * 0.36);
+        s.zIndex = zsort(wx, wy);
+      }
+      // Wind sway (visuals.md §4).
       if (n.kind === 'tree' || n.kind === 'wheat') s.skew.x = reduce ? 0 : this.fx.wind(n.wx, n.wy, t) * (n.kind === 'wheat' ? 0.16 : 0.05);
     }
+    this.objects.visible = !this.far;
+    this.wallsG.visible = !this.far;
+    for (const t of this.kingLabels.values()) if (this.far) t.visible = false;
+    this.drawFar(now);
     this.drawTown(zsort, counter);
     this.drawDecals(now, sel);
     this.drawArenas(now, zsort, counter);
@@ -405,7 +484,7 @@ export class Scene {
     if (!show) { if (label) label.visible = false; return; }
     if (!label) {
       const pl = p.owner ? this.mirror.players.get(p.owner) : undefined;
-      label = new Text({ text: (p.emperor ? '♛ ' : '') + (pl?.name ?? '—'), style: { fontFamily: 'Nunito, system-ui', fontWeight: '800', fontSize: 22, fill: 0xffffff, stroke: { color: 0x23211f, width: 5 } } });
+      label = new Text({ text: pl?.name ?? '-', style: { fontFamily: 'Nunito, system-ui', fontWeight: '800', fontSize: 22, fill: p.emperor ? 0xf3d27a : 0xffffff, stroke: { color: 0x23211f, width: 5 } } });
       label.anchor.set(0.5, 1);
       this.labels.addChild(label);
       this.kingLabels.set(p.id, label);
@@ -426,8 +505,8 @@ export class Scene {
       this.objects.addChild(v.bar);
     }
     const color = this.colorOf(b.owner);
-    const k = `${b.type}:${color}`;
-    if (k !== v.texKey) { const tex = buildingTexture(b.type, color); if (tex) { v.sprite.texture = tex; v.texKey = k; } }
+    const k = b.camp ? `camp:${b.camp.art}:${b.camp.faction}` : `${b.type}:${color}`;
+    if (k !== v.texKey) { const tex = b.camp ? campTexture(b.camp.art, b.camp.faction) : buildingTexture(b.type, color); if (tex) { v.sprite.texture = tex; v.texKey = k; } }
     const th = this.theta;
     const cx = (b.x + b.size / 2) * S, cy = (b.y + b.size / 2) * S;
     const w = b.size * S * (b.size === 1 ? 1.25 : 1.12);
@@ -440,7 +519,7 @@ export class Scene {
     const building = b.built < 1;
     v.sprite.alpha = building ? 0.45 + 0.5 * b.built : 1;
     v.sprite.tint = b.type === 'ruin' ? 0xffffff : mix(0x9a9a9a, 0xffffff, b.hp / 100);
-    const producing = !building && !b.blocked && b.type !== 'ruin';
+    const producing = !building && !b.blocked && b.type !== 'ruin' && b.type !== 'camp';
     if (producing) v.sprite.tint = mix(v.sprite.tint as number, 0xfff3c4, 0.12 + 0.08 * Math.sin(now / 300 + b.id));
     // Progress bar (construction or production), in screen-up direction.
     v.bar.clear();
@@ -456,58 +535,137 @@ export class Scene {
     }
   }
 
+  /** Far zoom: pieces as dots (kings bigger), buildings as squares, battles as rings. */
+  private drawFar(now: number) {
+    const g = this.farG;
+    g.clear();
+    if (!this.far) return;
+    const m = this.mirror, lw = (px: number) => this.lw(px);
+    for (const b of m.buildings.values()) {
+      if (b.type === 'ruin') continue;
+      g.rect(b.x * S, b.y * S, b.size * S, b.size * S).fill({ color: parseInt(this.colorOf(b.owner).slice(1), 16), alpha: 0.85 });
+    }
+    for (const p of m.pieces.values()) {
+      if (p.state === 'battle') continue;
+      const v = this.pieces.get(p.id);
+      const x = ((v?.x ?? p.x) + 0.5) * S, y = ((v?.y ?? p.y) + 0.5) * S;
+      const r = lw(p.kind === 'K' ? 4.5 : 2.4);
+      g.circle(x, y, r + lw(1.5)).fill({ color: 0x1d1b19, alpha: 0.6 });
+      g.circle(x, y, r).fill({ color: p.owner === m.me ? 0xffffff : parseInt(this.colorOf(p.owner).slice(1), 16) });
+    }
+    for (const b of m.battles.values()) {
+      if (b.phase === 'over' || b.kind === 'practice') continue;
+      const pulse = 0.5 + 0.5 * Math.sin(now / 250);
+      g.circle((b.cx + 0.5) * S, (b.cy + 0.5) * S, lw(10 + 6 * pulse)).stroke({ width: lw(3), color: 0xe0503a });
+    }
+  }
+
+  /** A line width that stays the same on screen at any zoom. */
+  private lw(px: number) { return px / Math.max(0.05, this.cam.zoom); }
+
+  /** Dashed line in world space, marching toward its end. */
+  private dashed(g: Graphics, fx: number, fy: number, tx: number, ty: number, now: number) {
+    const len = Math.hypot(tx - fx, ty - fy), dash = this.lw(14), off = (now / 12) % (dash * 2);
+    for (let d = -off; d < len; d += dash * 2) {
+      const a = Math.max(0, d), b = Math.min(len, d + dash);
+      if (b <= a) continue;
+      g.moveTo(fx + ((tx - fx) * a) / len, fy + ((ty - fy) * a) / len).lineTo(fx + ((tx - fx) * b) / len, fy + ((ty - fy) * b) / len);
+    }
+  }
+
+  /** A square target marker: dark halo, bright ring, pulsing fill. */
+  private target(g: Graphics, x: number, y: number, col: number, now: number) {
+    const pulse = 0.5 + 0.5 * Math.sin(now / 220);
+    const inset = S * 0.06;
+    g.rect(x * S + inset, y * S + inset, S - inset * 2, S - inset * 2).fill({ color: col, alpha: 0.18 + 0.15 * pulse });
+    g.rect(x * S + inset, y * S + inset, S - inset * 2, S - inset * 2).stroke({ width: this.lw(9), color: 0x1d1b19, alpha: 0.35 });
+    g.rect(x * S + inset, y * S + inset, S - inset * 2, S - inset * 2).stroke({ width: this.lw(4.5), color: col, alpha: 1 });
+    g.circle((x + 0.5) * S, (y + 0.5) * S, S * (0.7 + 0.35 * pulse)).stroke({ width: this.lw(3), color: col, alpha: 0.55 * (1 - pulse) + 0.2 });
+  }
+
+  /** Moves you've sent stay marked until the troop gets there (ux.md §3). */
+  moveTargets = new Map<string, { to: [number, number]; ids: number[]; attack: boolean; t0: number }>();
+  pendingMarker: [number, number] | null = null;
+
   private drawDecals(now: number, sel: Set<number>) {
     const g = this.decals;
     g.clear();
     const m = this.mirror;
-    // Reach rings of selected kings (the one reach rule, economy.md §2).
+    const lw = (px: number) => this.lw(px);
+    // Selected pieces: a bright ring with a dark halo so it reads on any ground.
     for (const id of sel) {
       const p = m.pieces.get(id), v = this.pieces.get(id);
       if (!p || !v || p.state === 'battle') continue;
       const cx = (v.x + 0.5) * S, cy = (v.y + 0.5) * S;
-      g.circle(cx, cy, S * 0.46).stroke({ width: 4, color: 0xffffff, alpha: 0.9 });
-      g.circle(cx, cy, S * 0.46).fill({ color: 0xffffff, alpha: 0.12 });
+      g.circle(cx, cy, S * 0.47).fill({ color: 0xffffff, alpha: 0.22 });
+      g.circle(cx, cy, S * 0.47).stroke({ width: lw(8), color: 0x1d1b19, alpha: 0.35 });
+      g.circle(cx, cy, S * 0.47).stroke({ width: lw(4), color: 0xffffff, alpha: 1 });
       if (p.kind === 'K') {
-        g.rect((v.x - REACH) * S, (v.y - REACH) * S, (REACH * 2 + 1) * S, (REACH * 2 + 1) * S).stroke({ width: 3, color: 0xffffff, alpha: 0.25 + 0.1 * Math.sin(now / 500) });
+        const r = [(v.x - REACH) * S, (v.y - REACH) * S, (REACH * 2 + 1) * S, (REACH * 2 + 1) * S] as const;
+        g.rect(...r).fill({ color: 0xffffff, alpha: 0.05 });
+        g.rect(...r).stroke({ width: lw(3), color: 0xffffff, alpha: 0.45 + 0.15 * Math.sin(now / 500) });
       }
     }
+    // Where your troops are headed, until they arrive.
+    for (const [k, t] of this.moveTargets) {
+      const moving = t.ids.map((id) => m.pieces.get(id)).filter((p) => p && (p.state === 'moving' || p.state === 'battle'));
+      if ((!moving.length && now - t.t0 > 1500) || now - t.t0 > 240_000) { this.moveTargets.delete(k); continue; }
+      const col = t.attack ? 0xe0503a : 0xffffff;
+      const lead = moving[0] ? this.pieces.get(moving[0]!.id) : undefined;
+      if (lead) { this.dashed(g, (lead.x + 0.5) * S, (lead.y + 0.5) * S, (t.to[0] + 0.5) * S, (t.to[1] + 0.5) * S, now); g.stroke({ width: lw(3.5), color: col, alpha: 0.55, cap: 'round' }); }
+      this.target(g, t.to[0], t.to[1], col, now);
+    }
+    if (this.pendingMarker) this.target(g, this.pendingMarker[0], this.pendingMarker[1], 0xffffff, now);
     // Path preview while dragging a command (ux.md §3).
     if (this.pathPreview) {
       const { from, to, ok, attack } = this.pathPreview;
       const col = attack ? 0xe0503a : ok ? 0xffffff : 0xff6b5a;
       const fx = (from[0] + 0.5) * S, fy = (from[1] + 0.5) * S, tx = (to[0] + 0.5) * S, ty = (to[1] + 0.5) * S;
-      const len = Math.hypot(tx - fx, ty - fy), dash = 18, off = (now / 12) % (dash * 2);
-      for (let d = -off; d < len; d += dash * 2) {
-        const a = Math.max(0, d), b = Math.min(len, d + dash);
-        if (b <= a) continue;
-        g.moveTo(fx + ((tx - fx) * a) / len, fy + ((ty - fy) * a) / len).lineTo(fx + ((tx - fx) * b) / len, fy + ((ty - fy) * b) / len);
-      }
-      g.stroke({ width: 6, color: col, alpha: 0.85, cap: 'round' });
-      g.rect(to[0] * S, to[1] * S, S, S).stroke({ width: 5, color: col, alpha: 0.9 });
+      this.dashed(g, fx, fy, tx, ty, now);
+      g.stroke({ width: lw(10), color: 0x1d1b19, alpha: 0.3, cap: 'round' });
+      this.dashed(g, fx, fy, tx, ty, now);
+      g.stroke({ width: lw(5.5), color: col, alpha: 0.95, cap: 'round' });
+      this.target(g, to[0], to[1], col, now);
     }
     // Lasso and box selection.
     if (this.lasso && this.lasso.length > 1) {
       g.moveTo((this.lasso[0][0] + 0.5) * S, (this.lasso[0][1] + 0.5) * S);
       for (const [x, y] of this.lasso) g.lineTo((x + 0.5) * S, (y + 0.5) * S);
-      g.stroke({ width: 4, color: 0xffffff, alpha: 0.8 });
+      g.stroke({ width: lw(9), color: 0x1d1b19, alpha: 0.3 });
+      g.moveTo((this.lasso[0][0] + 0.5) * S, (this.lasso[0][1] + 0.5) * S);
+      for (const [x, y] of this.lasso) g.lineTo((x + 0.5) * S, (y + 0.5) * S);
+      g.stroke({ width: lw(4.5), color: 0xffffff, alpha: 1 });
     }
     if (this.box) {
       const [ax, ay] = this.box.a, [bx, by] = this.box.b;
-      g.rect((Math.min(ax, bx) + 0.5) * S, (Math.min(ay, by) + 0.5) * S, Math.abs(bx - ax) * S, Math.abs(by - ay) * S).fill({ color: 0xffffff, alpha: 0.08 }).stroke({ width: 3, color: 0xffffff, alpha: 0.7 });
+      g.rect((Math.min(ax, bx) + 0.5) * S, (Math.min(ay, by) + 0.5) * S, Math.abs(bx - ax) * S, Math.abs(by - ay) * S).fill({ color: 0xffffff, alpha: 0.12 }).stroke({ width: lw(3.5), color: 0xffffff, alpha: 0.95 });
     }
-    // Building ghost with its work area (economy.md §3).
+    // Building ghost: footprint, its 3-square work area, the nodes it would draw
+    // from, and the reach of the king that would hold it (economy.md §2–3).
     const ui = useUI.getState();
     if (ui.buildType && ui.ghost) {
       const size = ({ house: 1, stable: 2, temple: 2, barracks: 2, palace: 3 } as const)[ui.buildType];
       const { x, y, ok } = ui.ghost;
-      g.rect((x - 3) * S, (y - 3) * S, (size + 6) * S, (size + 6) * S).fill({ color: ok ? 0x95b957 : 0xe0503a, alpha: 0.1 }).stroke({ width: 3, color: ok ? 0xb5e07a : 0xff8a7a, alpha: 0.6 });
-      g.rect(x * S, y * S, size * S, size * S).fill({ color: ok ? 0x95b957 : 0xe0503a, alpha: 0.35 }).stroke({ width: 5, color: ok ? 0xd8ffb0 : 0xffb0a6 });
+      const good = ok ? 0x95e05a : 0xff5a45, light = ok ? 0xe8ffc8 : 0xffc2b8;
+      const king = m.myKings().filter((k) => k.state !== 'battle').sort((a, b) => cheb(a.x, a.y, x, y) - cheb(b.x, b.y, x, y))[0];
+      if (king) {
+        const r = [(king.x - REACH) * S, (king.y - REACH) * S, (REACH * 2 + 1) * S, (REACH * 2 + 1) * S] as const;
+        g.rect(...r).stroke({ width: lw(7), color: 0x1d1b19, alpha: 0.25 });
+        g.rect(...r).stroke({ width: lw(3), color: 0xffffff, alpha: 0.75 });
+      }
+      const wa = [(x - 3) * S, (y - 3) * S, (size + 6) * S, (size + 6) * S] as const;
+      g.rect(...wa).fill({ color: good, alpha: 0.16 });
+      g.rect(...wa).stroke({ width: lw(8), color: 0x1d1b19, alpha: 0.3 });
+      g.rect(...wa).stroke({ width: lw(4), color: good, alpha: 1 });
+      g.rect(x * S, y * S, size * S, size * S).fill({ color: good, alpha: 0.5 }).stroke({ width: lw(5), color: light });
       for (const n of m.nodes.values())
-        if (n.x >= x - 3 && n.x < x + size + 3 && n.y >= y - 3 && n.y < y + size + 3 && n.remaining > 0)
-          g.circle((n.x + 0.5) * S, (n.y + 0.5) * S, S * 0.4).stroke({ width: 3, color: 0xfff2b0, alpha: 0.8 });
+        if (n.x >= x - 3 && n.x < x + size + 3 && n.y >= y - 3 && n.y < y + size + 3 && n.remaining > 0) {
+          g.circle((n.x + 0.5) * S, (n.y + 0.5) * S, S * 0.42).stroke({ width: lw(7), color: 0x1d1b19, alpha: 0.3 });
+          g.circle((n.x + 0.5) * S, (n.y + 0.5) * S, S * 0.42).stroke({ width: lw(3.5), color: 0xfff2b0, alpha: 1 });
+        }
     }
     // Hover square on desktop
-    if (this.hover && !ui.buildType) g.rect(this.hover[0] * S, this.hover[1] * S, S, S).stroke({ width: 2, color: 0xffffff, alpha: 0.35 });
+    if (this.hover && !ui.buildType) g.rect(this.hover[0] * S, this.hover[1] * S, S, S).stroke({ width: lw(2.5), color: 0xffffff, alpha: 0.5 });
   }
 
   settlementAt(x: number, y: number) { return this.settlements.find((st) => st.ground.has(key(x, y)))?.id ?? -1; }
@@ -657,7 +815,10 @@ export class Scene {
         if (!s) { s = new Sprite(); s.anchor.set(0.5, 0.84); this.arenas.addChild(s); this.arenaPieces.set(id, s); }
         const white = pc.color === 'w';
         const pid = b.pieceMap[name];
-        const tex = pieceTexture(pc.type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? b.white.color : b.black.color, !!(pid && m.pieces.get(pid)?.emperor));
+        // A camp of the wilds fights as its creatures.
+        const wild = m.players.get(white ? b.white.playerId : b.black.playerId)?.wild;
+        const kind = pc.type.toUpperCase() as PieceKind;
+        const tex = wild ? creatureTexture(wild, kind) : pieceTexture(kind, white ? 'light' : 'dark', white ? b.white.color : b.black.color, !!(pid && m.pieces.get(pid)?.emperor));
         if (tex) s.texture = tex;
         const [x, y] = sq(f, r);
         const th = this.theta, wx = (x + 0.5) * S, wy = (y + 0.5) * S;
@@ -669,6 +830,13 @@ export class Scene {
       }
     }
     for (const [id, s] of this.arenaPieces) if (!used.has(id)) { s.destroy(); this.arenaPieces.delete(id); }
+  }
+
+  /** What's on the stage (for the ?perf overlay). */
+  stats() {
+    let nodes = 0;
+    for (const s of this.nodes.values()) if (s.parent) nodes++;
+    return { pieces: this.pieces.size, nodes, nodesLoaded: this.nodes.size, buildings: this.buildings.size, chunks: this.chunkViews.size, stage: this.objects.children.length };
   }
 
   /** Squares with something selectable of mine near a world point. */

@@ -78,7 +78,7 @@ export function cargo({ team = 'wheat' } = {}) {
   const kind = team;
   if (kind === 'tree') return part(rr(22, 50, 56, 14, 7), MAT.wood, MAT.woodShade, { shadeX: 60 }) + part(rr(26, 38, 50, 14, 7), MAT.wood, null) + part(ell(26, 45, 5, 7), '#d9b88a', null) + part(ell(22, 57, 5, 7), '#d9b88a', null);
   if (kind === 'rock') return part('M24 70 L30 44 L56 38 L74 52 L70 72 Z', MAT.stone, MAT.stoneShade, { shadeX: 56 }) + line('M40 50 L46 60', 2);
-  if (kind === 'gold') return part('M30 72 C24 56 34 40 50 40 C66 40 76 56 70 72 Z', '#b8894a', null) + line('M40 42 L50 34 L60 42', 3) + part(circ(50, 60, 7), MAT.gold, null);
+  if (kind === 'ore' || kind === 'gold') return part('M30 72 C24 56 34 40 50 40 C66 40 76 56 70 72 Z', '#b8894a', null) + line('M40 42 L50 34 L60 42', 3) + part(circ(50, 60, 7), MAT.gold, null);
   if (kind === 'pack') return part(rr(26, 36, 48, 40, 8), '#9a6a3f', '#7d5230', { shadeX: 58 }) + part(rr(32, 28, 36, 12, 5), '#c7508f', null) + line('M34 48 H66 M34 60 H66', 2.2, '#5c3d22') + part(circ(50, 54, 5), MAT.gold, null);
   // wheat bundle
   return line('M34 76 L50 34 M50 76 L50 30 M66 76 L50 34', 3, INK) + part(rr(36, 54, 28, 7, 3), MAT.wood, null) +

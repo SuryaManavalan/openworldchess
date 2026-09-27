@@ -9,8 +9,8 @@
 | # | Rule | Where |
 |---|---|---|
 | R1 | Buildings produce only from nodes within 3 squares | [economy.md](economy.md) §1 |
-| R2 | Nodes are richer and gold is more common at higher area elo | [resources.md](resources.md) §2 |
-| R3 | Stone and gold run out; wood and wheat regrow | [economy.md](economy.md) §1 |
+| R2 | Nodes are richer and ore is more common at higher area elo | [resources.md](resources.md) §2 |
+| R3 | Stone and ore run out; wood and wheat regrow | [economy.md](economy.md) §1 |
 | R4 | Buildings and pieces must stay within 10 squares of a king; kings are the slowest thing to produce | [economy.md](economy.md) §2, [movement.md](movement.md) §4 |
 | R5 | The Emperor is a king, and losing it loses everything nearby, plus a restart lower down | [progression.md](progression.md) §3 |
 | R6 | Movement is slow (a troop with pawns covers ~100 squares per minute), and attacks give 60 or 15 seconds of warning | [movement.md](movement.md) §2, [battle.md](battle.md) §2 |
@@ -22,7 +22,7 @@
 
 - A king is your scarcest asset (R4), so every king should anchor the best production it can reach.
 - The same buildings produce more near richer nodes (R2), and palace sites are far more common in pockets (5% of sites at low elo, 19% at 2000+; [resources.md](resources.md) §4).
-- Stone and gold run out (R3). Even a happy player eventually has to put kings somewhere new, and the best untapped sites are deeper, because they're richer and fewer people can hold them.
+- Stone and ore run out (R3). Even a happy player eventually has to put kings somewhere new, and the best untapped sites are deeper, because they're richer and fewer people can hold them.
 
 **Result:** a steady push inward that nobody scripted.
 
@@ -46,7 +46,7 @@ Nothing tells you where to keep your Emperor. The pressures:
 
 ## 3. Is the pull strong enough? A gap found
 
-In the current numbers, **richness only affects how much a node holds** (how long a mine lasts), not **how fast a building produces**. A barracks at elo 2200 makes Elephants at the same rate as one at elo 900. Only gold access and mine lifespan improve deeper. That's probably too weak to justify the danger.
+In the current numbers, **richness only affects how much a node holds** (how long a mine lasts), not **how fast a building produces**. A barracks at elo 2200 makes Elephants at the same rate as one at elo 900. Only ore access and mine lifespan improve deeper. That's probably too weak to justify the danger.
 
 **Proposed general rule (not a feature):** a building's production time scales with the richness of the node it draws from:
 
@@ -63,7 +63,7 @@ With it, the gradient per king (production rate × palace access × mine lifespa
 
 | Failure | Symptom | Adjust (the rule stays; change the numbers) |
 |---|---|---|
-| The pull is too weak | Settlements' area elo stays flat over time, even for strong players | Steeper `richness`; more gold at high elo; smaller mines (they run out sooner) |
+| The pull is too weak | Settlements' area elo stays flat over time, even for strong players | Steeper `richness`; more ore at high elo; smaller mines (they run out sooner) |
 | The pull is too strong | Weak players rush pockets and lose Emperors repeatedly | Flatter `richness`; a longer fade out of the new-player zone ([world.md](world.md) §4) |
 | Emperors never move | The Emperor sits by the first settlement forever | Smaller early mines, so the first settlement runs out within a few days |
 | One player snowballs | The top player holds most pockets | There are many pockets (35% of 2,000² cells have one); finite mines force turnover; shared anchors and 60-second warnings help defenders |

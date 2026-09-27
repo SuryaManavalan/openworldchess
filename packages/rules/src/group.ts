@@ -23,6 +23,12 @@ export interface GroupState {
   slots: Record<number, [number, number]>;
   /** Turns each piece has failed to get closer. */
   stuck: Record<number, number>;
+  /**
+   * Each piece's best distance to its slot since the lead last moved. Progress means
+   * beating it: a piece hopping back and forth (a slot in a river) never does, so it
+   * counts as stuck and the troop moves on.
+   */
+  best?: Record<number, number>;
   turns: number;
   done: boolean;
 }
@@ -88,6 +94,9 @@ export function newGroup(id: number, pieces: GroupPiece[], path: [number, number
 export interface StepContext {
   /** Is (x, y) free for this piece to enter right now? (terrain, buildings, pieces, reach) */
   free: (piece: GroupPiece, x: number, y: number) => boolean;
+  walkable?: (x: number, y: number) => boolean;
+  /** Off-screen groups search less (performance.md §5): nobody sees a slightly less tidy march. */
+  lite?: boolean;
 }
 
 /**
@@ -102,7 +111,7 @@ export function stepGroup(g: GroupState, pieces: GroupPiece[], ctx: StepContext,
   // 1. Has everyone caught up with their slot (or given up trying)? Then the lead advances.
   const caughtUp = pieces.every((p) => {
     const [tx, ty] = target(p);
-    return dist(p.x, p.y, tx, ty) <= 1.5 || (g.stuck[p.id] ?? 0) >= 3;
+    return dist(p.x, p.y, tx, ty) <= 2.5 || (g.stuck[p.id] ?? 0) >= 3;
   });
   if (caughtUp && g.pathIdx < g.path.length) {
     const speed = Math.min(...pieces.map((p) => KIND_SPEED[p.kind]));
@@ -113,6 +122,7 @@ export function stepGroup(g: GroupState, pieces: GroupPiece[], ctx: StepContext,
     g.heading = headingOf(look[0] - g.lead[0], look[1] - g.lead[1], g.heading);
     g.lead = [nx, ny];
     g.pathIdx = next;
+    g.best = {};
   }
 
   // 2. Each piece makes its best gait move toward its slot. Front pieces go first.
@@ -120,15 +130,22 @@ export function stepGroup(g: GroupState, pieces: GroupPiece[], ctx: StepContext,
   const order = [...pieces].sort((a, b) => (b.x * fx + b.y * fy) - (a.x * fx + a.y * fy) || a.id - b.id);
   const moves: GaitMove[] = [];
   let anyProgress = false;
+  const best = (g.best ??= {});
   for (const p of order) {
     const [tx, ty] = target(p);
     const before = dist(p.x, p.y, tx, ty);
-    const m = bestGaitMove(p, tx, ty, (x, y) => ctx.free(p, x, y));
+    best[p.id] ??= before;
+    // A piece stuck for a while looks a little further for a way around.
+    // (Every third turn: a boxed-in piece rarely finds a new way out every turn, and searching is the costliest thing we do.)
+    const stuck = g.stuck[p.id] ?? 0;
+    const m = stuck >= 3 ? (g.turns % (ctx.lite ? 6 : 3) === 0 ? bestGaitMove(p, tx, ty, (x, y) => ctx.free(p, x, y), ctx.lite ? 240 : 500, ctx.lite ? 12 : 16) : null) : bestGaitMove(p, tx, ty, (x, y) => ctx.free(p, x, y), ctx.lite ? 60 : 240, ctx.lite ? 8 : 14);
     if (m) {
       apply(p, m);
       moves.push(m);
       const after = dist(p.x, p.y, tx, ty);
-      if (after < before || m.turn) { g.stuck[p.id] = 0; anyProgress = true; } else g.stuck[p.id] = (g.stuck[p.id] ?? 0) + 1;
+      if (after < best[p.id] - 1e-9) { best[p.id] = after; g.stuck[p.id] = 0; anyProgress = true; }
+      else if (m.turn && after < before + 1e-9) { anyProgress = true; g.stuck[p.id] = (g.stuck[p.id] ?? 0) + (p.kind === 'P' ? 0 : 1); }
+      else g.stuck[p.id] = (g.stuck[p.id] ?? 0) + 1;
     } else if (before > 0) g.stuck[p.id] = (g.stuck[p.id] ?? 0) + 1;
     else g.stuck[p.id] = 0;
   }
@@ -141,6 +158,6 @@ export function stepGroup(g: GroupState, pieces: GroupPiece[], ctx: StepContext,
     });
     if (settled) g.done = true;
   }
-  if (g.turns > 2000) g.done = true;
+  if (g.turns > 8000) g.done = true;
   return moves;
 }

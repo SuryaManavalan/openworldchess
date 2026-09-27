@@ -42,7 +42,7 @@ const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16))
 const TERRAIN_COLOR: Record<Terrain, string> = {
   grass: '#a3c56a', forest: '#6f9a4a', water: '#71bcd4', mountain: '#8a8176', sand: '#e6d39e',
 };
-const NODE_COLOR: Record<Kind, string> = { tree: '#2c5a1c', wheat: '#f3e08a', rock: '#f4f1ea', gold: '#ff9f1a' };
+const NODE_COLOR: Record<Kind, string> = { tree: '#2c5a1c', wheat: '#f3e08a', rock: '#f4f1ea', ore: '#ff9f1a' };
 
 function localMap(cx: number, cy: number, size: number, px: number, name: string) {
   const w = size * px;
@@ -59,8 +59,8 @@ function localMap(cx: number, cy: number, size: number, px: number, name: string
       paint(x, y, (x0 + x + y0 + y) % 2 ? c.map((v) => v * 0.93) : c);
     }
   for (const n of resourcesInRect(seed, x0, y0, x0 + size - 1, y0 + size - 1)) {
-    if (n.kind === 'gold') paint(n.x - x0, n.y - y0, [60, 40, 10]);
-    paint(n.x - x0, n.y - y0, hex(NODE_COLOR[n.kind]), n.kind === 'gold' ? 1 : 0);
+    if (n.kind === 'ore') paint(n.x - x0, n.y - y0, [60, 40, 10]);
+    paint(n.x - x0, n.y - y0, hex(NODE_COLOR[n.kind]), n.kind === 'ore' ? 1 : 0);
   }
   writeFileSync(new URL(name, OUT), png(w, w, img));
 }

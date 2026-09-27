@@ -56,7 +56,7 @@ These are seeded and deterministic (§1.6): everyone watching sees the same mome
   - a ruin gets overgrown over time.
 - **A piece is born:** the door opens on the beat, the new piece steps out onto the square in front, the owner's banner flutters once, and a soft glow fades.
 - **Construction:** scaffolding rises in stages. Trees fall and rock gets chipped at the nodes it draws from, and the material visibly moves to the site.
-- **Resources run down visibly:** rock outcrops shrink as they're quarried, and gold veins lose their shine. Tree stumps regrow through sapling stages.
+- **Resources run down visibly:** rock outcrops shrink as they're quarried, and ore veins lose their shine. Tree stumps regrow through sapling stages.
 
 ## 4. Nature and atmosphere
 
@@ -122,7 +122,7 @@ A settlement should visibly grow from a camp into a city, and the growth should 
   - **A city's heart becomes a real chessboard.** The more civilized the land, the more it looks like the board.
 - **Roads from real footsteps:**
   - Pawns **haul goods** between each working building and the resource it draws from, so roads trace real supply lines: farm to house, quarry to barracks, and between neighboring towns.
-  - Traffic upgrades a square from worn trail (4 steps) to dirt road (12) to cobbled street (60); squares surrounded by streets pave over into small squares. Roads are drawn as connected, rounded strokes, not tinted squares.
+  - Traffic makes a dirt path (12 steps), then a cobbled street (60). Roads are drawn as smoothed, slightly irregular curves through trodden squares, with lone squares ignored; squares surrounded by streets pave over into small plazas. Roads are drawn as connected, rounded strokes, not tinted squares.
   - Unused roads fade by half every hour and grass returns.
 - **Names:** every settlement gets a name drawn from its land (water gives "-ford"/"-bridge", mountains "-crag", forest "-wood"), shown with its tier as a label when zoomed out.
 - **Props from state, seeded so everyone sees the same town:**
@@ -146,9 +146,9 @@ A settlement should visibly grow from a camp into a city, and the growth should 
   - A bridge only forms where the road crosses the riverbed, not where a road runs along it.
 - **Merchants and trade roads:** about one pawn in six in a realm with more than one town becomes a merchant, with a pack on its back.
   - A merchant shuttles along a real path between two of its owner's towns, pauses at each market, and heads back.
-  - Every step stays within reach of the owner's kings, so **only towns whose realms connect can trade**. That rewards building a connected realm.
+  - Merchants travel as **caravans**: on a trade run, they may cross open country between two of their owner's towns up to **80 squares apart**. This is the one exception to the reach rule. Caravans can't fight or be attacked (there's no king to challenge), so balance is unchanged. If either town's king leaves, the route ends and the merchant goes home.
   - Their footsteps wear a trade road between the towns.
-  - Hauling pawns now visibly carry what they gathered on the way back: wheat bundles, logs, stone, gold.
+  - Hauling pawns now visibly carry what they gathered on the way back: wheat bundles, logs, stone, ore.
 - **The town bell:** towns and cities get a bell tower near their heart.
   - **At dawn** (the shared 40-minute day), every bell rings, once per strike for the settlement's tier, with rings of golden light rolling over the rooftops, a low bell voice in the soundtrack, and the birds taking off.
   - At dusk, one softer toll, and **street lamps light one by one**, each with a little spark.
@@ -159,6 +159,21 @@ Ideas for later:
 - ferries or longer bridges over wide rivers;
 - festivals when a city wins a siege;
 - seasons.
+
+## 11. Biomes and the wilds (added after playtesting)
+
+- **Every biome has its own ground:**
+  - a palette per terrain (grass, sand, water, forest, mountain);
+  - its own marks, such as dune ripples, cracked earth, heather, fallen petals, snow and fey sparkles, leaf litter and tiny mushroom caps;
+  - biome water: icy, murky, and lava in the ashlands, with bright seams.
+
+  The chessboard checker always stays.
+- **Nodes take the biome's look** (art in `art/assets/nature.mjs`):
+  - **Trees (17):** oak, pine, birch, maple, snow pine, juniper, acacia, saguaro, joshua tree, palm, willow, cherry blossom, giant mushroom, dead tree, silverwood, crystal tree, charred tree.
+  - **Rocks (9):** boulder, mossy, snowy, sandstone, red mesa, basalt with lava cracks, crystal cluster, runestone, gravestone.
+  - **Ores (7):** gold, silver, copper, emerald, ruby, amethyst, sapphire. They are all the same resource, **ore** (renamed from "gold" because it looks different in every biome).
+  - **Crops (8):** wheat, corn, berries, pumpkins, rice, glowcaps, prickly pear, firebloom. Every crop is still "wheat".
+- **Creatures and camps** of the wilds are drawn per faction ([wilds.md](wilds.md) §6). At night a camp glows like a campfire.
 
 ## 8. Build order
 

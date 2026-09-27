@@ -1,7 +1,10 @@
 // First-run welcome, the "While you were away" report (progression.md §5),
 // and a light guided first session (ROADMAP M6) that advances as you play.
 import { useEffect, useState } from 'react';
+import { randomName } from '@owc/shared';
 import { conn, mirror } from '../net.ts';
+import { Icon } from './Icon.tsx';
+import type { ReactNode } from 'react';
 import { useUI } from '../store.ts';
 import { pieceUrl } from '../game/textures.ts';
 import { scene } from './GameView.tsx';
@@ -11,9 +14,11 @@ const put = (k: string, v: string) => { try { localStorage.setItem(k, v); } catc
 
 export function Welcome() {
   const ui = useUI();
-  const [name, setName] = useState(() => get('owc.name') ?? '');
+  // Prefilled with a random handle (the same kind bots get), so a default name looks like anyone's.
+  const [name, setName] = useState(() => get('owc.name') ?? randomName());
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (ui.nameError || ui.status === 'open') setBusy(false); }, [ui.nameError, ui.status]);
+  useEffect(() => { if (ui.nameError?.includes('taken')) setName((n) => n.replace(/\d+$/, '') + Math.floor(Math.random() * 999)); }, [ui.nameError]);
   useEffect(() => { if (ui.status === 'open' && ui.needName) { ui.set({ needName: false }); put('owc.welcomed', '1'); } }, [ui.status]);
   if (!ui.needName) return null;
   const color = '#d9534a';
@@ -34,7 +39,10 @@ export function Welcome() {
         <h1>Open World Chess</h1>
         {ui.welcomeNote ? <p className="note">{ui.welcomeNote}</p> : <p>The whole world is a chessboard. Settle near resources, raise an army, and take what other rulers hold, one game of chess at a time.</p>}
         <label htmlFor="welcome-name">Choose a name</label>
-        <input id="welcome-name" value={name} maxLength={20} autoFocus placeholder="e.g. QuietRook" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && enter()} />
+        <div className="name-row">
+          <input id="welcome-name" value={name} maxLength={20} placeholder="e.g. QuietRook" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && enter()} />
+          <button className="icon-btn big" aria-label="Another name" onClick={() => { setName(randomName()); ui.set({ nameError: null }); }}><Icon name="dice" size={24} /></button>
+        </div>
         {ui.nameError && <p className="field-error">{ui.nameError}</p>}
         <button className="btn big" disabled={busy} onClick={enter}>{busy ? 'Entering…' : 'Play now'}</button>
         {ui.googleEnabled && <a className="btn ghost big google" href="/auth/google/start">Continue with Google</a>}
@@ -164,12 +172,12 @@ export function SignInNudge() {
   );
 }
 
-const STEPS = [
+const STEPS: { id: string; text: (phone: boolean) => ReactNode }[] = [
   { id: 'select', text: (phone: boolean) => phone ? 'Double-tap your Emperor (gold crown) to select its group.' : 'Double-click your Emperor (gold crown) to select its group.' },
   { id: 'move', text: (phone: boolean) => phone ? 'Drag from your pieces to a square to march there.' : 'Right-click a square to march there.' },
-  { id: 'house', text: () => 'Build a house (🔨) next to wheat. It will produce pawns.' },
-  { id: 'battle', text: () => 'Battles are chess. Try a practice battle from the ⚔ menu.' },
-] as const;
+  { id: 'house', text: () => <>Build a house <Icon name="hammer" size={15} /> next to wheat. It will produce pawns.</> },
+  { id: 'battle', text: () => <>Battles are chess. Try a practice battle from the <Icon name="swords" size={15} /> menu.</> },
+];
 
 export function Guide() {
   const ui = useUI();
@@ -191,7 +199,7 @@ export function Guide() {
       <span className="step">{STEPS.indexOf(step) + 1}/{STEPS.length}</span>
       <span>{step.text(ui.layout === 'phone')}</span>
       {step.id === 'select' && <button className="link" onClick={() => { const e = mirror.myPieces().find((p) => p.emperor); if (e) scene?.centerOn(e.x, e.y); }}>Show me</button>}
-      <button className="icon-btn small" aria-label="Hide guide" onClick={() => { setHidden(true); put('owc.guide.hidden', '1'); }}>✕</button>
+      <button className="icon-btn small" aria-label="Hide guide" onClick={() => { setHidden(true); put('owc.guide.hidden', '1'); }}><Icon name="close" size={14} /></button>
     </div>
   );
 }

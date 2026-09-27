@@ -1,14 +1,15 @@
 // The battle screen (ux.md §4): plain chess, laid out like a chess app.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess, type Square } from 'chess.js';
-import type { BattlePublic, PieceKind } from '@owc/shared';
+import { FACTIONS, creatureName, type BattlePublic, type PieceKind } from '@owc/shared';
 import { commands, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
-import { pieceUrl } from '../game/textures.ts';
+import { creatureUrl, pieceUrl } from '../game/textures.ts';
+import { ROLE_NAME } from './Inspect.tsx';
 import { audio } from '../audio/audio.ts';
 
 const FILES = 'abcdefgh';
-const EMOTES = ['🤝', '👏', '😐', '🔥', '🤔', '♟'];
+import { EMOTE_ICONS, EMOTE_LABELS, Icon } from './Icon.tsx';
 
 function fmt(ms: number) {
   ms = Math.max(0, ms);
@@ -96,7 +97,18 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
     const white = color === 'w';
     const pid = battle.pieceMap[sq];
     const emperor = !!(pid && mirror.pieces.get(pid)?.emperor);
+    const wild = mirror.players.get(white ? battle.white.playerId : battle.black.playerId)?.wild;
+    if (wild) return creatureUrl(wild, type.toUpperCase() as PieceKind);
     return pieceUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, emperor);
+  };
+
+  // Creatures glow faintly in their faction's color, so they never blend with your pieces.
+  const wildOf = (color: string) => mirror.players.get(color === 'w' ? battle.white.playerId : battle.black.playerId)?.wild;
+  // Creatures are named on hover, so nobody wonders what a Wolf Rider does.
+  const pieceTitle = (type: string, color: string) => {
+    const wild = mirror.players.get(color === 'w' ? battle.white.playerId : battle.black.playerId)?.wild;
+    const kind = type.toUpperCase() as PieceKind;
+    return wild ? `${creatureName(wild, kind)} (${ROLE_NAME[kind]})` : undefined;
   };
 
   const rows = [];
@@ -124,7 +136,7 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
           {f === 0 && <span className="coord r">{sq[1]}</span>}
           {rk === 7 && <span className="coord f">{sq[0]}</span>}
           {legalFrom.includes(sq as Square) && <span className={p ? 'hint cap' : 'hint'} />}
-          {p && <img src={pieceImg(p.type, p.color, sq)} className={dragging ? 'ghosted' : ''} draggable={false} alt="" />}
+          {p && <img src={pieceImg(p.type, p.color, sq)} className={dragging ? 'ghosted' : wildOf(p.color) ? 'wild' : ''} style={wildOf(p.color) ? { ['--glow' as string]: FACTIONS[wildOf(p.color)!]?.art.accent } : undefined} draggable={false} alt="" title={pieceTitle(p.type, p.color)} />}
         </div>,
       );
     }
@@ -138,7 +150,7 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
         <span className="chip" style={{ background: info.color }} />
         <span className="name">{info.name}</span>
         <span className="rating">{info.rating}</span>
-        {battle.aiControlled[c] && <span className="badge">AI playing</span>}
+        {mirror.players.get(battle[c].playerId)?.wild ? <span className="badge">Wild</span> : battle.aiControlled[c] && <span className="badge">AI playing</span>}
         {battle.drawOfferBy === c && <span className="badge">offers a draw</span>}
         <span className={`clock ${active ? 'on' : ''} ${low ? 'low' : ''}`}>{fmt(clock(c))}</span>
       </div>
@@ -147,14 +159,14 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
   const top = bottom === 'white' ? 'black' : 'white';
   const secs = Math.max(0, Math.ceil((battle.startsAt - mirror.serverNow()) / 1000));
   const emote = ui.hint?.startsWith('emote:') ? ui.hint.split(':') : null;
-  const emoteShown = emote && Date.now() - Number(emote[3]) < 2500 ? EMOTES[Number(emote[2])] : null;
+  const emoteShown = emote && Date.now() - Number(emote[3]) < 2500 ? EMOTE_ICONS[Number(emote[2])] : null;
 
   return (
     <div className="battle-overlay" onClick={(e) => { if (e.target === e.currentTarget && !side) ui.set({ battleFocus: null }); }}>
       <div className="battle">
         <div className="battle-head">
           <span className="kind">{battle.kind === 'siege' ? 'Siege' : battle.kind === 'practice' ? 'Practice battle' : 'Field battle'}{!side && ' · watching'}</span>
-          <button className="icon-btn" aria-label="Close" onClick={() => ui.set({ battleFocus: null })}>✕</button>
+          <button className="icon-btn" aria-label="Close" onClick={() => ui.set({ battleFocus: null })}><Icon name="close" size={18} /></button>
         </div>
         {player(top)}
         <div className="board-wrap">
@@ -183,17 +195,17 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
               <button className="btn" onClick={() => ui.set({ battleFocus: null })}>Back to the world</button>
             </div>
           )}
-          {emoteShown && <div className="emote-pop">{emoteShown}</div>}
+          {emoteShown && <div className="emote-pop"><Icon name={emoteShown} size={72} stroke={1.8} /></div>}
         </div>
         {player(bottom)}
         <div className="moves">{battle.moves.map((m, i) => <span key={i}>{i % 2 === 0 && <b>{i / 2 + 1}.</b>}{m}</span>)}</div>
         <div className="battle-actions">
-          {EMOTES.map((e, i) => <button key={i} className="emote" onClick={() => commands.emote(i, battle.id)}>{e}</button>)}
+          {EMOTE_ICONS.map((e, i) => <button key={i} className="emote" aria-label={EMOTE_LABELS[i]} title={EMOTE_LABELS[i]} onClick={() => commands.emote(i, battle.id)}><Icon name={e} size={22} /></button>)}
           {side && battle.phase === 'live' && <>
-            <button className="btn ghost" onClick={() => commands.draw(battle.id)}>{battle.drawOfferBy && battle.drawOfferBy !== side ? 'Accept draw' : '½ Draw'}</button>
+            <button className="btn ghost" onClick={() => commands.draw(battle.id)}>{battle.drawOfferBy && battle.drawOfferBy !== side ? 'Accept draw' : <><Icon name="draw" size={15} /> Draw</>}</button>
             {confirmResign
               ? <button className="btn danger" onClick={() => { commands.resign(battle.id); setConfirmResign(false); }}>Confirm resign</button>
-              : <button className="btn ghost" onClick={() => { setConfirmResign(true); setTimeout(() => setConfirmResign(false), 3000); }}>⚑ Resign</button>}
+              : <button className="btn ghost" onClick={() => { setConfirmResign(true); setTimeout(() => setConfirmResign(false), 3000); }}><Icon name="resign" size={15} /> Resign</button>}
           </>}
           {side === 'black' && battle.phase === 'countdown' && battle.kind === 'field' && <button className="btn ghost" onClick={() => commands.resign(battle.id)}>Surrender now</button>}
         </div>

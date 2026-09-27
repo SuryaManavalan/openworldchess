@@ -39,6 +39,7 @@ export class Bot {
   private lastBuildTry = 0;
   private lastAttack = 0;
   private lastExpand = 0;
+  private lastGather = 0;
   onToken: (t: string) => void = () => {};
 
   constructor(url: string, p: Persona, ai: ChessAI) {
@@ -162,10 +163,12 @@ export class Bot {
   /** Pull stray pieces back to the king's side, like a tidy player would. */
   private planGather(kings: Piece[]) {
     const m = this.m;
+    // Now and then, like a person would (and the server finds their way home itself).
+    if (Date.now() - this.lastGather < 60_000) return null;
     const strays = m.myPieces().filter((p) => p.state === 'routed' && !p.groupId);
     if (!strays.length) return null;
     const k = kings[0];
-    return { u: 0.3, run: () => this.conn.send({ t: 'order.move', pieceIds: strays.map((p) => p.id).slice(0, 40), to: [k.x, k.y + 2] }) };
+    return { u: 0.3, run: () => (this.lastGather = Date.now(), this.conn.send({ t: 'order.move', pieceIds: strays.map((p) => p.id).slice(0, 40), to: [k.x, k.y + 2] })) };
   }
 
   // ---------- war ----------

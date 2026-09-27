@@ -2,7 +2,7 @@
 // live their own lives. Real, cheap moves that stay inside the rules: they
 // keep within a king's reach and give way to any order. They never change
 // outcomes: idle pieces are only moved where they'd be free to stand anyway.
-import { REACH, cheb, distToRect, type Piece, type PieceKind } from '@owc/shared';
+import { REACH, cheb, type Piece, type PieceKind } from '@owc/shared';
 import { bestGaitMove, findPath } from '@owc/rules';
 import { hash01 } from '@owc/worldgen';
 import type { Game } from './game.ts';
@@ -23,32 +23,53 @@ interface Life {
 
 /** Share of pawns that become merchants when their owner has towns to trade between. */
 const MERCHANT_SHARE = 0.16;
-/** Towns trade when their markets are this close (their kings' reach must connect the road). */
-const TRADE_RANGE = 40;
+/** Towns trade when their markets are this close. Merchants travel as caravans between them. */
+const TRADE_RANGE = 80;
+/**
+ * Idle life is decoration: it gets a fixed CPU budget per world turn (moves searched,
+ * and routes planned), shared round-robin, so it can never slow the world down.
+ */
+const MOVES_PER_TURN = 90;
+const ROUTES_PER_TURN = 2;
 
 export class Routines {
   game: Game;
   lives = new Map<number, Life>();
+  private cursor = 0;
+  private moves = 0;
+  private routes = 0;
   constructor(game: Game) { this.game = game; }
 
   step(record: (p: Piece, fx: number, fy: number) => void) {
     const g = this.game, w = g.world, turn = g.turn;
-    for (const p of w.pieces.values()) {
-      if (p.state !== 'idle' || p.groupId || !p.owner) { this.lives.delete(p.id); continue; }
+    this.moves = MOVES_PER_TURN; this.routes = ROUTES_PER_TURN;
+    // Round-robin: start where the last turn's budget ran out.
+    const arenas = g.battles.active().filter((b) => b.phase === 'live' && b.kind !== 'practice');
+    const all = [...w.pieces.values()];
+    const n = all.length;
+    let i = 0;
+    for (; i < n && this.moves > 0; i++) {
+      const p = all[(this.cursor + i) % n];
+      if (p.state !== 'idle' || p.groupId || !p.owner || p.wild) { this.lives.delete(p.id); continue; }
+      // Idle life is for watching: nobody looking, nothing to animate (performance.md §5).
+      if (!g.watched(p.x, p.y)) continue;
       if ((turn + p.id * 7) % PERIOD[p.kind]) continue;
       let life = this.lives.get(p.id);
       if (!life) { life = { home: [p.x, p.y], step: 0, since: turn }; this.lives.set(p.id, life); }
       if (turn - life.since < 4) continue; // settle for a moment first
+      // A caravan on the road may be outside every king's reach; it keeps going.
+      if (life.trade && this.trade(p, life, record)) continue;
       if (!g.inReach(p.owner, p.x, p.y)) continue;
       const inSettlement = w.buildingsNear(p.x, p.y, REACH).some((b) => b.owner === p.owner);
       const [hx, hy] = life.home;
       let tx = hx, ty = hy, routine = 'rest', haul = false;
       const phase = life.step++;
       // A battle nearby draws a crowd (visuals.md §9): walk to the dome's edge and watch.
-      const arena = g.battles.active().find((b) => b.phase === 'live' && b.kind !== 'practice' && cheb(b.cx, b.cy, p.x, p.y) <= 16);
+      const arena = arenas.find((b) => cheb(b.cx, b.cy, p.x, p.y) <= 16);
       if (arena) {
         const d = Math.max(1, Math.hypot(p.x - arena.cx, p.y - arena.cy));
         if (d > 8) {
+          this.moves--;
           const m = bestGaitMove(p, Math.round(arena.cx + ((p.x - arena.cx) * 7.5) / d), Math.round(arena.cy + ((p.y - arena.cy) * 7.5) / d), (x, y) => w.free(x, y, p.id) && g.inReach(p.owner!, x, y), 60, 7);
           if (p.routine !== 'watch') { p.routine = 'watch'; w.touch(p); }
           if (m) { const fx = p.x, fy = p.y; p.facing = m.facing; if (!m.turn) w.movePiece(p, m.x, m.y); else w.touch(p); record(p, fx, fy); }
@@ -99,9 +120,11 @@ export class Routines {
         }
         case 'K': { tx = hx + (phase % 2 ? 0 : 1); routine = 'pace'; break; }
       }
+      // (free() already rules out building squares.)
+      const kings = g.kingsOf(p.owner);
       const ok = (x: number, y: number) =>
-        w.free(x, y, p.id) && g.inReach(p.owner!, x, y) && (haul || cheb(x, y, hx, hy) <= 6) &&
-        !w.buildingsNear(x, y, 0).some((b) => distToRect(x, y, b.x, b.y, b.size) === 0);
+        w.free(x, y, p.id) && (haul || cheb(x, y, hx, hy) <= 6) && kings.some((k) => cheb(k.x, k.y, x, y) <= REACH);
+      this.moves--;
       const m = bestGaitMove(p, tx, ty, ok, haul ? 90 : 60, haul ? 10 : 7);
       if (p.routine !== routine) { p.routine = routine; w.touch(p); }
       if (!m) continue;
@@ -110,6 +133,7 @@ export class Routines {
       if (!m.turn) w.movePiece(p, m.x, m.y); else w.touch(p);
       record(p, fx, fy);
     }
+    this.cursor = n ? (this.cursor + i) % n : 0;
   }
 
   /** Market squares: the center of each of the owner's settlements (kings with buildings near them). */
@@ -145,20 +169,27 @@ export class Routines {
     const t = life.trade;
     if (t.wait > 0) { t.wait--; if (p.routine !== 'trade') { p.routine = 'trade'; w.touch(p); } return true; }
     const dest = t.toB ? t.b : t.a;
-    const walk = (x: number, y: number) => w.walkable(x, y) && g.inReach(owner, x, y);
+    // Caravans may cross open country between towns (a narrow exception to the reach rule).
+    const walk = (x: number, y: number) => w.walkable(x, y);
     if (!t.path.length || t.idx >= t.path.length) {
       if (cheb(p.x, p.y, dest[0], dest[1]) <= 2) {
         // Arrived at market: trade for a little while, then head back with the other town's goods.
         t.toB = !t.toB; t.path = []; t.wait = 6 + Math.floor(hash01(w.seed, p.id, g.turn, 77) * 6);
         return true;
       }
-      t.path = findPath(p.x, p.y, dest[0], dest[1], walk, 4000);
+      // The destination market must still exist (its king may have left).
+      if (!this.markets(owner).some(([x, y]) => cheb(x, y, dest[0], dest[1]) < 12)) { life.trade = undefined; if (p.routine?.startsWith('merchant')) { p.routine = undefined; w.touch(p); } return false; }
+      // Route planning is the expensive part: a couple per turn, the rest wait their turn.
+      if (this.routes <= 0) return true;
+      this.routes--;
+      t.path = findPath(p.x, p.y, dest[0], dest[1], walk, 12000);
       t.idx = 0;
       if (!t.path.length) { life.trade = undefined; return false; }
     }
     // Follow the road a few squares ahead (a pawn turns before it walks).
     const [tx, ty] = t.path[Math.min(t.path.length - 1, t.idx + 3)];
-    const m = bestGaitMove(p, tx, ty, (x, y) => w.free(x, y, p.id) && g.inReach(owner, x, y), 80, 8);
+    this.moves--;
+    const m = bestGaitMove(p, tx, ty, (x, y) => w.free(x, y, p.id), 80, 8);
     const routine = t.toB ? 'merchant' : 'merchant:back';
     if (p.routine !== routine) { p.routine = routine; w.touch(p); }
     if (!m) { if (++t.stuck > 6) { t.path = []; t.stuck = 0; } return true; }

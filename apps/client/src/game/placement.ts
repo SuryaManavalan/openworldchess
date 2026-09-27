@@ -4,7 +4,7 @@ import { BUILDINGS, BUILD_SPACING, REACH, WORK_AREA, distToRect, key, type Build
 import { buildable, terrainAt } from '@owc/worldgen';
 import { mirror } from '../net.ts';
 
-const NAME: Record<NodeKind, string> = { tree: 'wood', rock: 'stone', gold: 'gold', wheat: 'wheat' };
+const NAME: Record<NodeKind, string> = { tree: 'wood', rock: 'stone', ore: 'ore', wheat: 'wheat' };
 
 export function checkPlacement(type: BuildingType, x: number, y: number): { ok: boolean; reason: string; rate?: number } {
   const spec = BUILDINGS[type], size = spec.size;
@@ -13,9 +13,10 @@ export function checkPlacement(type: BuildingType, x: number, y: number): { ok: 
   for (let dy = 0; dy < size; dy++)
     for (let dx = 0; dx < size; dx++) {
       const sx = x + dx, sy = y + dy;
-      if (!buildable(terrainAt(mirror.seed, sx, sy))) return { ok: false, reason: 'Only on grass or sand' };
+      const t = terrainAt(mirror.seed, sx, sy);
+      if (!buildable(t)) return { ok: false, reason: t === 'water' ? 'Not on water' : 'Not on mountains' };
       const n = mirror.nodes.get(key(sx, sy));
-      if (n && n.remaining > 0 && n.kind !== 'wheat') return { ok: false, reason: 'Resources in the way' };
+      if (n && n.remaining > 0 && n.kind !== 'wheat') return { ok: false, reason: n.kind === 'tree' ? 'A tree is in the way' : 'Rock is in the way' };
       for (const b of mirror.buildings.values()) if (distToRect(sx, sy, b.x, b.y, b.size) === 0) return { ok: false, reason: 'Something is already there' };
       const pid = mirror.pieceAt.get(key(sx, sy));
       if (pid != null && mirror.pieces.get(pid)?.owner !== mirror.me) return { ok: false, reason: 'Someone is standing there' };

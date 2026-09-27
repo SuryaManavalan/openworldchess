@@ -5,13 +5,20 @@ import { Texture } from 'pixi.js';
 import * as piecesArt from 'owc-art/pieces';
 import * as worldArt from 'owc-art/world';
 import * as decorArt from 'owc-art/decor';
-import type { PieceKind } from '@owc/shared';
+import * as creatureArt from 'owc-art/creatures';
+import * as natureArt from 'owc-art/nature';
+import * as campsArt from 'owc-art/camps';
+import { FACTIONS, type PieceKind } from '@owc/shared';
 
 type ArtFn = (o?: { side?: string; team?: string; emperor?: boolean }) => string;
 const PIECES = piecesArt.PIECES as unknown as Record<string, ArtFn>;
 const BUILDINGS = worldArt.BUILDINGS as unknown as Record<string, ArtFn>;
 const RESOURCES = worldArt.RESOURCES as unknown as Record<string, ArtFn>;
 const DECOR = decorArt.DECOR as unknown as Record<string, (o?: { team?: string; awning?: string }) => string>;
+type Art0 = Record<string, () => string>;
+const NATURE: Record<string, Art0> = { tree: natureArt.TREES as unknown as Art0, rock: natureArt.ROCKS as unknown as Art0, ore: natureArt.ORES as unknown as Art0, crop: natureArt.CROPS as unknown as Art0 };
+const creature = creatureArt.creature as unknown as (f: unknown, kind: PieceKind) => string;
+const campArt = campsArt.campArt as unknown as (name: string, f: unknown) => string;
 const ART_NAME: Record<PieceKind, string> = { K: 'king', Q: 'queen', R: 'elephant', B: 'bishop', N: 'knight', P: 'pawn' };
 export const RES = 128; // raster size per 100x100 art unit
 
@@ -53,9 +60,32 @@ export function buildingTexture(type: string, team: string, onReady?: () => void
   return get(`b:${type}:${team}`, () => BUILDINGS[type]({ team }), 192, onReady);
 }
 
-const NODE_ART: Record<string, string> = { tree: 'tree', pine: 'pine', rock: 'rock', gold: 'goldOre', wheat: 'wheat' };
+const NODE_ART: Record<string, string> = { tree: 'tree', pine: 'pine', rock: 'rock', ore: 'goldOre', wheat: 'wheat' };
+/** A resource node's art: a plain kind ("tree") or a biome variant ("tree:cherry", "ore:ruby"). */
 export function nodeTexture(kind: string, onReady?: () => void) {
-  return get(`n:${kind}`, () => RESOURCES[NODE_ART[kind]](), 96, onReady);
+  const [group, name] = kind.split(':');
+  const make = name ? () => (NATURE[group]?.[name] ?? RESOURCES.rock)() : () => RESOURCES[NODE_ART[kind]]();
+  return get(`n:${kind}`, make, 96, onReady);
+}
+
+/** A creature of the wilds (docs/specs/wilds.md): the faction's art for a chess role. */
+export function creatureTexture(faction: string, kind: PieceKind, onReady?: () => void) {
+  return get(`c:${faction}:${kind}`, () => creature(FACTIONS[faction], kind), RES, onReady);
+}
+
+export function creatureUrl(faction: string, kind: PieceKind): string {
+  const k = `c:${faction}:${kind}`;
+  let u = urlCache.get(k);
+  if (!u) {
+    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${creature(FACTIONS[faction], kind)}</svg>`);
+    urlCache.set(k, u);
+  }
+  return u;
+}
+
+/** A wild camp's structure, tinted with its faction's colors. */
+export function campTexture(art: string, faction: string, onReady?: () => void) {
+  return get(`camp:${art}:${faction}`, () => campArt(art, FACTIONS[faction]), 192, onReady);
 }
 
 export function stumpTexture(onReady?: () => void) {

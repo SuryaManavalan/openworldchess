@@ -42,13 +42,21 @@ class Audio {
   countdown = false;
   moving = 0;
 
-  /** Browsers only allow audio after a user gesture (audio.md §8). */
+  /**
+   * Browsers only allow audio after a user gesture (audio.md §8). Every gesture
+   * calls this: it builds the synths once, and resumes the audio context whenever
+   * it isn't running. (It used to latch on the first call: if that was a wheel
+   * zoom, which isn't a gesture, the context never started and the game stayed silent.)
+   */
   async unlock() {
-    if (this.started) return;
-    this.started = true;
-    await Tone.start();
-    this.setup();
-    this.ready = true;
+    if (!this.started) {
+      this.started = true;
+      this.setup();
+      this.ready = true;
+    }
+    if (Tone.getContext().state !== 'running') {
+      try { await Tone.start(); } catch { /* not a gesture yet: the next one will do it */ }
+    }
   }
 
   setVolumes(v: { sound: boolean; music: number; effects: number; ambience: number }) {

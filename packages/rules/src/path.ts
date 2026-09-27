@@ -76,3 +76,57 @@ export function findPath(sx: number, sy: number, tx: number, ty: number, free: F
   for (let k = bestK; k !== start; k = from.get(k)!) out.push(upk(k));
   return out.reverse();
 }
+
+const CELL = 8;
+
+/**
+ * Long routes (movement.md §5): plan on a coarse grid of 8×8-square cells first,
+ * which can see around lakes and mountain ranges far beyond a fine search, then
+ * stitch fine paths between the coarse waypoints.
+ */
+export function findPathLong(sx: number, sy: number, tx: number, ty: number, free: FreeFn, maxCoarse = 40000, budgetMs = 250): [number, number][] {
+  const deadline = Date.now() + budgetMs;
+  if (Math.max(Math.abs(tx - sx), Math.abs(ty - sy)) <= 48) return findPath(sx, sy, tx, ty, free, 20000);
+  // A cell is passable if a few of its squares can be walked.
+  // Permissive on purpose: narrow fords and passes must still show up at this scale.
+  const cellOk = (cx: number, cy: number) => {
+    for (const oy of [1, 4, 7]) for (const ox of [1, 4, 7]) if (free(cx * CELL + ox, cy * CELL + oy)) return true;
+    return false;
+  };
+  const ctx = Math.floor(tx / CELL), cty = Math.floor(ty / CELL);
+  const blocked = new Set<string>();
+  const out: [number, number][] = [];
+  let [px, py] = [sx, sy];
+  // Plan coarse, walk it leg by leg; a waypoint that can't be reached at the fine
+  // level marks its cell blocked, and we re-plan from where we got to.
+  // Past the time budget we return what we have; the caller plans the next leg later.
+  for (let attempt = 0; attempt < 30 && Date.now() < deadline; attempt++) {
+    const csx = Math.floor(px / CELL), csy = Math.floor(py / CELL);
+    const coarse = findPath(csx, csy, ctx, cty, (x, y) => (x === csx && y === csy) || (x === ctx && y === cty) || (!blocked.has(`${x},${y}`) && cellOk(x, y)), maxCoarse);
+    const way: [number, number, number, number][] = [];
+    for (let i = 2; i < coarse.length; i += 2) {
+      const [cx, cy] = coarse[i];
+      let p: [number, number] | null = null;
+      for (let r = 0; r < 4 && !p; r++)
+        for (let dy = -r; dy <= r && !p; dy++) for (let dx = -r; dx <= r && !p; dx++)
+          if (free(cx * CELL + 4 + dx, cy * CELL + 4 + dy)) p = [cx * CELL + 4 + dx, cy * CELL + 4 + dy];
+      if (p) way.push([p[0], p[1], cx, cy]);
+    }
+    way.push([tx, ty, ctx, cty]);
+    let failed = false;
+    for (const [wx, wy, cx, cy] of way) {
+      const leg = findPath(px, py, wx, wy, free, 12000);
+      const end = leg.at(-1);
+      if (!end || Math.max(Math.abs(end[0] - wx), Math.abs(end[1] - wy)) > 2) {
+        if (leg.length) { out.push(...leg); [px, py] = leg[leg.length - 1]; }
+        blocked.add(`${cx},${cy}`);
+        failed = true;
+        break;
+      }
+      out.push(...leg);
+      [px, py] = end;
+    }
+    if (!failed) break;
+  }
+  return out;
+}

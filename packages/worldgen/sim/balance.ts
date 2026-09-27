@@ -4,7 +4,14 @@
 // docs/specs/resources.md. Run: node sim/balance.ts [sitesPerSeed] [seeds]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { rng } from '../src/random.ts';
-import { buildable, eloAt, terrainAt } from '../src/terrain.ts';
+import { eloAt, terrainAt, type Terrain } from '../src/terrain.ts';
+
+/**
+ * Candidate city sites are open ground (grass and sand), where the targets were set.
+ * Forest floor is buildable too (world.md §2), but deep forest has no wheat by design:
+ * it's an extra option, not a starting spot, so it isn't held to the same targets.
+ */
+const openGround = (t: Terrain) => t === 'grass' || t === 'sand';
 import { resourcesInRect, type Kind, type ResourceNode } from '../src/resources.ts';
 
 const SITES = Number(process.argv[2] ?? 1500);
@@ -21,10 +28,10 @@ const BANDS = [
 
 const cheb = (a: ResourceNode, b: ResourceNode) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
-/** A palace site: some gold and some rock close enough to share one palace work area (a 9x9 box). */
+/** A palace site: some ore and some rock close enough to share one palace work area (a 9x9 box). */
 const hasPalaceSite = (nodes: ResourceNode[]) => {
-  const gold = nodes.filter((n) => n.kind === 'gold'), rock = nodes.filter((n) => n.kind === 'rock');
-  return gold.some((g) => rock.some((r) => cheb(g, r) <= 8));
+  const ore = nodes.filter((n) => n.kind === 'ore'), rock = nodes.filter((n) => n.kind === 'rock');
+  return ore.some((g) => rock.some((r) => cheb(g, r) <= 8));
 };
 
 /** Start-viable: enough wood to build, and wheat to feed houses and a stable. */
@@ -40,10 +47,10 @@ function sampleSites(seed: number, n: number): SiteStat[] {
   for (let tries = 0; out.length < n * BANDS.length && tries < 3_000_000; tries++) {
     const x = Math.floor((r() * 2 - 1) * WORLD), y = Math.floor((r() * 2 - 1) * WORLD);
     const band = BANDS.findIndex((b) => { const e = eloAt(seed, x, y); return e >= b.lo && e < b.hi; });
-    if (perBand[band] >= n || !buildable(terrainAt(seed, x, y))) continue;
+    if (perBand[band] >= n || !openGround(terrainAt(seed, x, y))) continue;
     perBand[band]++;
     const nodes = resourcesInRect(seed, x - CITY_R, y - CITY_R, x + CITY_R, y + CITY_R);
-    const counts = { tree: 0, wheat: 0, rock: 0, gold: 0 }, cap = { tree: 0, wheat: 0, rock: 0, gold: 0 };
+    const counts = { tree: 0, wheat: 0, rock: 0, ore: 0 }, cap = { tree: 0, wheat: 0, rock: 0, ore: 0 };
     for (const nd of nodes) { counts[nd.kind]++; cap[nd.kind] += nd.capacity; }
     out.push({ elo: eloAt(seed, x, y), counts, cap, viable: isViable(counts), palace: hasPalaceSite(nodes) });
   }
@@ -86,8 +93,8 @@ const frac = (xs: SiteStat[], f: (s: SiteStat) => boolean) => xs.filter(f).lengt
 const t0 = Date.now();
 const all: SiteStat[] = [];
 const terrainCounts: Record<string, number> = {};
-const gaps: Record<Kind, number[]> = { tree: [], wheat: [], rock: [], gold: [] };
-const ce: Record<Kind, number[]> = { tree: [], wheat: [], rock: [], gold: [] };
+const gaps: Record<Kind, number[]> = { tree: [], wheat: [], rock: [], ore: [] };
+const ce: Record<Kind, number[]> = { tree: [], wheat: [], rock: [], ore: [] };
 
 for (let seed = 1; seed <= SEEDS; seed++) {
   all.push(...sampleSites(seed, SITES));
@@ -99,12 +106,12 @@ for (let seed = 1; seed <= SEEDS; seed++) {
   // Gaps are measured in the new-player zone, where fairness matters most.
   for (let k = 0; k < 120; k++) {
     const x = Math.floor((r() * 2 - 1) * 2500), y = Math.floor((r() * 2 - 1) * 2500);
-    if (!buildable(terrainAt(seed, x, y))) continue;
-    for (const kind of ['tree', 'wheat', 'rock', 'gold'] as Kind[]) gaps[kind].push(nearest(seed, x, y, kind, 1024));
+    if (!openGround(terrainAt(seed, x, y))) continue;
+    for (const kind of ['tree', 'wheat', 'rock', 'ore'] as Kind[]) gaps[kind].push(nearest(seed, x, y, kind, 1024));
   }
   for (let k = 0; k < 3; k++)
-    for (const kind of ['tree', 'wheat', 'rock', 'gold'] as Kind[]) {
-      const size = kind === 'gold' ? 1200 : 300;
+    for (const kind of ['tree', 'wheat', 'rock', 'ore'] as Kind[]) {
+      const size = kind === 'ore' ? 1200 : 300;
       const v = clarkEvans(seed, kind, Math.floor((r() * 2 - 1) * 2000), Math.floor((r() * 2 - 1) * 2000), size);
       if (!Number.isNaN(v)) ce[kind].push(v);
     }
@@ -117,17 +124,17 @@ interface Check { name: string; value: number; lo: number; hi: number; fmt: 'pct
 const checks: Check[] = [
   { name: 'Start-viable sites (low elo)', value: frac(low, (s) => s.viable), lo: 0.9, hi: 1, fmt: 'pct' },
   { name: 'Sites with rock in reach (low elo)', value: frac(low, (s) => s.counts.rock > 0), lo: 0.5, hi: 0.75, fmt: 'pct' },
-  { name: 'Sites with gold in reach (low elo)', value: frac(low, (s) => s.counts.gold > 0), lo: 0.06, hi: 0.15, fmt: 'pct' },
+  { name: 'Sites with ore in reach (low elo)', value: frac(low, (s) => s.counts.ore > 0), lo: 0.06, hi: 0.15, fmt: 'pct' },
   { name: 'Palace sites (low elo)', value: frac(low, (s) => s.palace), lo: 0.03, hi: 0.08, fmt: 'pct' },
   { name: 'Palace sites (elo 2000+)', value: frac(high, (s) => s.palace), lo: 0.12, hi: 0.3, fmt: 'pct' },
   { name: 'Nearest wood, 99th pct (squares)', value: pct(gaps.tree, 0.99), lo: 0, hi: 20, fmt: 'num' },
   { name: 'Nearest wheat, 99th pct (squares)', value: pct(gaps.wheat, 0.99), lo: 0, hi: 25, fmt: 'num' },
   { name: 'Nearest rock, 99th pct (squares)', value: pct(gaps.rock, 0.99), lo: 0, hi: 50, fmt: 'num' },
-  { name: 'Nearest gold, 90th pct (squares)', value: pct(gaps.gold, 0.9), lo: 0, hi: 150, fmt: 'num' },
+  { name: 'Nearest ore, 90th pct (squares)', value: pct(gaps.ore, 0.9), lo: 0, hi: 150, fmt: 'num' },
   { name: 'Clustering: wood (Clark-Evans R)', value: mean(ce.tree), lo: 0, hi: 0.8, fmt: 'num' },
   { name: 'Clustering: wheat (R)', value: mean(ce.wheat), lo: 0, hi: 0.7, fmt: 'num' },
   { name: 'Clustering: rock (R)', value: mean(ce.rock), lo: 0, hi: 0.7, fmt: 'num' },
-  { name: 'Clustering: gold (R)', value: mean(ce.gold), lo: 0, hi: 0.6, fmt: 'num' },
+  { name: 'Clustering: ore (R)', value: mean(ce.ore), lo: 0, hi: 0.6, fmt: 'num' },
 ];
 
 const show = (c: Check) => (c.fmt === 'pct' ? `${(c.value * 100).toFixed(1)}%` : c.value.toFixed(2));
@@ -139,19 +146,19 @@ console.log('Terrain mix: ' + Object.entries(terrainCounts).map(([k, v]) => `${k
 console.log('\nCheck'.padEnd(44) + 'Value'.padEnd(10) + 'Target'.padEnd(12) + 'Result');
 for (const c of checks) console.log(c.name.padEnd(43) + show(c).padEnd(10) + range(c).padEnd(12) + (pass(c) ? 'PASS' : 'FAIL'));
 
-console.log('\nBy elo band        sites   viable   rock   gold   palace   wood cap   rock cap   gold cap   CV(site value)');
+console.log('\nBy elo band        sites   viable   rock    ore   palace   wood cap   rock cap    ore cap   CV(site value)');
 const bandRows = BANDS.map((b) => {
   const s = all.filter((x) => x.elo >= b.lo && x.elo < b.hi);
-  const value = s.map((x) => x.cap.tree * 0.2 + x.cap.wheat * 0.5 + x.cap.rock * 0.4 + x.cap.gold * 2);
+  const value = s.map((x) => x.cap.tree * 0.2 + x.cap.wheat * 0.5 + x.cap.rock * 0.4 + x.cap.ore * 2);
   const row = {
     band: b.name, sites: s.length,
     viable: frac(s, (x) => x.viable), rock: frac(s, (x) => x.counts.rock > 0),
-    gold: frac(s, (x) => x.counts.gold > 0), palace: frac(s, (x) => x.palace),
+    ore: frac(s, (x) => x.counts.ore > 0), palace: frac(s, (x) => x.palace),
     woodCap: s.length ? mean(s.map((x) => x.cap.tree)) : 0, rockCap: s.length ? mean(s.map((x) => x.cap.rock)) : 0,
-    goldCap: s.length ? mean(s.map((x) => x.cap.gold)) : 0, cv: s.length ? cv(value) : 0,
+    oreCap: s.length ? mean(s.map((x) => x.cap.ore)) : 0, cv: s.length ? cv(value) : 0,
   };
   const p = (v: number) => `${(v * 100).toFixed(0)}%`.padStart(6);
-  console.log(`${row.band.padEnd(16)}${String(row.sites).padStart(7)}  ${p(row.viable)} ${p(row.rock)} ${p(row.gold)} ${p(row.palace)}   ${row.woodCap.toFixed(0).padStart(8)}   ${row.rockCap.toFixed(0).padStart(8)}   ${row.goldCap.toFixed(0).padStart(8)}   ${row.cv.toFixed(2).padStart(8)}`);
+  console.log(`${row.band.padEnd(16)}${String(row.sites).padStart(7)}  ${p(row.viable)} ${p(row.rock)} ${p(row.ore)} ${p(row.palace)}   ${row.woodCap.toFixed(0).padStart(8)}   ${row.rockCap.toFixed(0).padStart(8)}   ${row.oreCap.toFixed(0).padStart(8)}   ${row.cv.toFixed(2).padStart(8)}`);
   return row;
 });
 

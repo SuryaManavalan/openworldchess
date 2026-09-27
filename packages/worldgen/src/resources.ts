@@ -10,7 +10,7 @@
 import { gaussian, hash, hash01, rng, valueNoise } from './random.ts';
 import { eloAt, fields, terrainAt, type Terrain } from './terrain.ts';
 
-export type Kind = 'tree' | 'wheat' | 'rock' | 'gold';
+export type Kind = 'tree' | 'wheat' | 'rock' | 'ore';
 
 export interface ResourceNode {
   x: number;
@@ -62,15 +62,15 @@ export const LAYERS: Record<string, Layer> = {
     chance: (s) => 0.2 + 0.7 * clamp01((s.height + 0.15) / 0.5),
   },
   vein: {
-    kind: 'gold', salt: 40, cell: 30, size: [2, 4], shape: 'scatter', spread: 1.0, companionRock: 0.6,
-    // Gold is rare, likes high ground, and is far more common in high-elo areas.
+    kind: 'ore', salt: 40, cell: 30, size: [2, 4], shape: 'scatter', spread: 1.0, companionRock: 0.6,
+    // Ore is rare, likes high ground, and is far more common in high-elo areas.
     chance: (s) => (0.14 + 0.5 * eloFactor(s.elo)) * (0.6 + 0.8 * clamp01((s.height + 0.1) / 0.5)),
   },
 };
 
 const FILL = { forestTree: 0.24, mountainRock: 0.06 };
-const BASE_CAPACITY: Record<Kind, number> = { tree: 200, wheat: 100, rock: 400, gold: 150 };
-const PRIORITY: Record<Kind, number> = { gold: 4, rock: 3, wheat: 2, tree: 1 };
+const BASE_CAPACITY: Record<Kind, number> = { tree: 200, wheat: 100, rock: 400, ore: 150 };
+const PRIORITY: Record<Kind, number> = { ore: 4, rock: 3, wheat: 2, tree: 1 };
 /** Farthest a cluster member can land from its cell, in squares. */
 const REACH = 12;
 
@@ -122,7 +122,7 @@ export function clusterAt(seed: number, layer: Layer, i: number, j: number): Res
   }
 
   if (out.length && layer.companionRock && r() < layer.companionRock) {
-    // A small outcrop 3-5 squares away: gold next to rock is a palace site.
+    // A small outcrop 3-5 squares away: ore next to rock is a palace site.
     const a = r() * 2 * Math.PI, d = 3 + r() * 2;
     const rx = cx + Math.round(Math.cos(a) * d), ry = cy + Math.round(Math.sin(a) * d);
     const n = 2 + Math.floor(r() * 3);
@@ -144,7 +144,7 @@ function adjacentToMountain(seed: number, x: number, y: number): boolean {
  */
 export function resourcesInRect(
   seed: number, x0: number, y0: number, x1: number, y1: number,
-  kinds: Kind[] = ['tree', 'wheat', 'rock', 'gold'],
+  kinds: Kind[] = ['tree', 'wheat', 'rock', 'ore'],
 ): ResourceNode[] {
   const want = new Set(kinds);
   const best = new Map<string, ResourceNode>();

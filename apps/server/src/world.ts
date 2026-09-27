@@ -4,7 +4,10 @@
 import { CHUNK, chunkKey, chunkOf, key, REACH, distToRect, type Building, type NodeState, type Piece } from '@owc/shared';
 import { resourcesInRect, terrainAt, walkable as terrainWalkable, buildable as terrainBuildable, eloAt } from '@owc/worldgen';
 
-const BLOCKING_NODE = { tree: true, rock: true, gold: true, wheat: false } as const;
+/** Numeric chunk key (chunks within ±65536 of the origin, i.e. ±2M squares). */
+const cnum = (cx: number, cy: number) => (cx + 65536) * 131072 + (cy + 65536);
+
+const BLOCKING_NODE = { tree: true, rock: true, ore: true, wheat: false } as const;
 const TREE_REGROW_MS = 30 * 60_000;
 const WHEAT_REGROW_EVERY_MS = 6_000;
 
@@ -33,10 +36,23 @@ export class World {
   sealed = new Map<number, number>();
   /** Walking traffic per square (desire paths, visuals.md §4). */
   traffic = new Map<number, number>();
+  /** trafficInChunk results, until a piece walks in that chunk again. */
+  private trafficCache = new Map<string, number[]>();
   nextId = 1;
+  /**
+   * Walkability per chunk, one byte per square (terrain, buildings, blocking nodes;
+   * arenas are checked separately). The hottest question in the game: every step
+   * of every search asks it, so it must be an array read, not four map lookups
+   * and a string (performance.md §4).
+   */
+  private walkGrid = new Map<number, Uint8Array>();
+  /** Chunks whose nodes are loaded, by numeric key. */
+  private loaded = new Set<number>();
 
   /** Changes since the last broadcast. */
   dirtyPieces = new Set<number>();
+  /** Pieces that only changed square (a move event usually tells clients; see Net.flushTurn). */
+  movedPieces = new Set<number>();
   removedPieces = new Set<number>();
   dirtyBuildings = new Set<number>();
   removedBuildings = new Set<number>();
@@ -55,6 +71,7 @@ export class World {
     const ck = chunkKey(cx, cy);
     let list = this.nodesByChunk.get(ck);
     if (list) return list;
+    this.loaded.add(cnum(cx, cy));
     list = [];
     for (const n of resourcesInRect(this.seed, cx * CHUNK, cy * CHUNK, cx * CHUNK + CHUNK - 1, cy * CHUNK + CHUNK - 1)) {
       const k = key(n.x, n.y);
@@ -67,8 +84,8 @@ export class World {
   }
 
   nodeAt(x: number, y: number): NodeRec | undefined {
-    const [cx, cy] = chunkOf(x, y);
-    this.ensureChunkNodes(cx, cy);
+    const cx = x >> 5, cy = y >> 5;
+    if (!this.loaded.has(cnum(cx, cy))) this.ensureChunkNodes(cx, cy);
     const n = this.nodes.get(key(x, y));
     return n && !n.gone ? n : undefined;
   }
@@ -92,7 +109,8 @@ export class World {
     if (n.remaining <= 0) {
       n.remaining = 0;
       if (n.kind === 'tree') n.regrowAt = now + TREE_REGROW_MS;
-      else if (n.kind === 'rock' || n.kind === 'gold') n.gone = true;
+      else if (n.kind === 'rock' || n.kind === 'ore') n.gone = true;
+      this.dirtyWalk(n.x, n.y);
     }
     const k = key(n.x, n.y);
     this.nodeOverlay.set(k, n);
@@ -105,7 +123,7 @@ export class World {
     for (const [k, n] of this.nodeOverlay) {
       if (n.gone) continue;
       if (n.kind === 'tree' && n.remaining === 0 && n.regrowAt && now >= n.regrowAt) {
-        n.remaining = n.capacity; n.regrowAt = undefined; this.dirtyNodes.add(k);
+        n.remaining = n.capacity; n.regrowAt = undefined; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y);
       } else if (n.kind === 'wheat' && n.remaining < n.capacity) {
         n.acc = (n.acc ?? 0) + dt;
         if (n.acc >= WHEAT_REGROW_EVERY_MS) {
@@ -124,13 +142,31 @@ export class World {
 
   /** Terrain, buildings, blocking nodes and sealed arenas (ignores pieces). */
   walkable(x: number, y: number): boolean {
-    if (!terrainWalkable(this.terrain(x, y))) return false;
-    const k = key(x, y);
-    if (this.buildingAt.has(k) || this.sealed.has(k)) return false;
-    const n = this.nodeAt(x, y);
-    if (n && BLOCKING_NODE[n.kind] && n.remaining > 0) return false;
-    return true;
+    const cx = x >> 5, cy = y >> 5, c = cnum(cx, cy);
+    let grid = this.walkGrid.get(c);
+    if (!grid) grid = this.buildWalk(cx, cy, c);
+    if (!grid[((y & 31) << 5) | (x & 31)]) return false;
+    return !(this.sealed.size && this.sealed.has(key(x, y)));
   }
+
+  private buildWalk(cx: number, cy: number, c: number): Uint8Array {
+    this.ensureChunkNodes(cx, cy);
+    const grid = new Uint8Array(CHUNK * CHUNK);
+    for (let ly = 0; ly < CHUNK; ly++)
+      for (let lx = 0; lx < CHUNK; lx++) {
+        const x = cx * CHUNK + lx, y = cy * CHUNK + ly, k = key(x, y);
+        if (!terrainWalkable(this.terrain(x, y)) || this.buildingAt.has(k)) continue;
+        const n = this.nodes.get(k);
+        if (n && !n.gone && BLOCKING_NODE[n.kind] && n.remaining > 0) continue;
+        grid[(ly << 5) | lx] = 1;
+      }
+    if (this.walkGrid.size > 20000) this.walkGrid.clear();
+    this.walkGrid.set(c, grid);
+    return grid;
+  }
+
+  /** Something that blocks walking changed at (x, y): rebuild that chunk's grid when next asked. */
+  dirtyWalk(x: number, y: number) { this.walkGrid.delete(cnum(x >> 5, y >> 5)); }
 
   buildable(x: number, y: number) { return terrainBuildable(this.terrain(x, y)); }
 
@@ -171,7 +207,8 @@ export class World {
     this.placeIndex(p);
     const k = key(x, y);
     this.traffic.set(k, Math.min(255, (this.traffic.get(k) ?? 0) + 1));
-    this.dirtyPieces.add(p.id);
+    this.trafficCache.delete(chunkKey(...chunkOf(x, y)));
+    this.movedPieces.add(p.id);
   }
 
   /** Take a piece off the board (into a battle arena); it keeps its record. */
@@ -185,6 +222,7 @@ export class World {
     this.unindex(p);
     this.pieces.delete(id);
     this.dirtyPieces.delete(id);
+    this.movedPieces.delete(id);
     this.removedPieces.add(id);
   }
 
@@ -221,7 +259,7 @@ export class World {
 
   addBuilding(b: Building) {
     this.buildings.set(b.id, b);
-    for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) this.buildingAt.set(key(b.x + dx, b.y + dy), b.id);
+    for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) { this.buildingAt.set(key(b.x + dx, b.y + dy), b.id); this.dirtyWalk(b.x + dx, b.y + dy); }
     const ck = chunkKey(...chunkOf(b.x, b.y));
     let s = this.buildingsByChunk.get(ck);
     if (!s) this.buildingsByChunk.set(ck, (s = new Set()));
@@ -232,7 +270,7 @@ export class World {
   removeBuilding(id: number) {
     const b = this.buildings.get(id);
     if (!b) return;
-    for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) this.buildingAt.delete(key(b.x + dx, b.y + dy));
+    for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) { this.buildingAt.delete(key(b.x + dx, b.y + dy)); this.dirtyWalk(b.x + dx, b.y + dy); }
     this.buildingsByChunk.get(chunkKey(...chunkOf(b.x, b.y)))?.delete(id);
     this.buildings.delete(id);
     this.removedBuildings.add(id);
@@ -265,24 +303,32 @@ export class World {
    * regenerate from the seed plus the stored changes).
    */
   maintain(keep: Set<string>, fadeTrails: boolean) {
-    if (fadeTrails) for (const [k, t] of this.traffic) { const n = t >> 1; if (n) this.traffic.set(k, n); else this.traffic.delete(k); }
+    if (fadeTrails) { for (const [k, t] of this.traffic) { const n = t >> 1; if (n) this.traffic.set(k, n); else this.traffic.delete(k); } this.trafficCache.clear(); }
+    if (this.trafficCache.size > 5000) this.trafficCache.clear();
     for (const [k, n] of this.nodeOverlay) if (!n.gone && n.remaining >= n.capacity && !n.regrowAt) this.nodeOverlay.delete(k);
-    if (this.nodesByChunk.size > 3000) {
+    if (this.nodesByChunk.size > 8000) {
       for (const ck of [...this.nodesByChunk.keys()]) {
         if (keep.has(ck) || this.piecesByChunk.get(ck)?.size || this.buildingsByChunk.get(ck)?.size) continue;
         for (const n of this.nodesByChunk.get(ck)!) this.nodes.delete(key(n.x, n.y));
         this.nodesByChunk.delete(ck);
+        const [cx, cy] = ck.split(',').map(Number);
+        this.loaded.delete(cnum(cx, cy));
+        this.walkGrid.delete(cnum(cx, cy));
       }
     }
   }
 
   trafficInChunk(cx: number, cy: number): number[] {
+    const ck = chunkKey(cx, cy);
+    const hit = this.trafficCache.get(ck);
+    if (hit) return hit;
     const out: number[] = [];
     for (let y = 0; y < CHUNK; y++)
       for (let x = 0; x < CHUNK; x++) {
         const t = this.traffic.get(key(cx * CHUNK + x, cy * CHUNK + y));
         if (t) out.push(y * CHUNK + x, t);
       }
+    this.trafficCache.set(ck, out);
     return out;
   }
 }

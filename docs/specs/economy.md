@@ -15,13 +15,13 @@ Covers resources, cities, buildings, and piece production. All numbers are **pla
 | Wood | Tree, pine | Yes: a stump regrows in ~30 minutes |
 | Food | Wheat field | Yes: fast harvest cycles |
 | Stone | Rock | **No**, it runs out |
-| Gold | Gold ore (rare) | **No**, it runs out |
+| Ore | Ore (rare) | **No**, it runs out |
 
 **Why this model:**
-- **Where you settle becomes the whole strategy.** A gold vein right next to rock is a palace site worth fighting over. This is what "players will want to set up villages and cities near resources" was asking for.
+- **Where you settle becomes the whole strategy.** An ore vein right next to rock is a palace site worth fighting over. This is what "players will want to set up villages and cities near resources" was asking for.
 - **Nothing to micromanage, and it keeps working while you're offline.** That matters for an MMO where players are away most of the time.
-- **Finite stone and gold drive conflict.** Mines run out, so players must expand, found new cities, or take someone else's.
-- **Specialized cities come for free.** A horse town on the wheat plains, a temple town by the gold hills. That gives each city a reason to exist, and trade between them is optional.
+- **Finite stone and ore drive conflict.** Mines run out, so players must expand, found new cities, or take someone else's.
+- **Specialized cities come for free.** A horse town on the wheat plains, a temple town by the ore hills. That gives each city a reason to exist, and trade between them is optional.
 - **Conquest takes something real.** A captured city comes with its good location, not just the buildings.
 
 **What we give up:** pawns no longer have a peacetime job, and there's less busywork (which is fine). Pawns stay the backbone of every army, and houses now matter for the population cap.
@@ -74,16 +74,16 @@ New pieces appear at the building's door.
 |---|---|---|---|---|---|
 | House / tavern | 30 wood | Wheat | Pawn | 1 min | 5 wheat |
 | Stable | 80 wood | Wheat | Knight | 4 min | 20 wheat |
-| Temple | 60 wood, 40 stone | Gold | Bishop | 4 min | 15 gold |
+| Temple | 60 wood, 40 stone | Ore | Bishop | 4 min | 15 ore |
 | Barracks | 60 wood, 80 stone | Rock | Elephant (rook) | 5 min | 30 stone |
-| Palace (1 per king, 3×3) | 120 wood, 150 stone | Gold **and** rock | **King and queen alternately, at the same rate** (the slowest) | 20 min | 40 gold, 40 stone |
+| Palace (1 per king, 3×3) | 120 wood, 150 stone | Ore **and** rock | **King and queen alternately, at the same rate** (the slowest) | 20 min | 40 ore, 40 stone |
 
 - Several buildings of the same type stack their output. Two stables produce two knights every 4 minutes.
 - **Sharing:** if two buildings draw from the same node, they take turns, so crowding buildings around one wheat field slows all of them.
 - The palace alternates king, queen, king, queen. The owner can pin it to only kings or only queens.
 - **Any building can be paused** by its owner. Without this, houses (the fastest producers) fill the population cap and starve every other building. Found by the bot simulation.
 - **Temple bishops** alternate square color; the building's door is placed so both colors can leave.
-- When a node runs out, the building shows an "exhausted" icon and waits. Renewable nodes regrow; for stone and gold, the player needs a new site.
+- When a node runs out, the building shows an "exhausted" icon and waits. Renewable nodes regrow; for stone and ore, the player needs a new site.
 - **Node size** scales with the area's elo ([world.md](world.md) §4). Mines in high-elo pockets last much longer.
 - **Production rate** also scales with node richness: `time = baseTime / richness(node)` (Proposed; see [migration.md](migration.md) §3). The base times in the table are for richness 1 (elo 1000).
 - **Placement preview:** while you place a building, its work area is highlighted and the nodes it would use are outlined. The preview is green if it can produce and red if it's missing its resource.
@@ -102,7 +102,7 @@ The battle cooldown ([battle.md](battle.md) §8) is the sum of this over the pie
 These are implemented and verified by simulation in **[resources.md](resources.md)**. For this model to work, worldgen must place nodes so that:
 - a typical king's reach (a 21×21 area) contains **wood and wheat** almost everywhere, so anyone can start;
 - **rock** turns up in most areas, but not all;
-- **gold** is rare and clustered, with gold next to rock rarer still. Those are the prime palace sites, and they're more common in high-elo pockets.
+- **ore** is rare and clustered, with ore next to rock rarer still. Those are the prime palace sites, and they're more common in high-elo pockets.
 
 ## 5. Starting kit (Proposed)
 

@@ -33,7 +33,7 @@ Covers the visual direction and the asset pipeline. The code lives in [`art/`](.
 | Pieces | king, queen, elephant, bishop, knight, pawn, Emperor | Round 2 (stoic) done |
 | Buildings | palace, house, stable, temple, barracks | Round 1 done; the palace should grow to 3×3 ([economy.md](economy.md) §2) |
 | Buildings, other | construction scaffold, ruins | To do |
-| Resources | tree, pine, rock, gold ore, wheat; depleted variants (stump, rubble, harvested field) | Depleted variants to do |
+| Resources | tree, pine, rock, ore, wheat; depleted variants (stump, rubble, harvested field) | Depleted variants to do |
 | Terrain | grass, sand, water, road, plaza | Done. Forest floor and mountain to do; 3–4 variants per terrain |
 | World UI | arena dome, cooldown shield, pawn-facing chevron, selection ring, command radius ring, alert ping | To do |
 | Portraits | a larger bust for each piece type, for the HUD | Later |

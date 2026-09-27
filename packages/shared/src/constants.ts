@@ -43,7 +43,8 @@ export const SET_COUNTS: Record<PieceKind, number> = { K: 1, Q: 1, R: 2, B: 2, N
 export const PIECE_VALUE: Record<PieceKind, number> = { K: 0, Q: 9, R: 5, B: 3, N: 3, P: 1 };
 
 export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks';
-export type NodeKind = 'tree' | 'wheat' | 'rock' | 'gold';
+/** Resources. "ore" looks different in each biome (gold, silver, copper, gems) but is one resource. */
+export type NodeKind = 'tree' | 'wheat' | 'rock' | 'ore';
 
 export interface BuildingSpec {
   type: BuildingType;
@@ -63,9 +64,9 @@ export interface BuildingSpec {
 export const BUILDINGS: Record<BuildingType, BuildingSpec> = {
   house: { type: 'house', size: 1, cost: { tree: 30 }, buildMs: 20_000, needs: ['wheat'], draw: { wheat: 5 }, produces: ['P'], baseMs: 60_000 },
   stable: { type: 'stable', size: 2, cost: { tree: 80 }, buildMs: 45_000, needs: ['wheat'], draw: { wheat: 20 }, produces: ['N'], baseMs: 240_000 },
-  temple: { type: 'temple', size: 2, cost: { tree: 60, rock: 40 }, buildMs: 45_000, needs: ['gold'], draw: { gold: 15 }, produces: ['B'], baseMs: 240_000 },
+  temple: { type: 'temple', size: 2, cost: { tree: 60, rock: 40 }, buildMs: 45_000, needs: ['ore'], draw: { ore: 15 }, produces: ['B'], baseMs: 240_000 },
   barracks: { type: 'barracks', size: 2, cost: { tree: 60, rock: 80 }, buildMs: 60_000, needs: ['rock'], draw: { rock: 30 }, produces: ['R'], baseMs: 300_000 },
-  palace: { type: 'palace', size: 3, cost: { tree: 120, rock: 150 }, buildMs: 90_000, needs: ['gold', 'rock'], draw: { gold: 40, rock: 40 }, produces: ['K', 'Q'], baseMs: 1_200_000 },
+  palace: { type: 'palace', size: 3, cost: { tree: 120, rock: 150 }, buildMs: 90_000, needs: ['ore', 'rock'], draw: { ore: 40, rock: 40 }, produces: ['K', 'Q'], baseMs: 1_200_000 },
 };
 
 /**

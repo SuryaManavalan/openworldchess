@@ -73,35 +73,87 @@ export const dist = (ax: number, ay: number, bx: number, by: number) => {
   return Math.max(dx, dy) + 0.4 * Math.min(dx, dy);
 };
 
+/** Progress that counts as a full step for each kind: a greedy move this good needs no search. */
+const FULL_STEP: Record<PieceKind, number> = { K: 1, P: 1, N: 2, B: 2, R: 3, Q: 3 };
+
 /**
  * Best-first search over the piece's own gait graph, to find the one move that
  * gets it closest to (tx, ty). Returns null when no move improves on standing
  * still. Bounded by `budget` expansions and a window around the piece.
+ *
+ * This runs for every moving piece every turn, so it's the hottest code in the
+ * game (performance.md §4). In the open, the best single move is almost always
+ * the answer: take it without searching. Only when that makes less than a full
+ * step of progress (an obstacle, a pawn that must turn) do we search, with a
+ * binary heap and numeric keys.
  */
 export function bestGaitMove(p: GaitState, tx: number, ty: number, free: FreeFn, budget = 240, window = 14): GaitMove | null {
   const h0 = dist(p.x, p.y, tx, ty);
   if (h0 === 0) return null;
-  type Node = { s: GaitState; first: GaitMove | null; g: number; h: number };
-  const seen = new Set<string>();
-  const sk = (s: GaitState) => `${s.x},${s.y},${p.kind === 'P' ? s.facing : 0}`;
-  const open: Node[] = [{ s: p, first: null, g: 0, h: h0 }];
-  seen.add(sk(p));
-  let best: Node | null = null;
   const inWindow: FreeFn = (x, y) => Math.abs(x - p.x) <= window && Math.abs(y - p.y) <= window && free(x, y);
-  for (let n = 0; n < budget && open.length; n++) {
-    // pop lowest f = g*0.7 + h (slightly greedy)
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) if (open[i].g * 0.7 + open[i].h < open[bi].g * 0.7 + open[bi].h) bi = i;
-    const cur = open.splice(bi, 1)[0];
-    if (cur.first && (!best || cur.h < best.h - 1e-9 || (Math.abs(cur.h - best.h) < 1e-9 && cur.g < best.g))) best = cur;
+  // Greedy fast path.
+  const first = gaitMoves(p, inWindow);
+  let greedy: GaitMove | null = null, gh = Infinity;
+  for (const m of first) {
+    if (m.turn) continue;
+    const h = dist(m.x, m.y, tx, ty);
+    if (h < gh) { gh = h; greedy = m; }
+  }
+  if (greedy && h0 - gh >= Math.min(h0, FULL_STEP[p.kind]) - 1e-9) return greedy;
+  if (budget <= 0) return greedy && gh < h0 ? greedy : null;
+  // Right next to the target and boxed in: waiting beats searching (pawns may still need to turn).
+  if (h0 <= 1.5 && p.kind !== 'P') return greedy && gh < h0 ? greedy : null;
+
+  // Search. Keys pack the offset from the start (and a pawn's facing) into a number.
+  const pawn = p.kind === 'P';
+  const sk = (x: number, y: number, f: number) => ((x - p.x + 1024) * 2048 + (y - p.y + 1024)) * 4 + (pawn ? f : 0);
+  type Node = { x: number; y: number; facing: Facing; first: GaitMove | null; g: number; h: number; f: number };
+  const seen = new Set<number>([sk(p.x, p.y, p.facing)]);
+  const heap: Node[] = [];
+  const push = (nd: Node) => {
+    heap.push(nd);
+    let i = heap.length - 1;
+    while (i > 0) { const q = (i - 1) >> 1; if (heap[q].f <= nd.f) break; heap[i] = heap[q]; i = q; }
+    heap[i] = nd;
+  };
+  const pop = (): Node => {
+    const top = heap[0], last = heap.pop()!;
+    if (heap.length) {
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1, r = l + 1;
+        let m = i, mf = last.f;
+        if (l < heap.length && heap[l].f < mf) { m = l; mf = heap[l].f; }
+        if (r < heap.length && heap[r].f < mf) m = r;
+        if (m === i) break;
+        heap[i] = heap[m]; i = m;
+      }
+      heap[i] = last;
+    }
+    return top;
+  };
+  // Seed with the moves already generated.
+  for (const m of first) {
+    const k = sk(m.x, m.y, m.facing);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const h = dist(m.x, m.y, tx, ty);
+    push({ x: m.x, y: m.y, facing: m.facing, first: m, g: 1, h, f: 0.7 + h });
+  }
+  let best: Node | null = null;
+  const st: GaitState = { kind: p.kind, x: 0, y: 0, facing: p.facing };
+  for (let n = 0; n < budget && heap.length; n++) {
+    const cur = pop();
+    if (!best || cur.h < best.h - 1e-9 || (Math.abs(cur.h - best.h) < 1e-9 && cur.g < best.g)) best = cur;
     if (cur.h === 0) break;
     if (cur.g >= 6) continue;
-    for (const m of gaitMoves(cur.s, inWindow)) {
-      const s: GaitState = { kind: p.kind, x: m.x, y: m.y, facing: m.facing };
-      const k = sk(s);
+    st.x = cur.x; st.y = cur.y; st.facing = cur.facing;
+    for (const m of gaitMoves(st, inWindow)) {
+      const k = sk(m.x, m.y, m.facing);
       if (seen.has(k)) continue;
       seen.add(k);
-      open.push({ s, first: cur.first ?? m, g: cur.g + 1, h: dist(m.x, m.y, tx, ty) });
+      const h = dist(m.x, m.y, tx, ty), g = cur.g + 1;
+      push({ x: m.x, y: m.y, facing: m.facing, first: cur.first, g, h, f: g * 0.7 + h });
     }
   }
   if (!best || best.h >= h0 - 1e-9) {

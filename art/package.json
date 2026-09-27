@@ -12,6 +12,9 @@
     "./pieces": "./assets/pieces.mjs",
     "./world": "./assets/world.mjs",
     "./style": "./lib/style.mjs",
-    "./decor": "./assets/decor.mjs"
+    "./decor": "./assets/decor.mjs",
+    "./creatures": "./assets/creatures.mjs",
+    "./nature": "./assets/nature.mjs",
+    "./camps": "./assets/camps.mjs"
   }
 }

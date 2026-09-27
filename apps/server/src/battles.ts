@@ -24,6 +24,9 @@ export interface BattleRec {
   endedAt?: number;
 }
 
+/** Battles involving camps of the wilds at once (docs/specs/wilds.md §4). */
+const MAX_WILD_BATTLES = 6;
+
 export class Battles {
   game: Game;
   recs = new Map<number, BattleRec>();
@@ -65,7 +68,15 @@ export class Battles {
     const owner = target.owner ? this.game.players.get(target.owner) : undefined;
     if (owner && owner.shieldUntil > this.game.now && this.w.elo(target.x, target.y) <= 1050) return 'That player is new and shielded';
     if (target.owner === attacker) return 'That is your own king';
+    // Camps of the wilds are played by the server's engines: only so many fights at once.
+    if ((this.game.wilds.campOf(target.owner) || this.game.wilds.campOf(attacker)) && this.wildBattles() >= MAX_WILD_BATTLES) return 'The wilds are restless. Try again in a minute';
     return null;
+  }
+
+  wildBattles() {
+    let n = 0;
+    for (const r of this.recs.values()) if (r.pub.phase !== 'over' && (this.game.wilds.campOf(r.white.player) || this.game.wilds.campOf(r.black.player))) n++;
+    return n;
   }
 
   /** Start the countdown (battle.md §2). */
@@ -282,7 +293,8 @@ export class Battles {
     const gm = r.game!;
     const rating = this.game.players.get(player)?.rating ?? 1000;
     const left = gm.timeLeft(gm.turn, this.game.now);
-    const movetime = Math.max(100, Math.min(1200, left / 60));
+    // Camps think quickly: they play below the area's rating anyway, and share the engines.
+    const movetime = Math.max(100, Math.min(this.game.wilds.campOf(player) ? 350 : 1200, left / 60));
     r.aiThinking = true;
     const fen = gm.fen, ply = gm.moves.length;
     this.ai.bestMove(fen, rating, movetime, r.pub.kind === 'practice' ? 0 : 1).then((uci) => {
@@ -331,8 +343,11 @@ export class Battles {
     for (const id of gm.killed) g.removePiece(id);
 
     const winnerSide: Color | null = result === 'draw' ? null : result;
+    let scattered: { camp: NonNullable<ReturnType<Game['wilds']['campOf']>>; by: string } | null = null;
     if (winnerSide) {
       const win = winnerSide === 'white' ? r.white : r.black, lose = winnerSide === 'white' ? r.black : r.white;
+      // The wilds (docs/specs/wilds.md §5): creatures never change sides, and camps never take land.
+      const wildWin = g.wilds.campOf(win.player), wildLose = g.wilds.campOf(lose.player);
       summary.winner = win.player; summary.loser = lose.player;
       const loserKing = w.pieces.get(lose.kingId);
       const winKing = w.pieces.get(win.kingId);
@@ -348,6 +363,8 @@ export class Battles {
       const loserRec = g.players.get(lose.player);
       const fresh = !!loserRec && !loserRec.isBot && now - loserRec.createdAt < FRESH_ACCOUNT_MS;
       const convert = (p: Piece) => {
+        if (wildLose) return; // the camp scatters below
+        if (wildWin) { g.makeMasterless(p); return; }
         if (p.kit || fresh) { summary.killed.push(p.id); g.removePiece(p.id); return; }
         g.setOwner(p, win.player); summary.converted.push(p.id);
       };
@@ -358,7 +375,7 @@ export class Battles {
         for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) { p.state = 'routed'; w.touch(p); summary.routed.push(id); } }
       }
       // Buildings the fallen king anchored go to the winner if no other loser king still holds them.
-      if (winKing) {
+      if (winKing && !wildWin && !wildLose) {
         for (const b of w.buildingsNear(kingAt[0], kingAt[1], REACH)) {
           if (b.owner !== lose.player || distToRect(kingAt[0], kingAt[1], b.x, b.y, b.size) > REACH) continue;
           if (!emperor && w.anchorsOf(b, lose.player).length) continue;
@@ -370,13 +387,14 @@ export class Battles {
       // Cooldown: time for the winner to regenerate what they lost.
       const counts: Partial<Record<BuildingType, number>> = {};
       // Only working buildings count, at most two per king per type (safeguards.md §3).
-      for (const b of w.buildings.values()) if (b.owner === win.player && b.built >= 1 && b.type !== 'ruin' && !b.blocked) counts[b.type] = (counts[b.type] ?? 0) + 1;
+      for (const b of w.buildings.values()) if (b.owner === win.player && b.built >= 1 && b.type !== 'ruin' && b.type !== 'camp' && !b.blocked) counts[b.type] = (counts[b.type] ?? 0) + 1;
       const cap = 2 * Math.max(1, g.kingsOf(win.player).length);
       for (const t of Object.keys(counts) as BuildingType[]) counts[t] = Math.min(counts[t]!, cap);
       const lostKinds = win.ids.filter((id) => gm.killed.includes(id)).map((id) => kinds.get(id)!).filter(Boolean);
       summary.cooldownMs = Math.max(MIN_BATTLE_COOLDOWN_MS, lostKinds.reduce((s, k) => s + regenMs(k, counts, g.speed), 0));
       for (const id of win.ids) { const p = w.pieces.get(id); if (p) { p.cooldownUntil = now + summary.cooldownMs; w.touch(p); } }
       if (winKing) winKing.protectedUntil = now + summary.cooldownMs;
+      if (wildLose) scattered = { camp: wildLose, by: win.player };
     } else {
       for (const s of [r.white, r.black]) {
         const lost = s.ids.filter((id) => gm.killed.includes(id)).map((id) => kinds.get(id)!);
@@ -403,10 +421,12 @@ export class Battles {
     if (process.env.LOG_BATTLES) console.log(`battle ${r.pub.id} over: ${result} by ${gm.termination} after ${gm.moves.length} plies; converted ${summary.converted.length}`);
     this.sync(r);
     for (const [side, other] of [[r.white, r.black], [r.black, r.white]] as const) {
+      if (g.wilds.campOf(side.player)) continue;
       const won = summary.winner === side.player, name = g.players.get(other.player)?.name ?? 'someone';
       g.logEvent(side.player, 'battle', `${won ? 'Won' : summary.winner ? 'Lost' : 'Drew'} a ${r.pub.kind} battle against ${name} (${gm.termination})${summary.converted.length ? `, ${summary.converted.length} pieces changed sides` : ''}`);
     }
     this.onEnd(r.pub, summary, [r.white.player, r.black.player]);
+    if (scattered) g.wilds.scatter(scattered.camp, scattered.by);
   }
 
   /**

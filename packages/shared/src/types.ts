@@ -31,12 +31,14 @@ export interface Piece {
   routine?: string;
   /** Part of a starting kit: never changes hands (it perishes instead). */
   kit?: boolean;
+  /** A creature of the wilds: its faction id (docs/specs/wilds.md). */
+  wild?: string;
 }
 
 export interface Building {
   id: number;
   owner: string | null;
-  type: BuildingType | 'ruin';
+  type: BuildingType | 'ruin' | 'camp';
   /** Top-left square of the footprint. */
   x: number;
   y: number;
@@ -64,6 +66,8 @@ export interface Building {
   sieges?: number;
   /** When a ruin formed (it crumbles away later). */
   ruinedAt?: number;
+  /** A camp of the wilds: its faction, art and name (docs/specs/wilds.md). */
+  camp?: { faction: string; art: string; name: string };
 }
 
 /** A resource node's current state (only nodes that differ from worldgen are stored). */
@@ -82,6 +86,8 @@ export interface PlayerPublic {
   emblem: number;
   rating: number;
   online: boolean;
+  /** A camp of the wilds, not a person (its faction id). */
+  wild?: string;
 }
 
 export interface PlayerSelf extends PlayerPublic {

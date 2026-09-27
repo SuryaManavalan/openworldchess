@@ -40,6 +40,7 @@ Each piece moves in the world the way it moves in chess:
 ### Command rule (Proposed): one reach rule for everything
 
 - **Every piece must stay within 10 squares (Chebyshev distance) of one of its owner's kings.** This is the same reach that keeps buildings standing ([economy.md](economy.md) §2). There's one rule for pieces and buildings alike, and no city radius.
+- **One exception:** merchants on a trade run travel as caravans between their owner's towns (visuals.md §10). They can't fight or be attacked.
 - A **troop** is simply the pieces moving with a king. When you drag a group that includes a king, the group moves together. When you drag pieces that have no king, they can go anywhere within reach of any of your kings, but no farther. The path preview stops at the edge of reach.
 - **Why:**
   - It matches the decided rule that an attacker must bring a king. Every army in the field can fight, and every fight is king against king.
@@ -68,16 +69,20 @@ A troop has a **heading**: the direction of its path, snapped to N, E, S or W. P
 - No piece may move more than **4 squares ahead** of its slot's position relative to the anchor. Fast pieces make one big move, then **wait** while the pawns catch up. Queens and elephants leap ahead and hold; knights hop in L's around the formation.
 - If the king falls behind the command radius, everyone ahead holds until it catches up.
 
-## 5. Pathfinding
+## 5. Pathfinding (as built)
 
-- **Troop path:** A* on the grid over squares a king can walk, 8 directions. The search is capped at ~256 squares of radius. Longer orders are split into waypoints using a coarse **chunk graph** (per chunk: which edges connect to which), precomputed from worldgen.
-- **Per-piece move:** each world turn, each piece chooses the one gait move that best reduces distance to its slot target. For the knight, that's a 2-ply search, so it doesn't hop into dead ends. Pawns rotate when their target lies off their facing.
-- **Stuck handling:**
-  - Pieces in the same troop may **swap** squares.
-  - If a piece is blocked for 3 turns, it makes a local repath.
-  - If the whole troop is blocked for 6 turns, the troop path is recomputed.
-  - If there's no route, the troop stops and the player is told.
-- All of this lives in `packages/rules` and is deterministic.
+- **Troop path:**
+  - Short routes (up to 48 squares): A* over squares a king can walk, in 8 directions.
+  - Long routes: **two levels**. A coarse A* over 8×8-square cells finds the way around lakes and mountain ranges; cells are passable if any sampled square is, so narrow fords still count. Fine A* then connects waypoints along the coarse route.
+  - If a waypoint turns out unreachable at the fine level, its cell is marked blocked and the coarse route is re-planned (within a 250ms budget).
+  - **Legs:** a troop that reaches the end of a partial route plans the next leg. It only gives up after 8 legs in a row that don't get closer.
+- **Per-piece move:** each world turn, each piece makes the gait move that best closes on its formation slot. A piece stuck for 3 turns searches a wider area for a way around.
+- **Getting through:**
+  - The owner's **idle pieces step aside**: they swap places with a marching piece.
+  - Groupmates don't swap with each other (that made them shuffle each other off their slots).
+  - A troop where half the pieces are stuck **re-plans its route around** whatever pieces are blocking it.
+- **Pace:** the lead point moves on once everyone is within 2.5 squares of their slot, or has given up trying.
+- **Measured:** 14 of 14 attack marches (up to 350 squares, random maps) reach their target. Marches of 650–1,000 squares around complex lakes can still give up.
 
 ## 6. Camera and direction (Decided: "rotate the camera, now that becomes up")
 

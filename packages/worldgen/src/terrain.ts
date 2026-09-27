@@ -33,7 +33,9 @@ let cacheSeed = NaN;
 const cache = new Map<number, Terrain>();
 
 export function terrainAt(seed: number, x: number, y: number): Terrain {
-  if (seed !== cacheSeed || cache.size > 2_000_000) { cache.clear(); cacheSeed = seed; }
+  if (seed !== cacheSeed) { cache.clear(); cacheSeed = seed; }
+  // Full: forget the oldest quarter (Maps keep insertion order), not everything at once.
+  if (cache.size > 2_000_000) { let n = 500_000; for (const k of cache.keys()) { cache.delete(k); if (--n <= 0) break; } }
   const key = x * 134217728 + y;
   let t = cache.get(key);
   if (t === undefined) { t = computeTerrain(seed, x, y); cache.set(key, t); }
@@ -57,7 +59,8 @@ function computeTerrain(seed: number, x: number, y: number): Terrain {
 }
 
 export const walkable = (t: Terrain) => t !== 'water' && t !== 'mountain';
-export const buildable = (t: Terrain) => t === 'grass' || t === 'sand';
+/** Buildings go on any open ground, forest floor included; trees and rocks block their own squares. */
+export const buildable = (t: Terrain) => t !== 'water' && t !== 'mountain';
 
 // ---------- elo field ----------
 

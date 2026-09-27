@@ -39,6 +39,8 @@ export class Connection {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private resubTimer: ReturnType<typeof setInterval> | null = null;
   closed = false;
+  /** Bytes and messages received (for the ?perf overlay). */
+  stats = { bytes: 0, msgs: 0 };
   status: 'connecting' | 'open' | 'closed' = 'connecting';
 
   constructor(opts: ConnectionOptions) {
@@ -73,7 +75,9 @@ export class Connection {
       this.sendRaw({ t: 'hello', v: PROTOCOL_VERSION, token: this.token ?? undefined, name: this.opts.name });
     };
     ws.onmessage = (ev) => {
-      const m = JSON.parse(String(ev.data)) as ServerMsg;
+      const raw = String(ev.data);
+      this.stats.bytes += raw.length; this.stats.msgs++;
+      const m = JSON.parse(raw) as ServerMsg;
       if (m.t === 'err' && m.code && this.status !== 'open') {
         this.closed = true;
         this.token = null;

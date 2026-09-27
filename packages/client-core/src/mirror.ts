@@ -36,6 +36,8 @@ export class Mirror {
   onBuildingRemoved: (id: number) => void = () => {};
   onNodeChange: (n: NodeState) => void = () => {};
   onChunk: (cx: number, cy: number) => void = () => {};
+  /** A node forgotten because its chunk left the view (not depleted: no effects). */
+  onNodeDropped: (k: number) => void = () => {};
   onBattle: (b: BattlePublic) => void = () => {};
   onBattleEnd: (id: number, s: BattleSummary, result: string, termination: string) => void = () => {};
   onAlert: (m: Extract<ServerMsg, { t: 'alert' }>) => void = () => {};
@@ -149,7 +151,7 @@ export class Mirror {
     for (const ck of [...this.chunks]) if (!keep.has(ck)) this.chunks.delete(ck);
     for (const p of [...this.pieces.values()]) if (p.owner !== this.me && !this.inChunks(p.x, p.y)) this.dropPiece(p.id);
     for (const b of [...this.buildings.values()]) if (b.owner !== this.me && !this.inChunks(b.x, b.y)) { this.buildings.delete(b.id); this.onBuildingRemoved(b.id); }
-    for (const [k, n] of [...this.nodes]) if (!this.inChunks(n.x, n.y)) this.nodes.delete(k);
+    for (const [k, n] of [...this.nodes]) if (!this.inChunks(n.x, n.y)) { this.nodes.delete(k); this.onNodeDropped(k); }
   }
 
   myPieces() { return [...this.minePieces].map((id) => this.pieces.get(id)!).filter(Boolean); }

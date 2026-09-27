@@ -14,6 +14,8 @@ This spec covers interaction and layout. Rendering, state and modes are in [clie
 6. **Confirm only what can't be undone.** Moves are cheap and can be re-issued, so they need no confirmation. Attacks, buildings and resigning are confirmed.
 7. **The same features on every platform.** There are no desktop-only abilities. The ergonomics differ, the power doesn't.
 
+**Icons (Decided):** no emoji or symbol glyphs anywhere in the UI, since they render differently on every platform. All icons are inline SVGs from one set (`apps/client/src/ui/Icon.tsx`): rounded 2px strokes on a 24px grid, colored by the surrounding text. Chess pieces in the HUD use the game's own piece art. (The wireframes below use glyphs only as sketch shorthand.)
+
 ## 2. Form factors
 
 | Form factor | Primary orientation | Layout family |
@@ -54,6 +56,17 @@ The layout is chosen by viewport size and input type (`pointer: coarse` plus wid
 This covers selecting and dragging a group to a location, from the Emperor across the map to a pawn one square over. It's the same on desktop with a mouse.
 
 A two-step alternative for accessibility: with a selection, tap the ground to place the ghost, then tap the **Move** chip.
+
+### Markers, flags and zooming out (added after mobile playtesting)
+
+- **Visibility:** every overlay line (selection rings, move and attack previews, the build ghost's work area and the king's reach) keeps the same thickness on screen at any zoom, with a dark outline so it reads on light ground.
+- **Destination flags:** moves you've sent stay marked with a pulsing flag and a trail line until the troop arrives. The two-step Move also shows its target.
+- **Aiming above the finger:** on touch, drag-to-command aims 80px above your finger.
+- **Zooming out:** you can zoom out about 5× further than before.
+  - Below 0.2× zoom, terrain switches to a cheap flat painter, pieces become dots (kings larger), buildings become colored squares, and battles become pulsing rings.
+  - Settlements show as floating pins with their name and tier; tap one to fly there.
+- **Flags:** drop one with the ⚑ button (then tap the map), by long-pressing empty ground, or with F on desktop. Up to 12, saved on the device. Tap a flag's ✕ to remove it.
+- **Edge arrows:** off-screen flags, your settlements and your Emperor show as arrows on the screen edge, with the distance in squares. Tap one to fly there.
 
 ### Choosing among overlapping things
 

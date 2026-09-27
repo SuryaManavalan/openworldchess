@@ -20,7 +20,7 @@ Every terrain keeps the light and dark checker so the world still reads as a boa
 | Sand | yes | yes | near water |
 | Road | yes | yes | placed by players later; maybe faster movement (see open questions) |
 | Plaza | yes | yes | city ground; appears automatically inside a city's radius (cosmetic) |
-| Forest floor | yes | no | holds tree nodes |
+| Forest floor | yes | yes | holds tree nodes; a standing tree blocks its own square (decided after playtesting: an invisible "no building in forest" rule confused players once biomes recolored the ground) |
 | Water | **no** | no | blocks sliding pieces; knights can jump a one-square gap (movement.md §3) |
 | Mountain | **no** | no | large impassable areas that break up the map and form chokepoints |
 
@@ -44,13 +44,33 @@ Every terrain keeps the light and dark checker so the world still reads as a boa
 
 Terrain lookups are memoized. For the simulator's whole sample, generation takes ~10ms per city site, so generating a chunk on demand is cheap.
 
+## 2b. Biomes (Decided, built in `packages/worldgen/src/biomes.ts`)
+
+A biome is how a place **looks** and **what lives there**. It never changes the rules: walkability, buildability and resource nodes still come from terrain and the resource layers exactly as before, so balance and existing cities are untouched. A biome only decides the ground colors, the marks on the squares, which tree, rock, ore and crop art the nodes use (visuals.md §11), and which creatures camp there ([wilds.md](wilds.md)).
+
+- **12 common biomes** come from a new temperature field (wavelength 1600) plus the existing moisture and height:
+  - Cold: pine forest (taiga) and tundra.
+  - Temperate: meadow, highlands, swamp, and three kinds of wood (oak, birch, autumn), split by a patch field.
+  - Hot: savanna, desert, badlands, jungle and swamp.
+
+  Forests keep the same line as terrain (moisture > 0.18), so a desert is never forest-terrain.
+- **6 rare biomes** are warped pockets on a 900-square grid, like the elo pockets: blossom vale, mushroom forest, blighted land, fey wood, crystal fields and ashlands (volcanic, where water is drawn as lava).
+  - A pocket is more likely in higher-rated land.
+  - The stranger kinds need it: crystal needs rating 1100+ and ashlands 1200+.
+- **Measured mix of land** (seed 1234):
+  - common: meadow 25%, tundra 14%, taiga 11%, highland 8%, savanna 7%, swamp 6%, badlands 5%, desert 5%, jungle 5%, oak/birch/autumn about 3.5% each;
+  - rare: blossom 1.2%, mushroom 1.1%, blight 0.6%, fey 0.3%, crystal 0.16%, ashlands 0.08%.
+
+  Rare biomes come to about 3.4% of land, concentrated in rich areas. Check with `node packages/worldgen/sim/biomestat.ts <seed>`.
+- On screen, biome edges are ragged (each square samples a slightly jittered point), not ruled lines.
+
 ## 3. Resource nodes
 
 | Node | Resource | Blocks movement | Capacity (placeholder) | Regrows |
 |---|---|---|---|---|
 | Tree / Pine | Wood | yes | 200 | yes, slowly (the stump regrows) |
 | Rock | Stone | yes | 400 | no |
-| Gold ore | Gold | yes | 150 | no |
+| Ore | Ore | yes | 150 | no |
 | Wheat field | Food | no (you can walk through it) | 100 per harvest | yes, fast (harvest cycles) |
 
 Capacity is multiplied by `richness(elo)` (0.7–1.9) and ±20% random variation; see [resources.md](resources.md) §2.
@@ -92,4 +112,4 @@ A square is **blocked** if it holds:
 
 - Should roads speed up movement (for example, a pawn moves 2 squares on a road)? It's fun, but it complicates gaits. Recommend deciding after M2 playtests.
 - Should the world have seasons or a day/night cycle? That would affect wheat regrowth and the look.
-- Are there neutral NPC armies (bandits) guarding gold? They would give solo play something to do, and train new players against AI at the local elo.
+- Are there neutral NPC armies (bandits) guarding ore? They would give solo play something to do, and train new players against AI at the local elo.

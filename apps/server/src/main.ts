@@ -7,6 +7,7 @@ import { Game } from './game.ts';
 import { Net } from './net.ts';
 import { load, save } from './persist.ts';
 import { handleAuth } from './auth.ts';
+import { perf } from './perf.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const SEED = Number(process.env.SEED ?? 1);
@@ -18,6 +19,9 @@ const DATA = process.env.DATA ?? new URL('../../../data/world.json', import.meta
 const STATIC = process.env.STATIC ?? new URL('../../client/dist/', import.meta.url).pathname;
 
 const game = new Game({ seed: SEED, speed: SPEED });
+/** Full holdings resync (turn deltas already carry your own pieces); saving is a big synchronous write. */
+const MINE_EVERY_MS = 30_000;
+const SAVE_EVERY_MS = 60_000;
 game.battles.countdownScale = COUNTDOWN_SCALE;
 if (process.env.SHIELD_MS) game.shieldMs = Number(process.env.SHIELD_MS);
 if (process.env.GUEST_GRACE_MS) game.guestGraceMs = Number(process.env.GUEST_GRACE_MS);
@@ -33,6 +37,13 @@ export const originOk = (req: { headers: Record<string, string | string[] | unde
 const server = createServer((req, res) => {
   if (!originOk(req)) { res.statusCode = 403; res.end('forbidden'); return; }
   if (req.url === '/health') { res.end(JSON.stringify({ ok: true, players: game.players.size, turn: game.turn })); return; }
+  // Observability (performance.md §2): only from the machine itself.
+  if (req.url?.startsWith('/metrics')) {
+    if (!/^(::1|127\.0\.0\.1|::ffff:127\.0\.0\.1)$/.test(req.socket.remoteAddress ?? '') || req.headers['x-origin-verify']) { res.statusCode = 404; res.end('not found'); return; }
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ last: perf.last, live: perf.snapshot() }, null, 1));
+    return;
+  }
   if (req.url?.startsWith('/auth/')) { handleAuth(game, req, res).catch(() => { res.statusCode = 500; res.end('auth error'); }); return; }
   let path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^(\.\.[/\\])+/, '');
   if (path === '/' || !extname(path)) path = '/index.html';
@@ -45,30 +56,50 @@ const server = createServer((req, res) => {
 const net = new Net(game, server, TURN, originOk);
 
 let nextTurnAt = Date.now() + TURN;
-let lastEconomy = 0, lastMine = 0, lastSave = Date.now(), lastFall = 0, lastMaintain = Date.now(), lastFade = Date.now();
+let lastEconomy = 0, lastMine = 0, lastSave = Date.now(), lastFall = 0, lastMaintain = Date.now(), lastFade = Date.now(), lastRoll = Date.now(), lastSelf = 0;
+perf.gauge('pieces', () => game.world.pieces.size);
+perf.gauge('buildings', () => game.world.buildings.size);
+perf.gauge('groups', () => game.groups.size);
+perf.gauge('players', () => game.players.size);
+perf.gauge('campsAwake', () => game.wilds.awake().length);
+perf.gauge('sessions', () => net.sessions.size);
+perf.gauge('battles', () => game.battles.recs.size);
+perf.gauge('turn', () => game.turn);
 net.nextTurnAt = nextTurnAt;
+
+// The world turn runs on its own timer, aimed at the exact moment it's due: the
+// beat everything moves to (and the music plays on) shouldn't wobble by the
+// housekeeping loop's tick (performance.md §1).
+const runTurn = () => {
+  const now = Date.now();
+  game.now = now;
+  // How late the turn runs is the number players feel.
+  perf.add('turn.late', now - nextTurnAt);
+  nextTurnAt += TURN;
+  if (nextTurnAt < now) { perf.count('turn.skipped'); nextTurnAt = now + TURN; } // fell behind: don't spiral
+  net.nextTurnAt = nextTurnAt;
+  perf.time('turn', () => game.worldTurn(now));
+  perf.time('net.flushTurn', () => net.flushTurn(game.turnMoves));
+  setTimeout(runTurn, Math.max(0, nextTurnAt - Date.now()));
+};
+setTimeout(runTurn, Math.max(0, nextTurnAt - Date.now()));
 
 setInterval(() => {
   const now = Date.now();
   game.now = now;
-  game.battles.tick(now);
-  if (now >= nextTurnAt) {
-    nextTurnAt += TURN;
-    if (nextTurnAt < now) nextTurnAt = now + TURN; // fell behind: don't spiral
-    net.nextTurnAt = nextTurnAt;
-    game.worldTurn(now);
-    net.flushTurn(game.turnMoves);
-  }
-  if (now - lastEconomy >= 1000) { lastEconomy = now; game.economy(now); }
-  if (now - lastMine >= 2500) { lastMine = now; net.sendAllMine(); }
+  perf.time('battles.tick', () => game.battles.tick(now));
+  if (now - lastEconomy >= 1000) { lastEconomy = now; perf.time('economy', () => game.economy(now)); }
+  if (now - lastMine >= MINE_EVERY_MS) { lastMine = now; perf.time('net.sendAllMine', () => net.sendAllMine()); }
+  if (now - lastSelf >= 2500) { lastSelf = now; perf.time('net.sendAllSelf', () => net.sendAllSelf()); }
   if (now - lastFall >= Math.min(30_000, game.guestGraceMs / 2)) { lastFall = now; game.fallOfGuests(now); }
+  if (now - lastRoll >= 60_000) { lastRoll = now; perf.roll(now); }
   if (now - lastMaintain >= 60_000) {
     lastMaintain = now;
     const fade = now - lastFade >= 3_600_000;
     if (fade) lastFade = now;
-    game.world.maintain(net.watchedChunks(), fade);
+    perf.time('maintain', () => game.world.maintain(net.watchedChunks(), fade));
   }
-  if (now - lastSave >= 15_000) { lastSave = now; save(game, DATA); }
+  if (now - lastSave >= SAVE_EVERY_MS) { lastSave = now; perf.time('save', () => save(game, DATA)); }
 }, Math.min(1000 / TICK_HZ, TURN / 2));
 
 const shutdown = () => { save(game, DATA); game.battles.ai.stop(); console.log('saved'); process.exit(0); };

@@ -56,7 +56,7 @@ function nameFor(seed: number, id: number, cx: number, cy: number) {
 }
 
 export function computeSettlements(m: Mirror): Settlement[] {
-  const blds = [...m.buildings.values()].filter((b) => b.owner && b.type !== 'ruin');
+  const blds = [...m.buildings.values()].filter((b) => b.owner && b.type !== 'ruin' && b.type !== 'camp');
   // Union buildings of the same owner that are close together.
   const parent = new Map<number, number>(blds.map((b) => [b.id, b.id]));
   const find = (i: number): number => { let p = parent.get(i)!; while (p !== parent.get(p)) p = parent.get(p)!; parent.set(i, p); return p; };

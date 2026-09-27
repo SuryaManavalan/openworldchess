@@ -13,7 +13,8 @@ const S = 64;
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: number; size: number; add?: boolean }
 interface Ring { x: number; y: number; t0: number; dur: number; color: number; r: number }
-interface Bird { x: number; y: number; vx: number; vy: number; rx: number; ry: number; scared: number; flap: number }
+/** A bird circles its roost slowly; startled, it flies straight off and fades away. */
+interface Bird { x: number; y: number; rx: number; ry: number; ang: number; rad: number; speed: number; flap: number; born: number; leave?: { vx: number; vy: number; t: number } }
 interface Scheduled { at: number; run: () => void }
 
 /** Day length: 40 real minutes, the same for everyone (visuals.md §4). */
@@ -185,45 +186,56 @@ export class Fx {
         });
       }
     }
-    if (!dusk) for (const b of this.birds) { b.scared = 3000; b.vx = (Math.random() - 0.5) * 0.02; b.vy = -0.012; }
+    if (!dusk) for (const b of this.birds) if (!b.leave) b.leave = { vx: (Math.random() - 0.5) * 0.004, vy: -0.004, t: 0 };
     const day = Math.floor((sc.mirror.serverNow() - Date.UTC(2026, 8, 26)) / DAY_MS) + 1;
-    useUI.getState().toast(dusk ? `☾ Dusk falls · day ${day}` : `☀ Dawn breaks · day ${day + 1}`, 'good');
+    useUI.getState().toast(dusk ? `Dusk falls · day ${day}` : `Dawn breaks · day ${day + 1}`, 'good', dusk ? 'moon' : 'sun');
   }
 
   private updateBirds(now: number, dt: number) {
     const sc = this.scene;
-    // Keep a flock roosting near trees close to the camera.
-    if (now - this.lastFlock > 4000) {
+    // A small flock now and then, roosting in trees near the view (visuals.md §4).
+    if (now - this.lastFlock > 12000) {
       this.lastFlock = now;
       const trees = [...sc.nodes.values()].filter((s) => (s as unknown as { kind: string }).kind === 'tree');
-      if (this.birds.length < 14 && trees.length) {
+      if (this.birds.length < 6 && trees.length && Math.random() < 0.6) {
         const roost = trees[Math.floor(Math.random() * trees.length)] as unknown as { wx: number; wy: number };
-        for (let i = 0; i < 5; i++) this.birds.push({ x: roost.wx + Math.random() * 2, y: roost.wy + Math.random() * 2, vx: 0, vy: 0, rx: roost.wx, ry: roost.wy, scared: 0, flap: Math.random() * 6 });
+        const dir = Math.random() < 0.5 ? 1 : -1, ang0 = Math.random() * Math.PI * 2;
+        for (let i = 0; i < 3; i++)
+          this.birds.push({ x: roost.wx, y: roost.wy, rx: roost.wx, ry: roost.wy, ang: ang0 + i * 0.35, rad: 2.6 + i * 0.3, speed: dir * (0.00032 + Math.random() * 0.00006), flap: Math.random() * 6, born: now });
       }
-      this.birds = this.birds.filter((b) => Math.hypot(b.x - sc.cam.x, b.y - sc.cam.y) < 60);
     }
     this.recentSteps = this.recentSteps.filter((s) => now - s.t < 1500);
     const g = this.g;
+    const keep: Bird[] = [];
     for (const b of this.birds) {
-      // Scatter from troops within 6 squares (visuals.md §4).
-      for (const s of this.recentSteps) if (Math.hypot(s.x - b.x, s.y - b.y) < 6 && b.scared <= 0) {
-        b.scared = 3500; const a = Math.atan2(b.y - s.y, b.x - s.x);
-        b.vx = Math.cos(a) * 0.012; b.vy = Math.sin(a) * 0.012;
-        if (Math.random() < 0.3) audio.birds();
+      if (Math.hypot(b.rx - sc.cam.x, b.ry - sc.cam.y) > 70) continue;
+      // Troops passing within 5 squares startle them (visuals.md §4).
+      if (!b.leave) for (const s of this.recentSteps) if (Math.hypot(s.x - b.x, s.y - b.y) < 5) {
+        const a = Math.atan2(b.y - s.y, b.x - s.x);
+        b.leave = { vx: Math.cos(a) * 0.005, vy: Math.sin(a) * 0.005 - 0.002, t: 0 };
+        if (Math.random() < 0.2) audio.birds();
+        break;
       }
-      if (b.scared > 0) { b.scared -= dt; }
-      else {
-        // orbit the roost lazily
-        const ang = Math.atan2(b.y - b.ry, b.x - b.rx) + 0.9;
-        const tx = b.rx + Math.cos(ang) * 3, ty = b.ry + Math.sin(ang) * 2;
-        b.vx += (tx - b.x) * 0.00002 * dt; b.vy += (ty - b.y) * 0.00002 * dt;
-        b.vx *= 0.985; b.vy *= 0.985;
+      let alpha = Math.min(1, (now - b.born) / 1200) * 0.7;
+      if (b.leave) {
+        // Straight away, easing up to speed, fading out over 3 seconds.
+        b.leave.t += dt;
+        const k = Math.min(1, b.leave.t / 600);
+        b.x += b.leave.vx * dt * k; b.y += b.leave.vy * dt * k;
+        alpha *= Math.max(0, 1 - b.leave.t / 3000);
+        if (alpha <= 0) continue;
+      } else {
+        // A slow, smooth loop around the roost (about 20 seconds a lap).
+        b.ang += b.speed * dt;
+        b.x = b.rx + Math.cos(b.ang) * b.rad;
+        b.y = b.ry + Math.sin(b.ang) * b.rad * 0.6;
       }
-      b.x += b.vx * dt; b.y += b.vy * dt;
-      b.flap += dt * (b.scared > 0 ? 0.03 : 0.012);
-      const px = (b.x + 0.5) * S, py = (b.y + 0.5) * S - S * 1.2, w = S * 0.14, f = Math.sin(b.flap) * w * 0.7;
-      g.moveTo(px - w, py - f).lineTo(px, py).lineTo(px + w, py - f).stroke({ width: 3, color: 0x2b2622, alpha: 0.75 });
+      keep.push(b);
+      b.flap += dt * (b.leave ? 0.02 : 0.008);
+      const px = (b.x + 0.5) * S, py = (b.y + 0.5) * S - S * 1.2, w = S * 0.13, f = Math.sin(b.flap) * w * 0.5;
+      g.moveTo(px - w, py - f).lineTo(px, py).lineTo(px + w, py - f).stroke({ width: 2.5, color: 0x2b2622, alpha });
     }
+    this.birds = keep;
   }
 
   private lastGlint = 0;

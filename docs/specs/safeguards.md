@@ -12,7 +12,7 @@ The principle ([PRINCIPLES.md](../PRINCIPLES.md)): prefer **general limits that 
 
 ## 2. Kings breeding kings
 
-- **Loop:** kings raise the cap and allow more palaces (one per king), and palaces make kings. That's exponential growth, limited only by gold.
+- **Loop:** kings raise the cap and allow more palaces (one per king), and palaces make kings. That's exponential growth, limited only by ore.
 - **Fix:** each king crowned takes longer: the palace's king time × (1 + kings/4). There's a **hard cap of 20 kings**. At the cap, a palace makes queens instead.
 
 ## 3. Building spam

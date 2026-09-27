@@ -222,3 +222,77 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .layout-phone .nudge { top: auto; bottom: calc(150px + var(--safe-bottom)); flex-direction: column; align-items: stretch; }
 .layout-phone .nudge-actions { flex-direction: row; }
 .layout-phone .nudge-actions .btn { flex: 1; }
+
+.name-row { display: flex; gap: 8px; }
+.name-row input { flex: 1; min-width: 0; }
+.icon-btn.big { width: 54px; height: auto; font-size: 22px; }
+
+/* map markers */
+.markers { position: absolute; inset: 0; pointer-events: none; }
+.marker { position: absolute; left: 0; top: 0; pointer-events: auto; display: flex; align-items: center; gap: 4px; margin: -18px 0 0 -18px; padding: 4px 10px 4px 6px; background: var(--panel); border: 2px solid var(--c); border-radius: 99px; font-weight: 900; font-size: 13px; cursor: pointer; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); will-change: transform; }
+.marker .icon { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--c); color: #1d1b19; font-size: 13px; }
+.marker .tip { display: none; }
+.marker .dist { display: none; color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.marker .x { border: 0; background: rgba(255, 255, 255, 0.1); color: var(--ink); border-radius: 50%; width: 20px; height: 20px; font-size: 11px; padding: 0; margin-left: 2px; }
+.marker.pin.flag { padding: 3px 4px 3px 3px; margin: -30px 0 0 -14px; }
+.marker.pin.flag .name { display: none; }
+.marker.pin.town { opacity: 0.85; font-size: 12px; }
+.marker.arrow { margin: 0; padding: 3px 8px 3px 3px; }
+.marker.arrow .name { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+.marker.arrow .dist { display: inline; }
+.marker.arrow .x { display: none; }
+.marker.arrow .tip { display: block; position: absolute; left: 0; top: 0; width: 0; height: 0; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 11px solid var(--c); margin: -7px 0 0 -5px; font-size: 0; transform-origin: 5px 7px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.layout-phone .marker.arrow .name { display: none; }
+.icon-btn.on { background: var(--gold); color: #1d1b19; }
+
+/* icons */
+.icon-svg { display: inline-block; vertical-align: -0.18em; flex: none; }
+.icon-btn { display: inline-grid; place-items: center; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.topbar .stat { display: inline-flex; align-items: center; gap: 4px; }
+.topbar .stat img { width: 22px; height: 22px; margin: -3px -2px; }
+.toast { display: flex; align-items: center; gap: 8px; }
+.alert .a-icon { display: grid; place-items: center; color: #f3d27a; }
+.alert.attacked .a-icon { color: #ff8a7a; }
+.alert .a-go { display: inline-flex; align-items: center; gap: 2px; }
+.badge.shield { display: inline-flex; align-items: center; gap: 3px; }
+.battle-actions .emote { display: grid; place-items: center; color: var(--ink); }
+.emote-pop { color: #fff6dc; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5)); }
+.build-fab { display: grid; place-items: center; color: #2b2622; }
+.marker .icon .icon-svg { vertical-align: 0; }
+.layout-phone .topbar .me { flex: none; }
+.layout-phone .topbar .me b { display: inline-block; min-width: 44px; max-width: 22vw; }
+.layout-phone .topbar .stats .bstat { display: none; }
+.layout-phone .topbar .stats .kstat { display: none; }
+.layout-phone .topbar .me b { max-width: 18vw; }
+.layout-phone .topbar { gap: 6px; padding-left: 10px; padding-right: 10px; }
+.layout-phone .topbar .top-actions { gap: 4px; flex: none; }
+.layout-phone .topbar .icon-btn { width: 38px; height: 38px; }
+.topbar .stats { min-width: 0; }
+.topbar .stat .muted { margin-left: -3px; }
+
+/* Inspect card and hover tag (wilds.md §6) */
+.inspect { position: absolute; left: 50%; transform: translateX(-50%); top: calc(64px + var(--safe-top)); width: min(360px, calc(100vw - 24px)); background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); animation: drop 0.2s ease-out; pointer-events: auto; z-index: 60; }
+.inspect .x { position: absolute; top: 8px; right: 8px; background: rgba(255, 255, 255, 0.08); border: 0; color: var(--ink); border-radius: 99px; width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer; }
+.inspect .head { display: flex; gap: 12px; align-items: center; padding-right: 28px; }
+.inspect .head img { width: 64px; height: 64px; flex: none; background: radial-gradient(circle at 50% 60%, rgba(255, 255, 255, 0.12), transparent 70%); border-radius: 12px; }
+.inspect .head b { display: block; font-size: 19px; line-height: 1.15; }
+.inspect .head span { display: block; font-size: 13px; opacity: 0.8; }
+.inspect .head .rating { font-weight: 800; opacity: 0.65; font-size: 12px; margin-top: 2px; }
+.inspect .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.inspect .badge.temper-horde { background: rgba(224, 80, 58, 0.25); color: #ffb2a4; }
+.inspect .badge.temper-lair { background: rgba(227, 178, 60, 0.22); color: #f3d27a; }
+.inspect .badge.temper-herd { background: rgba(149, 185, 87, 0.25); color: #cfe6a4; }
+.inspect .badge.rarity-uncommon { background: rgba(74, 127, 212, 0.28); color: #b8d0ff; text-transform: capitalize; }
+.inspect .badge.rarity-rare { background: rgba(142, 91, 209, 0.3); color: #dcc6ff; text-transform: capitalize; }
+.inspect .badge.rarity-legendary { background: rgba(240, 194, 74, 0.3); color: #ffe39a; text-transform: capitalize; }
+.inspect .lore { font-style: italic; opacity: 0.85; margin: 10px 0 4px; font-size: 13.5px; line-height: 1.4; }
+.inspect .temper, .inspect .note { font-size: 12.5px; opacity: 0.7; margin: 4px 0; line-height: 1.35; }
+.inspect .band { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 8px 0 4px; }
+.inspect .band span { display: flex; flex-direction: column; align-items: center; font-size: 11px; font-weight: 800; width: 52px; text-align: center; }
+.inspect .band img { width: 34px; height: 34px; }
+.inspect .band small { font-weight: 600; opacity: 0.7; font-size: 10px; line-height: 1.1; }
+.inspect .btn { width: 100%; margin-top: 8px; justify-content: center; }
+.hover-tag { position: fixed; left: 0; top: 0; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-size: 13px; font-weight: 800; white-space: nowrap; z-index: 40; }
+.board img.wild { filter: drop-shadow(0 0 2px var(--glow)) drop-shadow(0 0 5px var(--glow)); }
+.perf-overlay { position: absolute; left: 8px; bottom: calc(8px + var(--safe-bottom)); margin: 0; padding: 6px 8px; background: rgba(0, 0, 0, 0.72); color: #cfe6a4; font: 11px/1.4 ui-monospace, monospace; border-radius: 6px; pointer-events: none; z-index: 80; white-space: pre; }

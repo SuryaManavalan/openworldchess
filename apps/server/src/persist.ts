@@ -17,6 +17,10 @@ interface Snapshot {
   nodes: [number, NodeRec][];
   traffic: [number, number][];
   events?: [string, { at: number; kind: string; text: string }[]][];
+  /** Wild camp sites recently cleared (cell → until). */
+  cleared?: [string, number][];
+  /** When players were first near each camp cell. */
+  cellSeen?: [string, number][];
 }
 
 export function save(game: Game, file: string) {
@@ -27,8 +31,11 @@ export function save(game: Game, file: string) {
     pieces: [...w.pieces.values()],
     buildings: [...w.buildings.values()],
     nodes: [...w.nodeOverlay],
-    traffic: [...w.traffic],
+    // Roads show from 12 steps; single footprints are most of the map and not worth a save.
+    traffic: [...w.traffic].filter(([, t]) => t >= 3),
     events: [...game.events],
+    cleared: [...game.wilds.cleared],
+    cellSeen: [...game.wilds.cellSeen],
   };
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file + '.tmp', JSON.stringify(snap));
@@ -43,9 +50,15 @@ export function load(game: Game, file: string): boolean {
   w.nextId = snap.nextId;
   game.turn = snap.turn;
   for (const p of snap.players) { p.online = false; p.leftAt ??= Date.now(); game.players.set(p.id, p); game.tokens.set(p.token, p.id); }
-  for (const [k, n] of snap.nodes) w.nodeOverlay.set(k, n);
+  for (const [k, n] of snap.nodes) {
+    // "gold" was renamed "ore" (it looks different in each biome).
+    if ((n.kind as string) === 'gold') n.kind = 'ore';
+    w.nodeOverlay.set(k, n);
+  }
   for (const [k, t] of snap.traffic ?? []) w.traffic.set(k, t);
   for (const [pid, ev] of snap.events ?? []) game.events.set(pid, ev);
+  for (const [cell, until] of snap.cleared ?? []) game.wilds.cleared.set(cell, until);
+  for (const [cell, at] of snap.cellSeen ?? []) game.wilds.cellSeen.set(cell, at);
   for (const b of snap.buildings) w.addBuilding(b);
   for (const p of snap.pieces) {
     // Battles and marches in progress don't survive a restart.

@@ -36,6 +36,10 @@ export class Input {
     window.addEventListener('pointercancel', (e) => this.up(e, true));
     el.addEventListener('wheel', (e) => { e.preventDefault(); this.touched(); scene.zoomBy(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Any real gesture anywhere (buttons and sheets included) can start the sound.
+    const unlockAudio = () => audio.unlock().then(() => audio.setVolumes(useUI.getState().settings));
+    window.addEventListener('pointerdown', unlockAudio, true);
+    window.addEventListener('keydown', unlockAudio, true);
     window.addEventListener('keydown', (e) => this.key(e, true));
     window.addEventListener('keyup', (e) => this.key(e, false));
     scene.app.ticker.add(() => this.tick());
@@ -45,6 +49,11 @@ export class Input {
     this.scene.lastInput = Date.now();
     if (useUI.getState().watching) useUI.getState().set({ watching: false });
     audio.unlock().then(() => audio.setVolumes(useUI.getState().settings));
+  }
+
+  /** On touch, a command aims 80px above the finger so the thumb never hides the target (ux.md §3). */
+  private aim(p: Ptr): [number, number] {
+    return p.type === 'mouse' ? this.sq(p) : this.scene.toSquare(p.x, p.y - 80);
   }
 
   private sq(e: { offsetX: number; offsetY: number } | Ptr): [number, number] {
@@ -103,6 +112,8 @@ export class Input {
       if (e.pointerType === 'mouse') {
         const [sx, sy] = this.scene.toSquare(x, y);
         this.scene.hover = [Math.round(sx), Math.round(sy)];
+        const hp = this.scene.pickPiece(sx, sy, 0.6), hb = hp ? undefined : this.scene.pickBuilding(sx, sy);
+        this.scene.hoverInfo = hp || hb ? { piece: hp?.id, building: hb?.id, sx: e.clientX, sy: e.clientY } : null;
         if (useUI.getState().buildType) this.updateGhost([sx, sy]);
       }
       return;
@@ -138,7 +149,7 @@ export class Input {
       } else this.mode = under && sel.includes(under.id) ? 'command' : 'pan';
     }
     if (this.mode === 'pan') { this.panScreen(dx, dy); this.vel = { x: dx, y: dy }; }
-    else if (this.mode === 'command') this.previewCommand(this.sq(p));
+    else if (this.mode === 'command') this.previewCommand(this.aim(p));
     else if (this.mode === 'lasso') {
       const s = this.sq(p);
       const last = this.lassoPts[this.lassoPts.length - 1];
@@ -157,7 +168,7 @@ export class Input {
     const at = this.sq(p);
     if (cancelled) { this.reset(); return; }
     switch (this.mode) {
-      case 'command': this.finishCommand(at); break;
+      case 'command': this.finishCommand(this.aim(p)); break;
       case 'lasso': this.finishLasso(); break;
       case 'box': this.finishBox(); break;
       case 'ghost':
@@ -203,6 +214,7 @@ export class Input {
 
   private tap(at: [number, number], type: string) {
     const ui = useUI.getState(), sc = this.scene;
+    if (ui.flagMode) { ui.addFlag(at[0], at[1]); sc.fx.ripple(Math.round(at[0]), Math.round(at[1]), 0xe3b23c); haptic(15); return; }
     const now = performance.now();
     const dbl = now - this.lastTap.t < 320 && Math.hypot(at[0] - this.lastTap.x, at[1] - this.lastTap.y) < 1.2;
     this.lastTap = { t: now, x: at[0], y: at[1] };
@@ -220,13 +232,17 @@ export class Input {
     if (arena) { useUI.getState().set({ battleFocus: arena.id }); return; }
     const other = sc.pickPiece(at[0], at[1], 0.75);
     if (other && ui.selection.length && type !== 'mouse') { this.issue(at, other); return; }
-    if (other) { const pl = other.owner ? mirror.players.get(other.owner) : null; ui.toast(pl ? `${pl.name} · ${pl.rating}` : 'Masterless'); return; }
+    // Someone else's piece or camp: show what it is (ux.md §3).
+    if (other) { ui.set({ inspect: { piece: other.id } }); haptic(8); return; }
     const b = sc.pickBuilding(at[0], at[1]);
     if (b && b.owner === mirror.me && !ui.selection.length) { ui.set({ sheet: 'details', selection: [] }); useUI.getState().set({ hint: `building:${b.id}` }); return; }
+    if (b && b.owner !== mirror.me && (!ui.selection.length || type === 'mouse')) { ui.set({ inspect: { building: b.id } }); return; }
+    if (ui.inspect) ui.set({ inspect: null });
     if (ui.selection.length) {
       if (type === 'mouse') { ui.select([]); return; }
       // Two-step command for touch: tap the ground to place, then confirm (ux.md §3).
       this.pendingMove = [Math.round(at[0]), Math.round(at[1])];
+      sc.pendingMarker = this.pendingMove;
       sc.pathPreview = null;
       ui.bump();
       return;
@@ -235,7 +251,9 @@ export class Input {
 
   private longPress(at: [number, number]) {
     const mine = this.myPiece(at[0], at[1]);
-    if (mine) { this.selectWithSound(this.groupOf(mine)); haptic(); }
+    if (mine) { this.selectWithSound(this.groupOf(mine)); haptic(); return; }
+    // Long-press empty ground: drop a flag there.
+    if (!this.scene.pickPiece(at[0], at[1], 0.75) && !this.scene.pickBuilding(at[0], at[1])) { useUI.getState().addFlag(at[0], at[1]); this.scene.fx.ripple(Math.round(at[0]), Math.round(at[1]), 0xe3b23c); haptic(20); useUI.getState().toast('Flag placed'); }
   }
 
   private rightClick(at: [number, number]) {
@@ -283,7 +301,10 @@ export class Input {
     this.scene.fx.ripple(to[0], to[1], 0xffffff);
     audio.commit(); haptic();
     this.pendingMove = null;
-    commands.move(sel, to).then((err) => { if (err) audio.error(); });
+    this.scene.pendingMarker = null;
+    const key = sel.slice().sort((a, b) => a - b).join(',');
+    this.scene.moveTargets.set(key, { to, ids: sel, attack: false, t0: performance.now() });
+    commands.move(sel, to).then((err) => { if (err) { audio.error(); this.scene.moveTargets.delete(key); } });
   }
 
   private selectWithSound(ids: number[]) {
@@ -293,7 +314,8 @@ export class Input {
 
   private finishLasso() {
     const pts = this.lassoPts;
-    if (pts.length < 3) return;
+    // Held without drawing: that's a long-press.
+    if (pts.length < 3) { if (pts[0]) this.longPress(pts[0]); return; }
     const inside = (x: number, y: number) => {
       let c = false;
       for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -355,6 +377,7 @@ export class Input {
     else if (k === 'Escape') { if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else ui.select([]); }
     else if (k === 's' && !e.ctrlKey) { if (ui.selection.length) commands.stop(ui.selection); }
     else if (k === 'b') ui.set({ sheet: ui.sheet === 'build' ? null : 'build' });
+    else if (k === 'f' && this.scene.hover) { ui.addFlag(this.scene.hover[0], this.scene.hover[1]); this.scene.fx.ripple(this.scene.hover[0], this.scene.hover[1], 0xe3b23c); }
     else if (k === 'h' || k === 'Home') { const emp = mirror.myPieces().find((p) => p.emperor); if (emp) sc.centerOn(emp.x, emp.y); }
     else if (k === '+' || k === '=') sc.zoomBy(1.15);
     else if (k === '-') sc.zoomBy(1 / 1.15);

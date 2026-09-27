@@ -1,15 +1,17 @@
 // The authoritative game: players, orders, world turns and the economy.
 import {
-  BUILDINGS, BUILD_SPACING, CLAIM_RANGE, ENGAGE_RANGE, HOUSE_POP, KING_POP, HOUSES_PER_KING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
+  BUILDINGS, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, ENGAGE_RANGE, HOUSE_POP, KING_POP, HOUSES_PER_KING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
   BUILDINGS_PER_KING, PLAYER_BUILDING_CAP, RUIN_LIFETIME_MS, MASTERLESS_MS, REACH, SPAWN_SHIELD_MS, TEAM_COLORS,
   ANCHOR_GRACE_MS, DECAY_EVERY_MS, BUILDING_MAX_HP, WORK_AREA, cheb, distToRect, isLight,
   type Building, type BuildingType, type Facing, type NodeKind, type Piece, type PieceKind, type PlayerPublic, type PlayerSelf, type TurnMove,
 } from '@owc/shared';
-import { findPath, newGroup, stepGroup, bestGaitMove, productionMs, richness, type GroupState } from '@owc/rules';
+import { findPath, findPathLong, newGroup, stepGroup, bestGaitMove, productionMs, richness, type GroupState } from '@owc/rules';
 import { randomBytes } from 'node:crypto';
 import { World } from './world.ts';
 import { Battles } from './battles.ts';
 import { Routines } from './routines.ts';
+import { Wilds, type CampInfo } from './wilds.ts';
+import { perf } from './perf.ts';
 
 export interface PlayerRec {
   id: string;
@@ -32,6 +34,8 @@ export interface PlayerRec {
   createdAt: number;
   lastSeen: number;
   online: boolean;
+  /** A camp of the wilds (an NPC owner), not a person. */
+  wild?: CampInfo;
 }
 
 export interface GroupRec {
@@ -39,12 +43,23 @@ export interface GroupRec {
   owner: string;
   kingId?: number;
   attack?: { targetKingId: number; lastRepath: number };
+  /** When the group last re-planned around a blockage (in its own turns). */
+  repathAt?: number;
+  /** Where the group was ordered to (long routes are planned in legs). */
+  target?: [number, number];
+  /** Pieces that were outside every king's reach when ordered: they may walk home through open country. */
+  strays?: Set<number>;
+  /** Consecutive legs that didn't get closer (8 in a row: the target is unreachable). */
+  legs?: number;
+  legFrom?: number;
 }
 
 export interface GameOptions {
   seed: number;
   /** Multiplies economy speed (production, construction) for development. */
   speed: number;
+  /** Camps of creatures in the wilds (on unless turned off, e.g. in tests). */
+  wilds?: boolean;
 }
 
 export type Alert = { kind: 'attacked' | 'battle-soon' | 'decay' | 'emperor-lost' | 'respawned' | 'info'; text: string; battleId?: number; at?: [number, number] };
@@ -58,6 +73,7 @@ export class Game {
   kingsByOwner = new Map<string, Set<number>>();
   battles: Battles;
   routines: Routines;
+  wilds: Wilds;
   turn = 0;
   speed: number;
   /** New-player shield length (progression.md §4). */
@@ -75,6 +91,15 @@ export class Game {
     this.events.set(player, list);
   }
   onPlayers: () => void = () => {};
+  /**
+   * Chunks people (not bots) are looking at, set by the network layer. Detail that
+   * only matters to the eye (idle life, tidy formations) is simulated only there
+   * (performance.md §5). Unset (tests): everywhere counts as watched.
+   */
+  viewed: (() => Set<string>) | null = null;
+  /** This turn's viewed set (null = everything). */
+  watchedNow: Set<string> | null = null;
+  watched(x: number, y: number) { return !this.watchedNow || this.watchedNow.has(chunkKey(Math.floor(x / CHUNK), Math.floor(y / CHUNK))); }
   private lastEconomy = Date.now();
 
   constructor(opts: GameOptions) {
@@ -82,6 +107,8 @@ export class Game {
     this.speed = opts.speed;
     this.battles = new Battles(this);
     this.routines = new Routines(this);
+    this.wilds = new Wilds(this);
+    this.wilds.enabled = opts.wilds ?? true;
   }
 
   // ---------- ownership indexes ----------
@@ -139,7 +166,13 @@ export class Game {
 
   /** The one reach rule (economy.md §2): is (x, y) within reach of one of owner's kings? */
   inReach(owner: string, x: number, y: number, slack = 0): boolean {
-    for (const k of this.kingsOf(owner)) if (cheb(k.x, k.y, x, y) <= REACH + slack) return true;
+    // Hot path (every candidate step of every group): no allocation.
+    const s = this.kingsByOwner.get(owner);
+    if (!s) return false;
+    for (const id of s) {
+      const k = this.world.pieces.get(id);
+      if (k && k.state !== 'battle' && cheb(k.x, k.y, x, y) <= REACH + slack) return true;
+    }
     return false;
   }
 
@@ -152,7 +185,7 @@ export class Game {
   // ---------- players ----------
 
   publicPlayer(p: PlayerRec): PlayerPublic {
-    return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), online: p.online };
+    return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), online: p.online, wild: p.wild?.faction };
   }
   selfPlayer(p: PlayerRec): PlayerSelf {
     return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home };
@@ -252,7 +285,8 @@ export class Game {
 
   private orderable(player: string, ids: number[]): Piece[] {
     return ids.map((id) => this.world.pieces.get(id)!).filter((p) =>
-      p && p.owner === player && (p.state === 'idle' || p.state === 'moving') && !this.battles.frozen(p));
+      // Routed pieces (outside every king's reach) can be ordered too: you can always bring them home.
+      p && p.owner === player && (p.state === 'idle' || p.state === 'moving' || p.state === 'routed') && !this.battles.frozen(p));
   }
 
   leaveGroup(p: Piece) {
@@ -280,10 +314,13 @@ export class Game {
     }
     for (const p of pieces) if (p.groupId) this.leaveGroup(p);
     const leader = king ?? pieces.reduce((a, b) => (cheb(a.x, a.y, tx, ty) <= cheb(b.x, b.y, tx, ty) ? a : b));
-    const path = findPath(leader.x, leader.y, tx, ty, (x, y) => this.world.walkable(x, y));
+    const endPath = perf.start('path.order');
+    const path = findPathLong(leader.x, leader.y, tx, ty, (x, y) => this.world.walkable(x, y), 40000, this.players.get(player)?.isBot || this.players.get(player)?.wild ? 80 : 250);
+    endPath();
     const gid = this.world.id();
     const state = newGroup(gid, pieces, path, [leader.x, leader.y]);
-    this.groups.set(gid, { state, owner: player, kingId: king?.id, attack: attack != null ? { targetKingId: attack, lastRepath: this.turn } : undefined });
+    const strays = king ? undefined : new Set(pieces.filter((p) => !this.inReach(player, p.x, p.y, 1)).map((p) => p.id));
+    this.groups.set(gid, { state, owner: player, kingId: king?.id, attack: attack != null ? { targetKingId: attack, lastRepath: this.turn } : undefined, target: [tx, ty], legs: 0, strays: strays?.size ? strays : undefined });
     for (const p of pieces) { p.groupId = gid; p.state = 'moving'; p.routine = undefined; this.world.touch(p); }
     return null;
   }
@@ -337,7 +374,7 @@ export class Game {
     for (let dy = 0; dy < size; dy++)
       for (let dx = 0; dx < size; dx++) {
         const sx = x + dx, sy = y + dy;
-        if (!w.buildable(sx, sy)) return 'Can only build on grass or sand';
+        if (!w.buildable(sx, sy)) return w.terrain(sx, sy) === 'water' ? "Can't build on water" : "Can't build on mountains";
         if (w.buildingIdAt(sx, sy) != null || w.sealed.has(sx * 134217728 + sy)) return 'Something is already there';
         const n = w.nodeAt(sx, sy);
         if (n && n.remaining > 0 && n.kind !== 'wheat') return 'Clear the resources first';
@@ -397,6 +434,10 @@ export class Game {
     const record = (p: Piece, fx: number, fy: number) => this.turnMoves.push([p.id, fx, fy, p.x, p.y, p.facing]);
 
     // Groups, in id order (movement.md §1).
+    this.watchedNow = this.viewed?.() ?? null;
+    let endPhase = perf.start('turn.groups');
+    // Long-route planning inside a turn shares one time budget; the rest waits a turn.
+    let legMs = 60;
     for (const [gid, g] of [...this.groups].sort((a, b) => a[0] - b[0])) {
       const pieces = [...w.pieces.values()].filter((p) => p.groupId === gid && p.state === 'moving');
       if (!pieces.length) { this.groups.delete(gid); continue; }
@@ -418,44 +459,118 @@ export class Game {
           g.attack.lastRepath = this.turn;
         }
       }
+      // Idle pieces of the owner standing in the way step aside (swap places).
+      const yields = (mover: Piece, x: number, y: number) => {
+        const qid = w.pieceIdAt(x, y);
+        if (qid == null || qid === mover.id || cheb(mover.x, mover.y, x, y) > 2) return null;
+        const q = w.pieces.get(qid);
+        if (!q || q.owner !== mover.owner || q.state === 'battle') return null;
+        // Only idle, ungrouped pieces step aside. (Swapping groupmates made them
+        // shuffle each other off their slots forever.)
+        return !q.groupId && q.state === 'idle' ? q : null;
+      };
       stepGroup(g.state, pieces, {
-        free: (p, x, y) => w.free(x, y, p.id) && (p.kind === 'K' || this.inReach(g.owner, x, y, 1)),
+        free: (gp, x, y) => {
+          const p = gp as unknown as Piece;
+          // Without a king, pieces stay within reach, except one already outside it, which may walk home.
+          if (!(p.kind === 'K' || g.strays?.has(p.id) || this.inReach(g.owner, x, y, 1))) return false;
+          return w.free(x, y, p.id) || (w.walkable(x, y) && !!yields(p, x, y));
+        },
+        walkable: (x, y) => w.walkable(x, y),
+        lite: !pieces.some((p) => this.watched(p.x, p.y)),
       }, (gp, m) => {
         const p = gp as unknown as Piece;
         const fx = p.x, fy = p.y;
         p.facing = m.facing;
-        if (!m.turn) w.movePiece(p, m.x, m.y); else w.touch(p);
+        if (!m.turn) {
+          const q = yields(p, m.x, m.y);
+          w.movePiece(p, m.x, m.y);
+          if (q) { const qx = q.x, qy = q.y; w.movePiece(q, fx, fy); record(q, qx, qy); }
+        } else w.touch(p);
         record(p, fx, fy);
       });
+      // A stray's walk home that's hopelessly stuck just ends (it drifts, and may try again later).
+      if (g.strays && !g.kingId && pieces.every((p) => (g.state.stuck[p.id] ?? 0) >= 8)) {
+        for (const p of pieces) { p.groupId = undefined; p.state = 'idle'; w.touch(p); }
+        this.groups.delete(gid);
+        continue;
+      }
+      // A stalled group re-plans its route around whatever is blocking it.
+      const stalled = pieces.filter((p) => (g.state.stuck[p.id] ?? 0) >= 2).length;
+      if (stalled >= Math.max(1, pieces.length / 2) && g.state.pathIdx < g.state.path.length && g.state.turns - (g.repathAt ?? 0) > 8) {
+        g.repathAt = g.state.turns;
+        const end = g.state.path.at(-1)!;
+        const around = findPath(g.state.lead[0], g.state.lead[1], end[0], end[1], (x, y) => {
+          if (!w.walkable(x, y)) return false;
+          const id = w.pieceIdAt(x, y);
+          return id == null || w.pieces.get(id)?.groupId === gid || cheb(x, y, g.state.lead[0], g.state.lead[1]) > 20;
+        });
+        if (around.length) { g.state.path = [...g.state.path.slice(0, g.state.pathIdx), ...around]; }
+      }
+      // Long routes are planned in legs: at the end of a partial path, plan the next one.
+      const goal = g.attack ? (() => { const t = w.pieces.get(g.attack!.targetKingId); return t ? [t.x, t.y] as [number, number] : g.target; })() : g.target;
+      const left = goal ? cheb(g.state.lead[0], g.state.lead[1], goal[0], goal[1]) : 0;
+      if (goal && g.state.pathIdx >= g.state.path.length && left > 2 && (g.legs ?? 0) < 8 && legMs > 5) {
+        // A leg that got us closer resets the count; repeated dead ends give up.
+        g.legs = g.legFrom != null && left < g.legFrom - 4 ? 0 : (g.legs ?? 0) + 1;
+        g.legFrom = left;
+        const t0 = performance.now();
+        const leg = findPathLong(g.state.lead[0], g.state.lead[1], goal[0], goal[1], (x, y) => w.walkable(x, y), 40000, Math.min(60, legMs));
+        legMs -= performance.now() - t0;
+        if (leg.length) { g.state.path = [...g.state.path, ...leg]; g.state.done = false; }
+      }
       if (g.state.done) {
         for (const p of pieces) { p.groupId = undefined; p.state = 'idle'; w.touch(p); }
         this.groups.delete(gid);
       }
     }
 
+    endPhase();
+    endPhase = perf.start('turn.drift');
     // Pieces outside every king's reach drift toward the nearest king (movement.md §4).
+    this.strayRoutes = 2;
+    if (this.strayRoutedAt.size > 5000) this.strayRoutedAt.clear();
     if (this.turn % 2 === 0)
       for (const p of w.pieces.values()) {
         if (!p.owner || p.groupId || (p.state !== 'idle' && p.state !== 'routed')) continue;
+        // Off-screen strays take their time (every 6th turn instead of every 2nd).
+        if (p.state === 'routed' && this.turn % 6 !== 0 && !this.watched(p.x, p.y)) continue;
+        // Merchants on a trade run travel as caravans between towns.
+        if (p.routine === 'merchant' || p.routine === 'merchant:back' || p.routine === 'trade') continue;
         if (p.kind === 'K') { if (p.state === 'routed') { p.state = 'idle'; w.touch(p); } continue; }
-        if (this.inReach(p.owner, p.x, p.y)) { if (p.state === 'routed') { p.state = 'idle'; w.touch(p); } continue; }
+        if (this.inReach(p.owner, p.x, p.y)) { if (p.state === 'routed') { p.state = 'idle'; w.touch(p); this.driftStuck.delete(p.id); } continue; }
         const k = this.nearestKing(p.owner, p.x, p.y);
-        if (!k) { this.makeMasterless(p); continue; }
+        // Creatures without a king just melt back into the wild.
+        if (!k) { if (p.wild) this.removePiece(p.id); else this.makeMasterless(p); continue; }
         if (p.state !== 'routed') { p.state = 'routed'; w.touch(p); }
         const m = bestGaitMove(p, k.x, k.y, (x, y) => w.free(x, y, p.id), 120, 10);
+        const before = cheb(p.x, p.y, k.x, k.y);
         if (m) {
           const fx = p.x, fy = p.y;
           p.facing = m.facing;
           if (!m.turn) w.movePiece(p, m.x, m.y); else w.touch(p);
           record(p, fx, fy);
         }
+        // A greedy step can't get around a wood or a lake: after a few turns without
+        // getting closer, walk home along a real path instead.
+        const stuck = cheb(p.x, p.y, k.x, k.y) >= before ? (this.driftStuck.get(p.id) ?? 0) + 1 : 0;
+        this.driftStuck.set(p.id, stuck);
+        // Route planning is costly: a few strays a turn, and each at most once a minute.
+        if (stuck >= 3 && this.strayRoutes > 0 && this.turn - (this.strayRoutedAt.get(p.id) ?? -1e9) > 100) {
+          this.strayRoutes--;
+          this.driftStuck.delete(p.id);
+          this.strayRoutedAt.set(p.id, this.turn);
+          this.orderMove(p.owner, [p.id], [k.x, k.y]);
+        }
       }
 
+    endPhase();
     // Kings claim masterless pieces and buildings nearby (progression.md §3).
-    if (this.turn % 5 === 0) this.claims();
+    if (this.turn % 5 === 0) perf.time('turn.claims', () => this.claims());
 
-    // Idle life in settlements (visuals.md §2).
-    this.routines.step(record);
+    // Idle life in settlements (visuals.md §2), and in the wilds' camps.
+    perf.time('turn.routines', () => this.routines.step(record));
+    perf.time('turn.wilds', () => this.wilds.step(record));
   }
 
   /**
@@ -478,8 +593,8 @@ export class Game {
   }
 
   makeMasterless(p: Piece) {
-    // Starting-kit pieces never change hands (anti-farming, safeguards.md §5).
-    if (p.kit) { this.removePiece(p.id); return; }
+    // Starting-kit pieces never change hands (anti-farming, safeguards.md §5), nor do creatures.
+    if (p.kit || p.wild) { this.removePiece(p.id); return; }
     this.setOwner(p, null);
     p.state = 'masterless';
     p.expiresAt = this.now + MASTERLESS_MS;
@@ -509,6 +624,7 @@ export class Game {
     w.regrowNodes(now, dt);
     // Each node supplies one production at a time: buildings drawing from the same
     // node split its rate, so crowding one field gains nothing (safeguards.md §3).
+    perf.time('wilds.tick', () => this.wilds.tick(now));
     this.nodeUsers = new Map();
     for (const b of w.buildings.values())
       if (b.owner && b.type !== 'ruin' && b.built >= 1 && !b.blocked && b.drawsFrom)
@@ -526,6 +642,7 @@ export class Game {
     };
 
     for (const b of [...w.buildings.values()]) {
+      if (b.type === 'camp') continue;
       if (b.type === 'ruin') {
         b.ruinedAt ??= now;
         if (now - b.ruinedAt > RUIN_LIFETIME_MS) w.removeBuilding(b.id);
@@ -559,6 +676,10 @@ export class Game {
   }
 
   private nodeUsers = new Map<number, number>();
+  /** Drifting pieces that haven't gotten closer to their king, in drift steps. */
+  private driftStuck = new Map<number, number>();
+  private strayRoutedAt = new Map<number, number>();
+  private strayRoutes = 0;
 
   private produce(b: Building, dt: number, pop: { count: number; cap: number }) {
     const spec = BUILDINGS[b.type as BuildingType];

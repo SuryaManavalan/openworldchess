@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { BuildingType } from '@owc/shared';
 
 export interface AlertItem { id: number; kind: string; text: string; battleId?: number; at?: [number, number]; time: number }
-export interface Toast { id: number; text: string; tone: 'info' | 'error' | 'good' }
+export interface Toast { id: number; text: string; tone: 'info' | 'error' | 'good'; icon?: string }
 
 export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help';
 
@@ -28,6 +28,8 @@ interface UIState {
   toasts: Toast[];
   battleFocus: number | null;
   pendingAttack: { pieceIds: number[]; targetKingId: number; name: string; siege: boolean } | null;
+  /** Something that isn't yours, being looked at (Inspect card). */
+  inspect: { piece?: number; building?: number } | null;
   layout: 'phone' | 'desktop';
   settings: Settings;
   hint: string | null;
@@ -37,10 +39,14 @@ interface UIState {
   nameError: string | null;
   welcomeNote: string | null;
   googleEnabled: boolean;
+  flags: { id: number; x: number; y: number; color: string }[];
+  flagMode: boolean;
+  addFlag: (x: number, y: number) => void;
+  removeFlag: (id: number) => void;
   bump: () => void;
   set: (p: Partial<UIState>) => void;
   select: (ids: number[]) => void;
-  toast: (text: string, tone?: Toast['tone']) => void;
+  toast: (text: string, tone?: Toast['tone'], icon?: string) => void;
   alert: (a: Omit<AlertItem, 'id' | 'time'>) => void;
   dismissAlert: (id: number) => void;
   setSettings: (p: Partial<Settings>) => void;
@@ -57,6 +63,7 @@ export const useUI = create<UIState>((set, get) => ({
   status: 'connecting',
   version: 0,
   selection: [],
+  inspect: null,
   sheet: null,
   buildType: null,
   ghost: null,
@@ -73,12 +80,25 @@ export const useUI = create<UIState>((set, get) => ({
   nameError: null,
   welcomeNote: null,
   googleEnabled: false,
+  flags: (() => { try { return JSON.parse(localStorage.getItem('owc.flags') ?? '[]'); } catch { return []; } })(),
+  flagMode: false,
+  addFlag: (x, y) => {
+    const colors = ['#e0503a', '#e3b23c', '#4a7fd4', '#95b957', '#c7508f', '#46a6c9'];
+    const flags = [...get().flags, { id: Date.now(), x: Math.round(x), y: Math.round(y), color: colors[get().flags.length % colors.length] }].slice(-12);
+    try { localStorage.setItem('owc.flags', JSON.stringify(flags)); } catch { /* ignore */ }
+    set({ flags, flagMode: false });
+  },
+  removeFlag: (id) => {
+    const flags = get().flags.filter((f) => f.id !== id);
+    try { localStorage.setItem('owc.flags', JSON.stringify(flags)); } catch { /* ignore */ }
+    set({ flags });
+  },
   bump: () => set({ version: get().version + 1 }),
   set: (p) => set(p),
   select: (ids) => set({ selection: ids }),
-  toast: (text, tone = 'info') => {
+  toast: (text, tone = 'info', icon) => {
     const id = nextId++;
-    set({ toasts: [...get().toasts, { id, text, tone }].slice(-3) });
+    set({ toasts: [...get().toasts, { id, text, tone, icon }].slice(-3) });
     setTimeout(() => set({ toasts: get().toasts.filter((t) => t.id !== id) }), 3200);
   },
   alert: (a) => {

@@ -7,6 +7,7 @@ import {
   type BattlePublic, type BattleSummary, type Building, type NodeState, type Piece, type ServerMsg, type TurnMove,
 } from '@owc/shared';
 import type { Alert, Game, PlayerRec } from './game.ts';
+import { perf } from './perf.ts';
 
 interface Session {
   ws: WebSocket;
@@ -25,6 +26,7 @@ const inSubs = (s: Session, x: number, y: number) => s.subs.has(chunkKey(...chun
 
 export class Net {
   game: Game;
+  private lastType = '';
   sessions = new Set<Session>();
   private newAccounts = new Map<string, number[]>();
   private renamedAt = new Map<string, number>();
@@ -39,6 +41,9 @@ export class Net {
     wss.on('connection', (ws: WebSocket, req: IncomingMessage) => this.connect(ws, req));
     game.onAlert = (pid, a) => { game.logEvent(pid, a.kind, a.text); this.alert(pid, a); };
     game.onPlayers = () => this.broadcastPlayers();
+    // Camps of the wilds are only simulated where people are looking (bots don't count).
+    game.wilds.viewed = () => this.viewedChunks();
+    game.viewed = () => this.viewedChunks();
     game.battles.onUpdate = (b) => this.broadcast({ t: 'battle', battle: b });
     game.battles.onEnd = (b, s, involved) => this.battleEnd(b, s, involved);
   }
@@ -58,7 +63,7 @@ export class Net {
     const ip = fwd || req.socket.remoteAddress || '?';
     const s: Session = { ws, ip, subs: new Set(), watching: new Set(), lastMsg: Date.now(), bucket: 40, lastSub: 0, pathBudget: 8, lastPath: Date.now() };
     this.sessions.add(s);
-    ws.on('message', (data) => this.onMessage(s, data.toString()));
+    ws.on('message', (data) => { const end = perf.start('msg'); this.lastType = ''; this.onMessage(s, data.toString()); const t = this.lastType; const ms = end(); perf.add(`msg.${t ?? '?'}${s.player?.isBot ? '.bot' : ''}`, ms); });
     ws.on('close', () => {
       this.sessions.delete(s);
       if (s.player && ![...this.sessions].some((o) => o.player === s.player)) {
@@ -86,6 +91,7 @@ export class Net {
     } catch { return this.send(s, { t: 'err', msg: 'Bad JSON' }); }
 
     const g = this.game;
+    this.lastType = msg.t;
     if (msg.t === 'hello') {
       if (msg.v !== PROTOCOL_VERSION) { s.ws.close(4001, 'upgrade-required'); return; }
       // New accounts per address are limited (safeguards.md §5); local bots are exempt.
@@ -143,9 +149,11 @@ export class Net {
     }
   }
 
-  /** Pathfinding costs CPU: each session gets ~4 orders a second, bursts of 8. */
+  /** Pathfinding costs CPU: each session gets ~2 orders a second, bursts of 6. */
   private spendPath(s: Session, now: number) {
-    s.pathBudget = Math.min(8, s.pathBudget + ((now - s.lastPath) / 1000) * 4);
+    // Bots get less: they're many, and never in a hurry.
+    const rate = s.player?.isBot ? 0.5 : 2, burst = s.player?.isBot ? 2 : 6;
+    s.pathBudget = Math.min(burst, s.pathBudget + ((now - s.lastPath) / 1000) * rate);
     s.lastPath = now;
     if (s.pathBudget < 1) return false;
     s.pathBudget--;
@@ -178,20 +186,30 @@ export class Net {
   flushTurn(moves: TurnMove[]) {
     const w = this.game.world;
     const pieces: Piece[] = [...w.dirtyPieces].map((id) => w.pieces.get(id)!).filter(Boolean);
+    // Pieces that only walked: a move event is enough for people who see the move;
+    // bots, and anyone who didn't get the event, get the piece itself (performance.md §6).
+    const walked: Piece[] = [...w.movedPieces].filter((id) => !w.dirtyPieces.has(id)).map((id) => w.pieces.get(id)!).filter(Boolean);
+    const moveOf = new Map(moves.map((m) => [m[0], m]));
     const removed = [...w.removedPieces];
     const buildings: Building[] = [...w.dirtyBuildings].map((id) => w.buildings.get(id)!).filter(Boolean);
     const removedB = [...w.removedBuildings];
     const nodes: NodeState[] = [...w.dirtyNodes].map((k) => w.nodeRecByKey(k)!).filter(Boolean)
       .map(({ x, y, kind, capacity, remaining, gone }) => ({ x, y, kind, capacity, remaining: gone ? -1 : remaining }));
-    w.dirtyPieces.clear(); w.removedPieces.clear(); w.dirtyBuildings.clear(); w.removedBuildings.clear(); w.dirtyNodes.clear();
+    w.dirtyPieces.clear(); w.movedPieces.clear(); w.removedPieces.clear(); w.dirtyBuildings.clear(); w.removedBuildings.clear(); w.dirtyNodes.clear();
     const at = this.nextTurnAt - this.turnMs;
     for (const s of this.sessions) {
       if (!s.player) continue;
-      const mine = s.player.id;
+      const mine = s.player.id, bot = s.player.isBot;
+      const seen = (p: Piece) => p.owner === mine || inSubs(s, p.x, p.y);
+      // The client already knew the piece (it started in view) and gets this move: nothing else to send.
+      const gotMove = (p: Piece) => { const m = moveOf.get(p.id); return !!m && m[3] === p.x && m[4] === p.y && inSubs(s, m[1], m[2]); };
+      const out = pieces.filter(seen);
+      for (const p of walked) if (seen(p) && (bot || !gotMove(p))) out.push(p);
       this.send(s, {
         t: 'turn', n: this.game.turn, at,
-        moves: moves.filter((m) => inSubs(s, m[1], m[2]) || inSubs(s, m[3], m[4])),
-        pieces: pieces.filter((p) => p.owner === mine || inSubs(s, p.x, p.y)),
+        // Bots don't draw: they get piece states, not the per-turn moves for animation.
+        moves: bot ? [] : moves.filter((m) => inSubs(s, m[1], m[2]) || inSubs(s, m[3], m[4])),
+        pieces: out,
         removed,
         buildings: buildings.filter((b) => b.owner === mine || inSubs(s, b.x, b.y)),
         removedBuildings: removedB,
@@ -199,6 +217,9 @@ export class Net {
       });
     }
   }
+
+  /** Chunks people (not bots) are looking at. */
+  viewedChunks() { const out = new Set<string>(); for (const s of this.sessions) if (s.player && !s.player.isBot) for (const k of s.subs) out.add(k); return out; }
 
   /** Chunks someone is looking at (kept in memory). */
   watchedChunks() { const out = new Set<string>(); for (const s of this.sessions) for (const k of s.subs) out.add(k); return out; }
@@ -212,17 +233,22 @@ export class Net {
 
   sendAllMine() { for (const s of this.sessions) this.sendMine(s); }
 
+  /** The small, often-changing part (population cap, shield): people only, bots read it from resyncs. */
+  sendAllSelf() { for (const s of this.sessions) if (s.player && !s.player.isBot) this.send(s, { t: 'self', self: this.game.selfPlayer(s.player) }); }
+
   private alert(pid: string, a: Alert) {
     for (const s of this.sessions) if (s.player?.id === pid) this.send(s, { t: 'alert', ...a });
   }
 
   private broadcastPlayers() {
-    const players = [...this.game.players.values()].map((p) => this.game.publicPlayer(p));
+    // Sleeping camps are only a record on the server: clients don't need them.
+    const players = [...this.game.players.values()].filter((p) => !p.wild || p.wild.awake !== false).map((p) => this.game.publicPlayer(p));
     this.broadcast({ t: 'players', players });
   }
 
   private battleEnd(b: BattlePublic, summary: BattleSummary, _involved: string[]) {
     this.broadcast({ t: 'battle.end', battleId: b.id, result: b.result ?? 'draw', termination: b.termination ?? '', summary });
-    this.sendAllMine();
+    // Only the people involved need a fresh copy of their holdings.
+    for (const s of this.sessions) if (s.player && _involved.includes(s.player.id)) this.sendMine(s);
   }
 }

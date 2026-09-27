@@ -10,15 +10,20 @@ import { buildingUrl, pieceUrl } from '../game/textures.ts';
 import { audio } from '../audio/audio.ts';
 import { BattleView } from './BattleView.tsx';
 import { AwayReport, Guide, SignIn, SignInNudge, Welcome } from './Onboarding.tsx';
+import { Inspect, HoverTag } from './Inspect.tsx';
+import { PerfOverlay, perfOn } from './PerfOverlay.tsx';
+import { Markers } from './Markers.tsx';
+import { Icon, type IconName } from './Icon.tsx';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
-const NODE_NAME: Record<string, string> = { tree: 'wood', rock: 'stone', gold: 'gold', wheat: 'wheat' };
+const NODE_NAME: Record<string, string> = { tree: 'wood', rock: 'stone', ore: 'ore', wheat: 'wheat' };
 
 export function HUD() {
   const ui = useUI();
   const battle = ui.battleFocus != null ? mirror.battles.get(ui.battleFocus) : undefined;
   return (
     <div className={`hud layout-${ui.layout}`}>
+      <Markers />
       <TopBar />
       <Alerts />
       <Guide />
@@ -26,6 +31,9 @@ export function HUD() {
       {ui.layout === 'desktop' && <SidePanel />}
       <BottomDock />
       <Sheet />
+      {perfOn && <PerfOverlay />}
+      <Inspect />
+      {ui.layout === 'desktop' && <HoverTag />}
       {ui.pendingAttack && <AttackConfirm />}
       {battle && <BattleView battle={battle} />}
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
@@ -51,18 +59,19 @@ function TopBar() {
         <b>{self?.name ?? '…'}</b>
         <span className="muted">{self?.rating ?? ''}</span>
         {self?.guest && <button className="badge guest" onClick={() => window.dispatchEvent(new Event('owc:signin'))}>{ui.layout === 'phone' ? 'Sign in' : 'Guest · sign in'}</button>}
-        {shielded && <span className="badge shield" title="New players can't be attacked for a while">{ui.layout === 'phone' ? '🛡' : '🛡 shielded'}</span>}
+        {shielded && <span className="badge shield" title="New players can't be attacked for a while"><Icon name="shield" size={13} />{ui.layout === 'phone' ? '' : ' shielded'}</span>}
       </div>
       <div className="stats">
-        <span title="Pieces / population cap">♟ {pieces.length}{self?.popCap ? <span className="muted">/{self.popCap}</span> : null}</span>
-        <span title="Kings">♚ {pieces.filter((p) => p.kind === 'K').length}</span>
-        <span title="Buildings">⌂ {mirror.myBuildings().filter((b) => b.type !== 'ruin').length}</span>
+        <span className="stat" title="Pieces / population cap"><img src={pieceUrl('P', 'light', self?.color ?? '#888')} alt="" />{pieces.length}{self?.popCap ? <span className="muted">/{self.popCap}</span> : null}</span>
+        <span className="stat kstat" title="Kings"><img src={pieceUrl('K', 'light', self?.color ?? '#888')} alt="" />{pieces.filter((p) => p.kind === 'K').length}</span>
+        <span className="stat bstat" title="Buildings"><Icon name="house" size={16} />{mirror.myBuildings().filter((b) => b.type !== 'ruin').length}</span>
         <DayClock />
-        <button className="link" onClick={() => ui.set({ sheet: 'battles' })}>⚔ {live.length || ''}</button>
+        <button className="link stat" aria-label="Battles" onClick={() => ui.set({ sheet: 'battles' })}><Icon name="swords" size={17} />{live.length || ''}</button>
       </div>
       <div className="top-actions">
-        <button className="icon-btn" aria-label="Help" onClick={() => ui.set({ sheet: ui.sheet === 'help' ? null : 'help' })}>?</button>
-        <button className="icon-btn" aria-label="Settings" onClick={() => ui.set({ sheet: ui.sheet === 'settings' ? null : 'settings' })}>☰</button>
+        <button className={`icon-btn ${ui.flagMode ? 'on' : ''}`} aria-label="Place a flag" title="Place a flag (F)" onClick={() => { ui.set({ flagMode: !ui.flagMode }); if (!ui.flagMode) ui.toast(ui.layout === 'phone' ? 'Tap the map to place a flag' : 'Click the map to place a flag', 'info', 'flag'); }}><Icon name="flag" size={19} /></button>
+        <button className="icon-btn" aria-label="Help" onClick={() => ui.set({ sheet: ui.sheet === 'help' ? null : 'help' })}><Icon name="help" size={19} /></button>
+        <button className="icon-btn" aria-label="Settings" onClick={() => ui.set({ sheet: ui.sheet === 'settings' ? null : 'settings' })}><Icon name="menu" size={19} /></button>
       </div>
     </div>
   );
@@ -74,7 +83,7 @@ function DayClock() {
   const phase = (((now % DAY) + DAY) % DAY) / DAY;
   const day = Math.floor((now - Date.UTC(2026, 8, 26)) / DAY) + 1;
   const sun = Math.sin(phase * Math.PI * 2);
-  return <span title={`Day ${day}`} className="day">{sun >= 0 ? '☀' : '☾'} {day}</span>;
+  return <span title={`Day ${day}`} className="day stat"><Icon name={sun >= 0 ? 'sun' : 'moon'} size={16} />{day}</span>;
 }
 
 function Alerts() {
@@ -90,9 +99,9 @@ function Alerts() {
             if (b) ui.set({ battleFocus: b.id });
             ui.dismissAlert(a.id);
           }}>
-            <span className="a-icon">{a.kind === 'attacked' ? '⚠' : a.kind === 'battle-soon' ? '⚔' : a.kind === 'emperor-lost' ? '♛' : '•'}</span>
+            <span className="a-icon"><Icon name={(a.kind === 'attacked' ? 'alert' : a.kind === 'battle-soon' ? 'swords' : a.kind === 'emperor-lost' ? 'crown' : 'bell') as IconName} size={20} /></span>
             <span className="a-text">{a.text.replace(/Battle in \d+s/, secs != null ? `Battle in 0:${String(secs).padStart(2, '0')}` : 'Battle')}</span>
-            {(a.at || b) && <span className="a-go">{b ? 'Go to battle' : 'Show'} ›</span>}
+            {(a.at || b) && <span className="a-go">{b ? 'Go to battle' : 'Show'} <Icon name="chevron" size={14} /></span>}
           </div>
         );
       })}
@@ -102,7 +111,7 @@ function Alerts() {
 
 function Toasts() {
   const ui = useUI();
-  return <div className="toasts">{ui.toasts.map((t) => <div key={t.id} className={`toast ${t.tone}`}>{t.text}</div>)}</div>;
+  return <div className="toasts">{ui.toasts.map((t) => <div key={t.id} className={`toast ${t.tone}`}>{t.icon && <Icon name={t.icon as IconName} size={16} />}{t.text}</div>)}</div>;
 }
 
 /** Kings you own: one chip each (the troop bar). */
@@ -148,7 +157,7 @@ function BottomDock() {
       {ui.buildType && (
         <div className="action-row build-row">
           <span className={`ghost-state ${ui.ghost?.ok ? 'ok' : 'bad'}`}>{ui.ghost ? ui.ghost.reason : 'Drag on the map to place'}</span>
-          {ui.layout === 'phone' && <button className="btn" disabled={!ui.ghost?.ok} onClick={() => input?.placeBuilding()}>✓ Build</button>}
+          {ui.layout === 'phone' && <button className="btn" disabled={!ui.ghost?.ok} onClick={() => input?.placeBuilding()}><Icon name="check" size={18} /> Build</button>}
           <button className="btn ghost" onClick={() => ui.set({ buildType: null, ghost: null })}>Cancel</button>
         </div>
       )}
@@ -159,7 +168,7 @@ function BottomDock() {
           </span>
           {pending ? <>
             <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>Move here</button>
-            <button className="btn ghost" onClick={() => { if (input) input.pendingMove = null; ui.bump(); }}>✕</button>
+            <button className="btn ghost" onClick={() => { if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; ui.bump(); }} aria-label="Cancel"><Icon name="close" size={16} /></button>
           </> : <>
             <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
             {ui.layout === 'phone' && <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>+ Add</button>}
@@ -171,7 +180,7 @@ function BottomDock() {
       {ui.layout === 'phone' && (
         <div className="troop-bar">
           <div className="chips">{kings.map((k) => <KingChip key={k.id} k={k} compact />)}</div>
-          <button className="build-fab" aria-label="Build" onClick={() => ui.set({ sheet: ui.sheet === 'build' ? null : 'build' })}>🔨</button>
+          <button className="build-fab" aria-label="Build" onClick={() => ui.set({ sheet: ui.sheet === 'build' ? null : 'build' })}><Icon name="hammer" size={28} stroke={2.4} /></button>
         </div>
       )}
     </div>
@@ -237,7 +246,7 @@ function Details() {
       <div className="meter"><span style={{ width: `${(b.built < 1 ? b.built : b.prod) * 100}%` }} /></div>
       <p>{b.blocked ? why[b.blocked] : `Producing ${spec.produces.map((k) => PIECE_NAME[k]).join('/')} · ${b.rate ?? 1}× speed from local richness`}</p>
       <p className="muted">Condition {b.hp}/100</p>
-      <button className="btn ghost small" onClick={() => commands.pause(b.id, !b.paused)}>{b.paused ? '▶ Resume production' : '⏸ Pause production'}</button>
+      <button className="btn ghost small" onClick={() => commands.pause(b.id, !b.paused)}>{b.paused ? <><Icon name="play" size={14} /> Resume production</> : <><Icon name="pause" size={14} /> Pause production</>}</button>
       {b.type === 'palace' && (
         <div className="seg">
           {(['alt', 'K', 'Q'] as const).map((m) => <button key={m} className={b.palaceMode === m ? 'on' : ''} onClick={() => commands.palaceMode(b.id, m)}>{m === 'alt' ? 'Alternate' : m === 'K' ? 'Kings' : 'Queens'}</button>)}
@@ -273,7 +282,7 @@ function BattleList() {
     <div>
       <h3>Battles</h3>
       {!list.length && <p className="muted">No battles right now.</p>}
-      <button className="btn ghost" style={{ width: '100%', marginBottom: 8 }} onClick={() => { commands.practice(); ui.set({ sheet: null }); }}>♟ Practice battle vs AI</button>
+      <button className="btn ghost" style={{ width: '100%', marginBottom: 8 }} onClick={() => { commands.practice(); ui.set({ sheet: null }); }}><Icon name="pawn" size={16} /> Practice battle vs AI</button>
       {list.map((b) => (
         <button key={b.id} className="row-btn" onClick={() => { ui.set({ battleFocus: b.id, sheet: null }); scene?.centerOn(b.cx, b.cy); }}>
           <span className="chip" style={{ background: b.white.color }} /> {b.white.name} vs <span className="chip" style={{ background: b.black.color }} /> {b.black.name}
@@ -311,10 +320,10 @@ function Help() {
       <h3>How to play</h3>
       <ul>
         <li><b>Everything stays near a king.</b> Pieces and buildings must be within 10 squares of one of your kings. Walk kings forward and your pieces follow.</li>
-        <li><b>Build next to resources.</b> Each building draws from nodes within 3 squares: houses and stables from wheat, barracks from rock, temples from gold, the palace from gold and rock. Construction takes wood and stone from within 10 squares.</li>
+        <li><b>Build next to resources.</b> Each building draws from nodes within 3 squares: houses and stables from wheat, barracks from rock, temples from ore, the palace from ore and rock. Construction takes wood and stone from within 10 squares.</li>
         <li><b>Battles are chess.</b> Take a group with a king to an enemy king. After a countdown, both sides fight with up to one chess set. Lose your king and your survivors flee; the pieces it held go to the winner.</li>
         <li><b>Protect your Emperor</b> (the gold crown). If it falls, you start again somewhere new.</li>
-        <li><b>Higher elo lands are richer:</b> buildings there produce faster and gold is common. The players there are stronger too.</li>
+        <li><b>Higher elo lands are richer:</b> buildings there produce faster and ore is common. The players there are stronger too.</li>
       </ul>
       <p className="muted">Phone: drag from your pieces to command · long-press and draw to select many · double-tap a piece for its king's group · pinch to zoom · twist with two fingers to rotate.</p>
     </div>
@@ -335,7 +344,7 @@ function AttackConfirm() {
         <p>{a.siege ? 'A siege: they get 60 seconds to prepare.' : 'A field battle: 15 seconds until it starts.'} Both sides fight with at most one chess set. If your king falls, the pieces with it are lost.</p>
         <div className="versus"><div><b>You</b><span>{mine.length} pieces · material {val(mine)}</span></div><div className="vs">vs</div><div><b>{a.name}</b><span>~{theirs.length} pieces seen · material {val(theirs)}</span></div></div>
         <div className="row-actions">
-          <button className="btn danger" onClick={() => { commands.attack(a.pieceIds, a.targetKingId); ui.set({ pendingAttack: null }); }}>⚔ Attack</button>
+          <button className="btn danger" onClick={() => { commands.attack(a.pieceIds, a.targetKingId); if (scene && target) scene.moveTargets.set('attack:' + a.targetKingId, { to: [target.x, target.y], ids: a.pieceIds, attack: true, t0: performance.now() }); ui.set({ pendingAttack: null }); }}><Icon name="swords" size={17} /> Attack</button>
           <button className="btn ghost" onClick={() => ui.set({ pendingAttack: null })}>Not now</button>
         </div>
       </div>

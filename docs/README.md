@@ -19,6 +19,8 @@
 | [specs/bots.md](specs/bots.md) | AI players from day 0: architecture, human-like behavior, rating integrity, population and phasing out, detectability. |
 | [specs/visuals.md](specs/visuals.md) | The living world: the 100 BPM heartbeat, idle routines, rare moments, nature that reacts, juice, camera, watch mode. |
 | [specs/audio.md](specs/audio.md) | Sound: everything in key and on the beat, armies as rhythm sections, cascading rewards, adaptive music, ambience. |
+| [specs/wilds.md](specs/wilds.md) | Hordes and herds: 32 creature factions, camps, growth, raiding, aftermath, art and names. |
+| [specs/performance.md](specs/performance.md) | Budgets, observability (/metrics, ?perf, live profiling), the replay benchmark, and the optimizations in use. |
 | [specs/safeguards.md](specs/safeguards.md) | Runaway loops (piece spam, king breeding, alt farming, server load) and the caps that stop them. |
 | [specs/client.md](specs/client.md) | Screens, rendering layers, HUD, input, performance. |
 | [specs/art.md](specs/art.md) | Art direction, style rules, the asset list, the pipeline. |
