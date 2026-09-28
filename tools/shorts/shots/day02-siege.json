@@ -1,0 +1,22 @@
+{
+ "scenario": "out/day02/scenario.env.json",
+ "out": "out/day02/siege.mp4",
+ "seconds": 20,
+ "offset": [4, 1],
+ "path": [
+  { "t": 0, "zoom": 0.62 },
+  { "t": 3.6, "zoom": 0.62 },
+  { "t": 12, "zoom": 0.4, "dx": 1, "dy": -2 },
+  { "t": 20, "zoom": 0.3, "dx": -6, "dy": -3 }
+ ],
+ "ease": "inOut",
+ "before": [
+  { "act": "battle.mjs#attack", "args": { "as": "Aurelian", "target": "Greyholt" } },
+  { "act": "battle.mjs#playToMateIn1", "args": { "as": "Aurelian" } }
+ ],
+ "events": [
+  { "t": 1.4, "eval": "window.__owc.ui.getState().set({ battleFocus: B })" },
+  { "t": 2.0, "act": "battle.mjs#mate", "args": { "as": "Aurelian" } },
+  { "t": 4.0, "eval": "window.__owc.ui.getState().set({ battleFocus: null })" }
+ ]
+}

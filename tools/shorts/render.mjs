@@ -10,7 +10,8 @@
 //     "base": { "video": "out/day01/world.mp4", "start": 0, "speed": 1 }   // or "background": "#23211f"
 //     "layers": [ ...see scene.js... ],
 //     "audio": { "bpm": 100, "musicGain": 0.55, "sfxGain": 0.8, "bright": false },
-//     "voice": [ { "at": 0.3, "voice": "chronicler", "text": "The whole world is a chessboard." } ]
+//     "voice": [ { "at": 0.3, "voice": "chronicler", "text": "The whole world is a chessboard.", "settings": {} } ],
+//     "voiceContext": true   // send each line's neighbours as context (steadier, script-like delivery)
 //   }
 // Paths are relative to the repo root.
 import { chromium } from 'playwright';
@@ -28,8 +29,11 @@ for (const l of tl.layers) if (l.type === 'image' && !/^(https?|data|file):/.tes
 
 // 1. Voice lines (cached), checked to fit before the next line starts.
 const voices = [];
-for (const v of tl.voice ?? []) {
-  const file = await speak(v.voice, v.text);
+const lines = tl.voice ?? [];
+for (const [i, v] of lines.entries()) {
+  // "voiceContext": each line hears its neighbours (same voice), for a script's natural cadence.
+  const near = (j) => (tl.voiceContext && lines[j]?.voice === v.voice ? lines[j].text : undefined);
+  const file = await speak(v.voice, v.text, { settings: v.settings, prev: near(i - 1), next: near(i + 1) });
   const d = duration(file);
   voices.push({ ...v, file, d });
   console.log(`voice ${v.at.toFixed(1)}s +${d.toFixed(1)}s  ${v.voice}: ${v.text}`);

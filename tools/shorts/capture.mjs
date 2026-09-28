@@ -12,8 +12,14 @@
 //     "focus": "pawn" | "king" | null,    // snap the center to the nearest such piece
 //     "path": [ { "t": 0, "zoom": 2.2 }, { "t": 17, "zoom": 0.05, "dx": 0, "dy": 0 } ],
 //     "ease": "inOut" | "linear" | "out",
-//     "rotate": 0                          // degrees over the whole shot (optional)
+//     "rotate": 0,                         // degrees over the whole shot (optional)
+//     "scenario": "out/day02/scenario.env.json",   // film a staged local world (scenario.ts) instead of base
+//     "before": [ { "act": "battle.mjs#attack", "args": {...} }, { "wait": 3000 } ],   // setup, not filmed
+//     "events": [ { "t": 1.8, "act": "battle.mjs#mate", "args": {...} },               // during the shot
+//                 { "t": 0, "eval": "window.__owc.ui.getState().set({ battleFocus: ... })" } ]
 //   }
+// Acts live in tools/shorts/acts/ (players signed in with the scenario's tokens, moves from our
+// engine). An eval runs in the camera's page; it may use `B` = the staged battle's id.
 // Camera keys interpolate zoom exponentially (so a zoom-out feels even), and
 // dx/dy (squares, relative to the center) linearly.
 import { chromium } from 'playwright';
@@ -22,6 +28,9 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const spec = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const env = spec.scenario ? JSON.parse(readFileSync(resolve(spec.scenario), 'utf8')) : null;
+// A staged world: its server, and its spot (plus an optional "offset" in squares).
+if (env) { spec.base = env.base; spec.center ??= [env.center[0] + (spec.offset?.[0] ?? 0), env.center[1] + (spec.offset?.[1] ?? 0)]; }
 const FPS = 30, W = 540, H = 960; // CSS size; ×2 device pixels = 1080×1920
 const out = resolve(spec.out);
 mkdirSync(dirname(out), { recursive: true });
@@ -60,6 +69,20 @@ await page.goto(`${spec.base.replace(/\/$/, '')}/?cinema&watch`);
 await page.waitForFunction(() => window.__owc?.scene && window.__owc.mirror.me === 'watcher', null, { timeout: 30_000 });
 await page.waitForTimeout(2500);
 
+// Acts: staged players doing things (setup before filming, or events during it).
+const acts = new Map();
+const ctx = { browser, page, env, args: {} };
+async function run(step) {
+  if (step.wait) return page.waitForTimeout(step.wait);
+  if (step.eval) return page.evaluate((code) => { const m = window.__owc.mirror; const B = [...m.battles.values()].reverse().find((b) => b.phase !== 'over')?.id ?? [...m.battles.values()].at(-1)?.id; return new Function('B', code)(B); }, step.eval);
+  const [file, fn] = step.act.split('#');
+  if (!acts.has(file)) acts.set(file, await import(new URL(`./acts/${file}`, import.meta.url).href));
+  console.log(`act ${step.act}`);
+  ctx.args = step.args ?? {}; // (one shared context: an act can leave things for a later one)
+  return acts.get(file)[fn](ctx, ctx.args);
+}
+for (const step of spec.before ?? []) await run(step);
+
 // Where to film.
 let center = spec.center;
 const fly = async (x, y, zoom, wait = 2500) => {
@@ -97,8 +120,10 @@ for (let i = 0; i < 20; i++) await page.evaluate(() => new Promise((r) => reques
 
 const ff = spawn('ffmpeg', ['-v', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-', '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(FPS), out], { stdio: ['pipe', 'inherit', 'inherit'] });
 const frames = Math.round(spec.seconds * FPS);
+const events = [...(spec.events ?? [])].sort((a, b) => a.t - b.t);
 for (let i = 0; i < frames; i++) {
   const t = i / FPS, c = camAt(t);
+  while (events.length && events[0].t <= t) await run(events.shift());
   await page.evaluate(([x, y, z, rot]) => {
     const s = window.__owc.scene;
     s.fly = null; s.cam.x = x; s.cam.y = y; s.cam.zoom = z;
@@ -110,5 +135,6 @@ for (let i = 0; i < frames; i++) {
 }
 ff.stdin.end();
 await new Promise((r) => ff.on('close', r));
+for (const m of acts.values()) m.stop?.();
 await browser.close();
 console.log(`\nwrote ${out}`);

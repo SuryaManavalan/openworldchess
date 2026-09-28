@@ -65,3 +65,4 @@ Voice: **C** Chronicler · **K** Caster · **—** none (music and sound only).
 | Day | Posted | File | Hook used | Views (48h) | 2s hold | Avg watch % | Shares | Notes |
 |---|---|---|---|---|---|---|---|---|
 | 1 | not yet | `out/day01/day01.mp4` (timeline `tools/shorts/timelines/day01.json`) | "The whole world is a chessboard." | | | | | First video made with the toolkit. Footage: FrostQueen481's town → grey_blunder → AshKnight971. |
+| 2 | not yet | `out/day02/day02.mp4` (scenario `scenarios/day02-siege.json`, shot `shots/day02-siege.json`, timeline `timelines/day02.json`) | "What happens after checkmate?" | | | | | First staged video: a local world with two made-up empires (Aurelian vs Greyholt), our engine playing Aurelian's real game to mate, filmed live: red town → mate on the spectator board → every building flies Aurelian's flag, survivors scatter. Caster voice. |

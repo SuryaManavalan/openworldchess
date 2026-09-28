@@ -1,0 +1,151 @@
+{
+ "out": "out/day02/day02.mp4",
+ "seconds": 20,
+ "base": {
+  "video": "out/day02/siege.mp4"
+ },
+ "layers": [
+  {
+   "type": "vignette",
+   "t0": 0,
+   "t1": 20,
+   "strength": 0.5
+  },
+  {
+   "type": "text",
+   "t0": 0,
+   "t1": 1.9,
+   "lines": [
+    "WHAT HAPPENS AFTER"
+   ],
+   "y": 330,
+   "size": 66,
+   "anim": "slam",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "t0": 0,
+   "t1": 1.9,
+   "lines": [
+    "CHECKMATE?"
+   ],
+   "color": "#e3b23c",
+   "y": 450,
+   "size": 160,
+   "anim": "slam",
+   "glow": "rgba(227,178,60,0.35)"
+  },
+  {
+   "type": "flash",
+   "t0": 2.05,
+   "dur": 0.25
+  },
+  {
+   "type": "text",
+   "t0": 4.1,
+   "t1": 7.0,
+   "lines": [
+    "THE TOWN",
+    "IS YOURS."
+   ],
+   "colors": [
+    "#ece6da",
+    "#7fa8ff"
+   ],
+   "y": 400,
+   "size": 140,
+   "anim": "slam",
+   "glow": "rgba(61,111,209,0.45)"
+  },
+  {
+   "type": "text",
+   "t0": 7.2,
+   "t1": 10.0,
+   "lines": [
+    "Every building.",
+    "Your flag."
+   ],
+   "y": 400,
+   "size": 104,
+   "font": "bold",
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 10.2,
+   "t1": 13.0,
+   "lines": [
+    "Their army",
+    "scatters."
+   ],
+   "y": 400,
+   "size": 110,
+   "font": "bold",
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 13.2,
+   "t1": 15.8,
+   "lines": [
+    "Real chess.",
+    "Real stakes."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 400,
+   "size": 116,
+   "anim": "pop"
+  },
+  {
+   "type": "endcard",
+   "t0": 16.0,
+   "t1": 20,
+   "sub": "Your first king is waiting",
+   "url": "openworldchess.com",
+   "dim": 0.55,
+   "y": 560
+  }
+ ],
+ "audio": {
+  "bpm": 100,
+  "musicGain": 0.5,
+  "sfxGain": 0.8
+ },
+ "voice": [
+  {
+   "at": 0.2,
+   "voice": "caster",
+   "text": "What happens after checkmate?"
+  },
+  {
+   "at": 4.2,
+   "voice": "caster",
+   "text": "The town is yours now."
+  },
+  {
+   "at": 7.3,
+   "voice": "caster",
+   "text": "Every building flies your flag."
+  },
+  {
+   "at": 10.3,
+   "voice": "caster",
+   "text": "Their army scatters."
+  },
+  {
+   "at": 13.3,
+   "voice": "caster",
+   "text": "Real chess. Real stakes."
+  },
+  {
+   "at": 16.2,
+   "voice": "caster",
+   "text": "Open World Chess. Your first king is waiting."
+  }
+ ],
+ "voiceContext": true
+}

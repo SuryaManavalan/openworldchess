@@ -79,6 +79,15 @@ working example of driving the game):
 - Use a dedicated marketing account; never film other real players' names
   without blurring, unless they're our bots.
 
+### B2. Staged scenes (sieges, blunders, crowns)
+
+For a specific moment (a mate that takes a town, a queen blunder, a crown seized), stage
+it on a local server with `tools/shorts/scenario.ts` and film it with acts that play as
+the staged players (our engine plays their moves, so the chess is real). See
+`tools/shorts/README.md` → Staged scenes. Use made-up empire names, never a real
+player's. It's real game behavior, so no "simulated" label is needed; label speed if
+you speed it up.
+
 ### C. Art and motion (no gameplay)
 
 - Piece, building, creature, relic and wonder art is generated as SVG under

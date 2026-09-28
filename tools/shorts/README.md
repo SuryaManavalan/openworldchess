@@ -69,7 +69,29 @@ art layers from `art/`, a battle-replay layer (from `clip.ts`), transitions
 (whip, zoom punch), and a `post.mjs` that uploads to TikTok through the
 server once `studio-post` exists.
 
+## Staged scenes (battles, sieges, anything with a plot)
+
+For moments you can't wait for on the live server, stage them on a **local** server:
+
+```bash
+node tools/shorts/scenario.ts tools/shorts/scenarios/day02-siege.json   # world + server; writes out/day02/scenario.env.json
+node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scenario": that env; "before"/"events": acts
+```
+
+- `scenario.ts`: made-up empires at an open spot, with pieces, buildings and reserves; the
+  Emperors are parked far away; staged players are old, unshielded accounts, so battles
+  resolve exactly as for real players. `turnMs` slows the world to match filming speed.
+- Acts (`tools/shorts/acts/`): players signed in with the scenario's tokens. `battle.mjs`:
+  `attack`, `playToMateIn1` (our engine plays the real game until the next move mates),
+  `mate`. Shots run acts in `before` (not filmed) and `events` (at a time in the shot);
+  an `eval` event runs in the camera's page (`B` is the staged battle's id).
+- Filming with a player's tab open is slower (~2 s a frame). Stop the server afterwards
+  (its pid is in the env file).
+
 ## Changelog
+
+- 2026-09-28: staged scenes: `scenario.ts`, acts (`acts/battle.mjs`), and `scenario` /
+  `before` / `events` in shots. First used for Day 2 (a siege, filmed live).
 
 - 2026-09-27: capture films in watch mode (no guest empire, no rate limit) in a
   visible window (~175 ms a frame). The end card's URL is a big pill. Text centers
