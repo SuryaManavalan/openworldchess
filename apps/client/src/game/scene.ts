@@ -10,6 +10,7 @@ import { nodeArt } from './biomeArt.ts';
 import { paintChunk, paintChunkFar, terrainCodes, biomeCodes, textureFrom, TPX, FAR_TPX } from './terrain.ts';
 import { Fx } from './fx.ts';
 import { Bubbles } from './bubbles.ts';
+import { FarIcons } from './farIcons.ts';
 import { computeSettlements, decorate, wallsFor, TIER_NAME, type Decor, type Settlement, type Wall } from './settlements.ts';
 import { decorTexture } from './textures.ts';
 import { useUI } from '../store.ts';
@@ -65,6 +66,8 @@ export class Scene {
   mirror: Mirror;
   fx: Fx;
   bubbles: Bubbles;
+  /** Far view: one icon per area for the resource that stands out there. */
+  farIcons: FarIcons;
   pieces = new Map<number, PieceView>();
   buildings = new Map<number, BuildingView>();
   nodes = new Map<number, Sprite>();
@@ -106,15 +109,16 @@ export class Scene {
     this.mirror = mirror;
     this.fx = new Fx(this);
     this.bubbles = new Bubbles(this);
+    this.farIcons = new FarIcons(this);
     this.worker = new Worker(new URL('./terrainWorker.ts', import.meta.url), { type: 'module' });
-    this.worker.onmessage = (e: MessageEvent<{ cx: number; cy: number; codes: Uint8Array; biomes: Uint8Array }>) => this.chunkReady(e.data.cx, e.data.cy, e.data.codes, e.data.biomes);
+    this.worker.onmessage = (e: MessageEvent<{ cx: number; cy: number; codes: Uint8Array; biomes: Uint8Array; res: Float32Array }>) => { this.farIcons.setBase(chunkKey(e.data.cx, e.data.cy), e.data.res); this.chunkReady(e.data.cx, e.data.cy, e.data.codes, e.data.biomes); };
   }
 
   async init(el: HTMLElement) {
     await this.app.init({ resizeTo: el, background: '#6f8f4a', antialias: true, resolution: Math.min(2, devicePixelRatio), autoDensity: true });
     el.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
-    this.world.addChild(this.ground, this.wallsG, this.decals, this.objects, this.farG, this.arenas, this.fx.layer, this.bubbles.layer, this.fx.top, this.labels);
+    this.world.addChild(this.ground, this.wallsG, this.decals, this.objects, this.farIcons.layer, this.farG, this.arenas, this.fx.layer, this.bubbles.layer, this.fx.top, this.labels);
     this.arenas.addChild(this.arenaG);
     this.arenaG.zIndex = -1e9;
     this.app.stage.addChild(this.world, this.fx.screenLayer, this.overlay);
@@ -482,6 +486,7 @@ export class Scene {
     this.wallsG.visible = !this.far;
     for (const t of this.kingLabels.values()) if (this.far) t.visible = false;
     this.bubbles.update(now, counter, view);
+    this.farIcons.update(now, counter, view);
     this.drawFar(now);
     this.drawTown(zsort, counter);
     this.drawDecals(now, sel);

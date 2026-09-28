@@ -188,6 +188,13 @@ Settlements slowly clear the trees around them. Every 30 seconds, each of a town
   - **Crops (8):** wheat, corn, berries, pumpkins, rice, glowcaps, prickly pear, firebloom. Every crop is still "wheat".
 - **Creatures and camps** of the wilds are drawn per faction ([wilds.md](wilds.md) §6). At night a camp glows like a campfire.
 
+## 12. Resources from afar (as built 2026-09-28)
+
+Zoomed out, single trees, rocks and fields are too small to draw, so the far view marks what each area holds instead (`apps/client/src/game/farIcons.ts`):
+- **One icon per area, at most:** each 16×16 area (whole 32×32 chunks when zoomed very far out) shows the kind that stands out there, and only if there's a lot of it: 40+ trees, 6+ rocks, 2+ ore, 12+ fields. Rarer kinds win a tie, so an ore vein in a wood shows as ore.
+- **The icons are the land's own art:** a stand of three trees in the biome's kind of tree, a pile of stones, sheaves of wheat. **Ore glows gold**, so it isn't mistaken for rock at a glance. They sit where the resource is centered, and keep the same size on screen at any zoom.
+- **They show what's really there:** counts come from the world generator (in the terrain worker) and, where the area is loaded, from the live nodes, so felled woods and spent mines lose their icon.
+
 ## 8. Build order
 
 | Milestone | Life and visuals |
