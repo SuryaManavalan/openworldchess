@@ -1,5 +1,6 @@
 // Entity shapes shared by server, client and bots.
 import type { BuildingType, NodeKind, PieceKind } from './constants.ts';
+import type { ChronicleView } from './chronicle.ts';
 
 /** Facing: 0 = north (-y), 1 = east (+x), 2 = south (+y), 3 = west (-x). */
 export type Facing = 0 | 1 | 2 | 3;
@@ -77,6 +78,8 @@ export interface NodeState {
   kind: NodeKind;
   capacity: number;
   remaining: number;
+  /** A cache a scattered camp left behind (campaign.md §4.2): rich, and it never regrows. */
+  hoard?: boolean;
 }
 
 export interface PlayerPublic {
@@ -90,6 +93,10 @@ export interface PlayerPublic {
   wild?: string;
   /** Cosmetic civilization in use (docs/specs/cosmetics.md). */
   civ?: string;
+  /** Their title, relics and capital, for everyone to see (campaign.md §4). */
+  title?: number;
+  relics?: string[];
+  capital?: [number, number];
 }
 
 export interface PlayerSelf extends PlayerPublic {
@@ -107,6 +114,10 @@ export interface PlayerSelf extends PlayerPublic {
   crowns?: number;
   /** Whether the shop can take payments right now. */
   shopOpen?: boolean;
+  /** Their place in the campaign (campaign.md). */
+  chronicle?: ChronicleView;
+  /** The connected TikTok account, for sharing clips. */
+  tiktok?: { name: string };
 }
 
 export type BattleResult = 'white' | 'black' | 'draw' | null;
@@ -125,6 +136,8 @@ export interface BattlePublic {
   phase: 'countdown' | 'live' | 'over';
   startsAt: number;
   fen: string;
+  /** The position the battle began from (for replays and clips). */
+  startFen?: string;
   moves: string[];
   clocks: { white: number; black: number; turnStartedAt: number | null };
   result: BattleResult;

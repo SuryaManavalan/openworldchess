@@ -56,7 +56,10 @@ export class Routines {
       const p = all[(this.cursor + i) % n];
       if (p.state !== 'idle' || p.groupId || !p.owner || p.wild) { this.lives.delete(p.id); continue; }
       // Idle life is for watching: nobody looking, nothing to animate (performance.md §5).
-      if (!g.watched(p.x, p.y)) continue;
+      // Except merchants: trade is part of the game (campaign.md §4.4), so caravans keep going.
+      const watched = g.watched(p.x, p.y);
+      const merchant = p.kind === 'P' && hash01(w.seed, p.id, 3, 75) < MERCHANT_SHARE;
+      if (!watched && !merchant) continue;
       let life = this.lives.get(p.id);
       if (!life) { life = { home: [p.x, p.y], step: 0, since: turn, due: turn + ((p.id * 7) % PERIOD[p.kind]) }; this.lives.set(p.id, life); }
       // Each piece keeps its own pace. (A pace from the turn number alone let the round-robin
@@ -66,6 +69,7 @@ export class Routines {
       if (turn - life.since < 4) continue; // settle for a moment first
       // A caravan on the road may be outside every king's reach; it keeps going.
       if (life.trade && this.trade(p, life, record)) continue;
+      if (!watched) { if (merchant) this.trade(p, life, record); continue; }
       if (!g.inReach(p.owner, p.x, p.y)) continue;
       const inSettlement = w.buildingsNear(p.x, p.y, REACH).some((b) => b.owner === p.owner);
       const [hx, hy] = life.home;
@@ -182,6 +186,10 @@ export class Routines {
     if (!t.path.length || t.idx >= t.path.length) {
       if (cheb(p.x, p.y, dest[0], dest[1]) <= 2) {
         // Arrived at market: trade for a little while, then head back with the other town's goods.
+        // The two towns are now trading (campaign.md §4.4), and it counts toward quests.
+        const near = (m: [number, number]) => g.chronicle.settlementsOf(owner).find((s) => cheb(s.cx, s.cy, m[0], m[1]) <= 12);
+        const sa = near(t.a), sb = near(t.b);
+        if (sa && sb && sa.id !== sb.id) { g.recordTrade(sa.id, sb.id); g.chronicle.note(owner, 'link'); }
         t.toB = !t.toB; t.path = []; t.wait = 6 + Math.floor(hash01(w.seed, p.id, g.turn, 77) * 6);
         return true;
       }

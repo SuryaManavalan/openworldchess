@@ -4,7 +4,7 @@ import { BUILDINGS, BUILD_SPACING, REACH, WORK_AREA, distToRect, key, type Build
 import { buildable, terrainAt } from '@owc/worldgen';
 import { mirror } from '../net.ts';
 
-const NAME: Record<NodeKind, string> = { tree: 'wood', rock: 'stone', ore: 'ore', wheat: 'wheat' };
+const NAME: Record<NodeKind, string> = { tree: 'wood', rock: 'stone', ore: 'ore', wheat: 'crops' };
 
 export function checkPlacement(type: BuildingType, x: number, y: number): { ok: boolean; reason: string; rate?: number } {
   const spec = BUILDINGS[type], size = spec.size;

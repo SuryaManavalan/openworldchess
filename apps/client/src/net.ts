@@ -8,10 +8,13 @@ const tokenKey = 'owc.token';
 const readToken = () => { try { return localStorage.getItem(tokenKey); } catch { return null; } };
 
 const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+/** ?watch: look at the world without an empire (for filming; see tools/shorts). */
+export const WATCH = new URLSearchParams(location.search).has('watch');
 export const conn = new Connection({
   url: `${proto}://${location.host}/play`,
   WebSocket: WebSocket as never,
-  token: readToken(),
+  token: WATCH ? null : readToken(),
+  watch: WATCH,
   autoStart: false,
   onToken: (t) => { try { localStorage.setItem(tokenKey, t); } catch { /* ignore */ } },
   onStatus: (s) => useUI.getState().set({ status: s }),
@@ -22,8 +25,10 @@ export const conn = new Connection({
   },
 });
 // Returning players reconnect at once; new players choose a name first.
-if (readToken()) conn.start(); else useUI.getState().set({ needName: true });
+if (WATCH || readToken()) conn.start(); else useUI.getState().set({ needName: true });
 export const mirror = conn.mirror;
+// A chapter done: celebrate it (campaign.md §5.5).
+mirror.onChapter = (c) => useUI.getState().set({ ceremony: c });
 // Off to Stripe's secure checkout page.
 mirror.onShopUrl = (url) => { location.href = url; };
 
@@ -55,6 +60,10 @@ export const commands = {
   practice() { conn.send({ t: 'practice' }); },
   emote(id: number, battleId?: number) { conn.send({ t: 'emote', id, battleId }); },
   // Shop (cosmetics.md): Crowns via Stripe, civilizations via Crowns.
+  setCapital(buildingId: number) { return conn.request({ t: 'capital.set', buildingId }); },
+  resetEmpire(name: string) { return conn.request({ t: 'empire.reset', name }); },
+  declineQuest(id: number) { conn.send({ t: 'quest.decline', id }); },
+  muster(kingId: number) { return conn.request({ t: 'muster', kingId }); },
   checkout(pack: string) { return conn.request({ t: 'shop.checkout', pack }); },
   buyCiv(civ: string) { return conn.request({ t: 'civ.buy', civ }); },
   equipCiv(civ: string | null) { conn.send({ t: 'civ.equip', civ }); },

@@ -16,7 +16,7 @@
 // - Hordes and lairs attack online players' troops in the field (never an
 //   Emperor, never a settlement); herds never attack.
 // - Beating a camp's king scatters the camp and clears the land for a while.
-import { CHUNK, FACTIONS, GROWTH_ORDER, RARITY_WEIGHT, REACH, chunkKey, cheb, distToRect, type Faction, type Piece, type PieceKind } from '@owc/shared';
+import { CHUNK, FACTIONS, GROWTH_ORDER, RARITY_WEIGHT, REACH, setWorth, chunkKey, cheb, distToRect, type Faction, type Piece, type PieceKind } from '@owc/shared';
 import { bestGaitMove } from '@owc/rules';
 import { biomeAt, hash, hash01, resourcesInRect, rng, terrainAt, walkable as terrainWalkable } from '@owc/worldgen';
 import { randomBytes } from 'node:crypto';
@@ -66,6 +66,8 @@ export interface CampInfo {
   roster?: PieceKind[];
   /** Last time someone was viewing its area. */
   lastViewed?: number;
+  /** Raised by the Chronicle for this player's hunt: stays young (it never grows). */
+  quarryFor?: string;
 }
 
 export interface Site { faction: Faction; x: number; y: number; cell: string; biome: string; roll: number }
@@ -195,7 +197,9 @@ export class Wilds {
       info.awake ??= true;
       if (kings.some((k) => cheb(k.x, k.y, info.x, info.y) <= FADE_FAR)) info.lastNear = now;
       else if (now - info.lastNear > FADE_MS && !this.inBattle(c.id)) { this.remove(c); continue; }
-      if (isViewed(info.x, info.y)) {
+      // Awake while someone is looking, or while any empire's king is close (a troop marching
+      // up to a camp must find it there, even if nobody's watching, bots included).
+      if (isViewed(info.x, info.y) || kings.some((k) => cheb(k.x, k.y, info.x, info.y) <= 24)) {
         info.lastViewed = now;
         // Waking places pieces: a dozen camps per tick at most, the rest a moment later.
         if (!info.awake) { if (wakeBudget-- <= 0) continue; if (!this.wake(c)) { this.remove(c); continue; } }
@@ -273,12 +277,12 @@ export class Wilds {
   }
 
   /** A new camp: asleep (a record) unless someone is viewing the spot, then it wakes right away. */
-  spawn(s: Site, now: number, strength = 0, viewed = true): PlayerRec | null {
+  spawn(s: Site, now: number, strength = 0, viewed = true, size?: number): PlayerRec | null {
     const g = this.game, w = this.w, f = s.faction;
     const id = 'w' + randomBytes(5).toString('hex');
     const areaElo = w.elo(s.x, s.y);
     // A band, not two lost pieces: 3–5 to start, more near stronger players.
-    const roster = rosterOf(3 + Math.floor(s.roll * 5) % 3 + this.strengthBonus(strength));
+    const roster = rosterOf(size ?? 3 + Math.floor(s.roll * 5) % 3 + this.strengthBonus(strength));
     const rec: PlayerRec = {
       id, token: randomBytes(16).toString('hex'), name: f.name, color: f.art.accent, emblem: 0,
       rating: this.ratingFor(areaElo, roster.length), rd: 80, vol: 0.06, emperorId: null, shieldUntil: 0, home: [s.x, s.y],
@@ -290,6 +294,33 @@ export class Wilds {
     g.battles.offlineSince.set(id, 0);
     if (viewed && !this.wake(rec)) { this.remove(rec); return null; }
     return rec;
+  }
+
+  /**
+   * A young band for a player whose hunt has nothing beatable in reach (campaign.md §12):
+   * camps grow with age, so an old corner of the world can hold only bands no newcomer
+   * could beat. Raised 16-30 squares from `near`, a peaceful herd where the land has one,
+   * with under 80% of the hunter's material. One per player at a time.
+   */
+  quarry(forPlayer: string, near: [number, number], might: number, now: number): PlayerRec | null {
+    if (this.camps().some((c) => c.wild!.quarryFor === forPlayer)) return null;
+    const worth = (ks: PieceKind[]) => setWorth(ks); // only a legal set takes the field
+    let n = 3;
+    while (n < 12 && worth(rosterOf(n + 1)) <= might * 0.8) n++;
+    const w = this.w, common = Object.values(FACTIONS).filter((f) => f.rarity === 'common');
+    for (let tries = 0; tries < 40; tries++) {
+      const a = Math.random() * Math.PI * 2, d = 16 + Math.random() * 14;
+      const x = Math.round(near[0] + Math.cos(a) * d), y = Math.round(near[1] + Math.sin(a) * d);
+      if (!this.spotFree(x, y) || w.buildingsNear(x, y, 8).length) continue;
+      const biome = biomeAt(w.seed, x, y);
+      const f = common.find((q) => q.temper === 'herd' && q.biomes.includes(biome)) ?? common.find((q) => q.biomes.includes(biome)) ?? common.find((q) => q.temper === 'herd') ?? common[0];
+      const c = this.spawn({ faction: f, x, y, cell: `q:${forPlayer}:${now}`, biome, roll: 0 }, now, 0, true, n);
+      if (!c) continue;
+      c.wild!.quarryFor = forPlayer;
+      this.dirty = true;
+      return c;
+    }
+    return null;
   }
 
   /** Someone is looking: put the camp's building and pieces into the world. */
@@ -375,6 +406,7 @@ export class Wilds {
   /** One more piece now and then, in the growth order. Asleep, only the roster grows. */
   private grow(c: PlayerRec, now: number, kings: Piece[]) {
     const info = c.wild!;
+    if (info.quarryFor) return;
     if (now - info.grewAt < GROW_MS / this.game.speed || this.inBattle(c.id)) return;
     let kinds: PieceKind[];
     if (info.awake) {
@@ -441,14 +473,25 @@ export class Wilds {
   }
 
   /** The camp's king fell: the rest scatter into the wild and the site stays empty for a while. */
-  scatter(c: PlayerRec, by?: string) {
+  scatter(c: PlayerRec, by?: string, size = 0) {
     const g = this.game, info = c.wild!;
     this.cleared.set(info.cell, g.now + CLEARED_MS);
-    if (by) {
-      const f = FACTIONS[info.faction];
-      g.onAlert(by, { kind: 'info', text: `You scattered the ${f.name} and cleared their ${f.camp}` });
-    }
+    const f = FACTIONS[info.faction];
+    const at: [number, number] = [info.x, info.y];
     this.remove(c);
+    if (!by) return;
+    size = Math.max(size, 2);
+    // Spoils of the wild (campaign.md §4.2): a hoard where the camp stood, captives from
+    // raiders, Renown, and a relic from rare camps.
+    const kind = f.near === 'water' ? 'wheat' : f.near;
+    const base = { tree: 200, wheat: 100, rock: 400, ore: 150 }[kind];
+    const mult = (2 + size / 2) * { common: 1, uncommon: 1.5, rare: 2.5, legendary: 4 }[f.rarity];
+    const spot = this.w.nearestFree(at[0], at[1], 4, (x, y) => !this.w.nodeAt(x, y) && this.w.buildingIdAt(x, y) == null) ?? at;
+    this.w.addHoard(spot[0], spot[1], kind, Math.round(base * mult));
+    const freed = g.chronicle.freeCaptives(by, f.id, size, at);
+    g.chronicle.onHunt(by, f.id, size, c.id, at);
+    const what = { tree: 'timber', wheat: 'grain', rock: 'cut stone', ore: 'treasure' }[kind];
+    g.onAlert(by, { kind: 'info', text: `You scattered the ${f.name}. Their ${what} hoard is yours to take${freed ? `, and ${freed} captives joined you` : ''}`, at: spot });
   }
 
   /** Remove a camp entirely (pieces, building, record). */

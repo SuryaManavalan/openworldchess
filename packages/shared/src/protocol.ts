@@ -9,13 +9,13 @@ const xy = z.tuple([z.number().int(), z.number().int()]);
 const ids = z.array(z.number().int()).max(200);
 
 export const ClientMsg = z.discriminatedUnion('t', [
-  z.object({ t: z.literal('hello'), token: z.string().max(200).optional(), name: z.string().max(24).optional(), v: z.number() }),
+  z.object({ t: z.literal('hello'), token: z.string().max(200).optional(), name: z.string().max(24).optional(), v: z.number(), watch: z.boolean().optional() }),
   z.object({ t: z.literal('sub'), chunks: z.array(xy).max(81) }),
   z.object({ t: z.literal('order.move'), rid: z.number().optional(), pieceIds: ids, to: xy }),
   z.object({ t: z.literal('order.stop'), pieceIds: ids }),
   z.object({ t: z.literal('order.attack'), rid: z.number().optional(), pieceIds: ids, targetKingId: z.number().int() }),
   z.object({ t: z.literal('order.cancelAttack'), battleId: z.number().int() }),
-  z.object({ t: z.literal('build'), rid: z.number().optional(), building: z.enum(['palace', 'house', 'stable', 'temple', 'barracks']), at: xy }),
+  z.object({ t: z.literal('build'), rid: z.number().optional(), building: z.enum(['palace', 'house', 'stable', 'temple', 'barracks', 'wonder']), at: xy }),
   z.object({ t: z.literal('building.pause'), buildingId: z.number().int(), paused: z.boolean() }),
   z.object({ t: z.literal('palace.mode'), buildingId: z.number().int(), mode: z.enum(['alt', 'K', 'Q']) }),
   z.object({ t: z.literal('battle.move'), battleId: z.number().int(), uci: z.string().min(4).max(5) }),
@@ -29,6 +29,11 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('shop.checkout'), rid: z.number().optional(), pack: z.string().max(20) }),
   z.object({ t: z.literal('civ.buy'), rid: z.number().optional(), civ: z.string().max(20) }),
   z.object({ t: z.literal('civ.equip'), civ: z.string().max(20).nullable() }),
+  // The Chronicle (campaign.md): name a capital, turn down a side quest, gather your pieces to a king.
+  z.object({ t: z.literal('capital.set'), rid: z.number().optional(), buildingId: z.number().int() }),
+  z.object({ t: z.literal('empire.reset'), rid: z.number().optional(), name: z.string().max(40) }),
+  z.object({ t: z.literal('quest.decline'), id: z.number().int() }),
+  z.object({ t: z.literal('muster'), rid: z.number().optional(), kingId: z.number().int() }),
   z.object({ t: z.literal('profile'), name: z.string().min(2).max(20) }),
   z.object({ t: z.literal('ping'), at: z.number() }),
 ]);
@@ -53,7 +58,8 @@ export type ServerMsg =
   | { t: 'ack'; rid: number }
   | { t: 'err'; rid?: number; msg: string; code?: 'need-name' | 'name-taken' | 'bad-name' }
   | { t: 'pong'; at: number; serverTime: number }
-  | { t: 'shop.url'; rid?: number; url: string };
+  | { t: 'shop.url'; rid?: number; url: string }
+  | { t: 'chapter'; n: number; name: string; opens: string; title?: string; coronation?: boolean };
 
 export interface BattleSummary {
   winner: string | null;

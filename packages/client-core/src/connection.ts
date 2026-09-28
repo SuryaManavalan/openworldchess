@@ -23,6 +23,8 @@ export interface ConnectionOptions {
   onStatus?: (s: 'connecting' | 'open' | 'closed') => void;
   /** Wait for start() instead of connecting immediately. */
   autoStart?: boolean;
+  /** Watch the world without an empire (filming, ?watch): no name, no orders. */
+  watch?: boolean;
   /** The server refused to let us in (e.g. the name is taken). The connection stops. */
   onHelloError?: (msg: string, code: string) => void;
 }
@@ -72,7 +74,7 @@ export class Connection {
     this.ws = ws;
     ws.onopen = () => {
       this.backoff = 500;
-      this.sendRaw({ t: 'hello', v: PROTOCOL_VERSION, token: this.token ?? undefined, name: this.opts.name });
+      this.sendRaw(this.opts.watch ? { t: 'hello', v: PROTOCOL_VERSION, watch: true } : { t: 'hello', v: PROTOCOL_VERSION, token: this.token ?? undefined, name: this.opts.name });
     };
     ws.onmessage = (ev) => {
       const raw = String(ev.data);
@@ -86,8 +88,7 @@ export class Connection {
         return;
       }
       if (m.t === 'welcome') {
-        this.token = m.token;
-        this.opts.onToken?.(m.token);
+        if (!this.opts.watch) { this.token = m.token; this.opts.onToken?.(m.token); }
         this.setStatus('open');
         // Resubscribe: the server resends chunk snapshots (networking.md §4).
         this.mirror.chunks.clear();

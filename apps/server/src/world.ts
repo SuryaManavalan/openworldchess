@@ -81,8 +81,39 @@ export class World {
       this.nodes.set(k, rec);
       list.push(rec);
     }
+    // Hoards: runtime nodes, stored only in the overlay.
+    for (const k of this.hoardKeys.get(ck) ?? []) {
+      const rec = this.nodeOverlay.get(k);
+      if (rec && !this.nodes.has(k)) { this.nodes.set(k, rec); list.push(rec); }
+    }
     this.nodesByChunk.set(ck, list);
     return list;
+  }
+
+  /** Hoard keys by chunk (they're not in worldgen, so the overlay is their only record). */
+  private hoardKeys = new Map<string, Set<number>>();
+  indexHoard(n: NodeRec) {
+    const ck = chunkKey(...chunkOf(n.x, n.y));
+    let s = this.hoardKeys.get(ck);
+    if (!s) this.hoardKeys.set(ck, (s = new Set()));
+    s.add(key(n.x, n.y));
+  }
+
+  /** Leave a hoard (campaign.md §4.2): a rich resource cache at (x, y). */
+  addHoard(x: number, y: number, kind: NodeRec['kind'], capacity: number): NodeRec {
+    const k = key(x, y);
+    const rec: NodeRec = { x, y, kind, capacity, remaining: capacity, hoard: true };
+    // It replaces whatever node was there.
+    const old = this.nodes.get(k);
+    if (old) { old.gone = true; }
+    this.nodeOverlay.set(k, rec);
+    this.indexHoard(rec);
+    const ck = chunkKey(...chunkOf(x, y));
+    const list = this.nodesByChunk.get(ck);
+    if (list) { const i = list.indexOf(old!); if (i >= 0) list.splice(i, 1); list.push(rec); this.nodes.set(k, rec); }
+    this.dirtyNodes.add(k);
+    this.dirtyWalk(x, y);
+    return rec;
   }
 
   nodeAt(x: number, y: number): NodeRec | undefined {
@@ -110,7 +141,8 @@ export class World {
     n.remaining -= got;
     if (n.remaining <= 0) {
       n.remaining = 0;
-      if (n.kind === 'tree') n.regrowAt = now + TREE_REGROW_MS;
+      if (n.hoard) n.gone = true; // hoards are spent for good
+      else if (n.kind === 'tree') n.regrowAt = now + TREE_REGROW_MS;
       else if (n.kind === 'rock' || n.kind === 'ore') n.gone = true;
       this.dirtyWalk(n.x, n.y);
     }
@@ -128,7 +160,7 @@ export class World {
   /** Regrow trees and wheat (economy.md §1). */
   regrowNodes(now: number, dt: number) {
     for (const [k, n] of this.nodeOverlay) {
-      if (n.gone) continue;
+      if (n.gone || n.hoard) continue;
       if (n.kind === 'tree' && n.remaining === 0 && n.regrowAt && now >= n.regrowAt) {
         // Inside a settlement the stump is dug out instead: towns open into clearings (visuals.md §10).
         if (this.settledNear(n.x, n.y, SETTLED_R)) { n.gone = true; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y); continue; }
@@ -314,7 +346,7 @@ export class World {
   maintain(keep: Set<string>, fadeTrails: boolean) {
     if (fadeTrails) { for (const [k, t] of this.traffic) { const n = t >> 1; if (n) this.traffic.set(k, n); else this.traffic.delete(k); } this.trafficCache.clear(); }
     if (this.trafficCache.size > 5000) this.trafficCache.clear();
-    for (const [k, n] of this.nodeOverlay) if (!n.gone && n.remaining >= n.capacity && !n.regrowAt) this.nodeOverlay.delete(k);
+    for (const [k, n] of this.nodeOverlay) if (!n.gone && !n.hoard && n.remaining >= n.capacity && !n.regrowAt) this.nodeOverlay.delete(k);
     if (this.nodesByChunk.size > 8000) {
       for (const ck of [...this.nodesByChunk.keys()]) {
         if (keep.has(ck) || this.piecesByChunk.get(ck)?.size || this.buildingsByChunk.get(ck)?.size) continue;

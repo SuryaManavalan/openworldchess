@@ -1,6 +1,7 @@
 // Input (ux.md §3): touch gestures and mouse/keyboard both turn into the same
 // commands. One model everywhere: select, then direct.
-import { REACH, cheb, type Piece } from '@owc/shared';
+import { BUILDINGS, REACH, cheb, type Piece } from '@owc/shared';
+import { pickSet } from '@owc/rules';
 import type { Scene } from './scene.ts';
 import { commands, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
@@ -205,7 +206,18 @@ export class Input {
     return p && p.owner === mirror.me ? p : undefined;
   }
 
-  /** The group a king leads: your pieces within its reach (movement.md §4). */
+  /**
+   * A king's best legal army (ux.md §3): the chess set it would fight with (a queen,
+   * 2 rooks, 2 bishops, 2 knights, 8 pawns), filled with its nearest pieces that
+   * aren't recovering from a battle. The same rule the server uses to pick a battle set.
+   */
+  armyOf(king: Piece): number[] {
+    const now = mirror.serverNow();
+    const near = mirror.myPieces().filter((q) => q.state !== 'battle' && cheb(q.x, q.y, king.x, king.y) <= REACH && (q.kind !== 'K' || q.id === king.id) && (q.id === king.id || (q.cooldownUntil ?? 0) <= now));
+    return pickSet(king.id, near, king.x, king.y).set.map((q) => q.id);
+  }
+
+  /** The group a king leads: all your pieces within its reach (movement.md §4). */
   groupOf(p: Piece): number[] {
     const king = p.kind === 'K' ? p : mirror.myKings().filter((k) => cheb(k.x, k.y, p.x, p.y) <= REACH).sort((a, b) => cheb(a.x, a.y, p.x, p.y) - cheb(b.x, b.y, p.x, p.y))[0];
     if (!king) return [p.id];
@@ -221,11 +233,12 @@ export class Input {
     const mine = this.myPiece(at[0], at[1]);
     if (mine) {
       this.pendingMove = null;
+      // Double-tap: everything under that king. Tap a king: its best army. Tap a piece: just it.
       if (dbl) { const g = this.groupOf(mine); this.selectWithSound(g); haptic(); return; }
       const shift = this.keys.has('Shift');
       const sel = ui.selection;
       if (shift || (type !== 'mouse' && sel.length && ui.lassoMode)) this.selectWithSound(sel.includes(mine.id) ? sel.filter((i) => i !== mine.id) : [...sel, mine.id]);
-      else this.selectWithSound([mine.id]);
+      else this.selectWithSound(mine.kind === 'K' ? this.armyOf(mine) : [mine.id]);
       return;
     }
     const arena = sc.pickArena(at[0], at[1]);
@@ -345,7 +358,7 @@ export class Input {
   updateGhost(at: [number, number]) {
     const ui = useUI.getState();
     if (!ui.buildType) return;
-    const size = ({ house: 1, stable: 2, temple: 2, barracks: 2, palace: 3 } as const)[ui.buildType];
+    const size = BUILDINGS[ui.buildType].size;
     const x = Math.round(at[0] - (size - 1) / 2), y = Math.round(at[1] - (size - 1) / 2);
     const res = checkPlacement(ui.buildType, x, y);
     ui.set({ ghost: { x, y, ok: res.ok, reason: res.reason } });

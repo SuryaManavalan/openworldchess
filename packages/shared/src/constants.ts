@@ -42,7 +42,22 @@ export const SET_COUNTS: Record<PieceKind, number> = { K: 1, Q: 1, R: 2, B: 2, N
 /** Material values used by bots and UI estimates. */
 export const PIECE_VALUE: Record<PieceKind, number> = { K: 0, Q: 9, R: 5, B: 3, N: 3, P: 1 };
 
-export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks';
+/** The most of each kind one side can bring to a battle (a legal chess set). */
+export const SET_MAX: Record<PieceKind, number> = { K: 1, Q: 1, R: 2, B: 2, N: 2, P: 8 };
+
+/**
+ * The material of the strongest legal set these pieces could field. A crowd of
+ * forty pawns and knights still fights as eight pawns and two knights.
+ */
+export function setWorth(kinds: Iterable<PieceKind>): number {
+  const n: Record<PieceKind, number> = { K: 0, Q: 0, R: 0, B: 0, N: 0, P: 0 };
+  for (const k of kinds) n[k]++;
+  let w = 0;
+  for (const k of ['Q', 'R', 'B', 'N', 'P'] as const) w += Math.min(n[k], SET_MAX[k]) * PIECE_VALUE[k];
+  return w;
+}
+
+export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks' | 'wonder';
 /** Resources. "ore" looks different in each biome (gold, silver, copper, gems) but is one resource. */
 export type NodeKind = 'tree' | 'wheat' | 'rock' | 'ore';
 
@@ -67,6 +82,8 @@ export const BUILDINGS: Record<BuildingType, BuildingSpec> = {
   temple: { type: 'temple', size: 2, cost: { tree: 60, rock: 40 }, buildMs: 45_000, needs: ['ore'], draw: { ore: 15 }, produces: ['B'], baseMs: 240_000 },
   barracks: { type: 'barracks', size: 2, cost: { tree: 60, rock: 80 }, buildMs: 60_000, needs: ['rock'], draw: { rock: 30 }, produces: ['R'], baseMs: 300_000 },
   palace: { type: 'palace', size: 3, cost: { tree: 120, rock: 150 }, buildMs: 90_000, needs: ['ore', 'rock'], draw: { ore: 40, rock: 40 }, produces: ['K', 'Q'], baseMs: 1_200_000 },
+  // The campaign's capstone (campaign.md §4.5): one per empire, in a city capital; it produces nothing, it lifts its town.
+  wonder: { type: 'wonder', size: 3, cost: { tree: 400, rock: 400, ore: 150 }, buildMs: 30 * 60_000, needs: [], draw: {}, produces: [], baseMs: 0 },
 };
 
 /**

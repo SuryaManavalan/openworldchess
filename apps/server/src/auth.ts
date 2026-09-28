@@ -6,6 +6,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import type { Game } from './game.ts';
+import { tiktokEnabled } from './tiktok.ts';
+import { stats } from './stats.ts';
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
@@ -17,7 +19,7 @@ const pending = new Map<string, { token: string | null; at: number }>();
 
 export const googleEnabled = () => !!(CLIENT_ID && CLIENT_SECRET);
 
-function html(res: ServerResponse, body: string, status = 200) {
+export function html(res: ServerResponse, body: string, status = 200) {
   res.statusCode = status;
   res.setHeader('content-type', 'text/html; charset=utf-8');
   res.setHeader('cache-control', 'no-store');
@@ -25,8 +27,8 @@ function html(res: ServerResponse, body: string, status = 200) {
 }
 
 /** Hand the account token to the page, then go back into the game. */
-function finish(res: ServerResponse, token: string, note: string) {
-  html(res, `<p>${note}</p><script>try{localStorage.setItem('owc.token',${JSON.stringify(token)});localStorage.setItem('owc.welcomed','1');localStorage.setItem('owc.signedin','1')}catch(e){}location.replace('/')</script>`);
+export function finish(res: ServerResponse, token: string, note: string, to = '/') {
+  html(res, `<p>${note}</p><script>try{localStorage.setItem('owc.token',${JSON.stringify(token)});localStorage.setItem('owc.welcomed','1');localStorage.setItem('owc.signedin','1')}catch(e){}location.replace(${JSON.stringify(to)})</script>`);
 }
 
 export async function handleAuth(game: Game, req: IncomingMessage, res: ServerResponse): Promise<boolean> {
@@ -34,7 +36,7 @@ export async function handleAuth(game: Game, req: IncomingMessage, res: ServerRe
   if (url.pathname === '/auth/config') {
     res.setHeader('content-type', 'application/json');
     res.setHeader('cache-control', 'no-store');
-    res.end(JSON.stringify({ google: googleEnabled() }));
+    res.end(JSON.stringify({ google: googleEnabled(), tiktok: tiktokEnabled() }));
     return true;
   }
   if (url.pathname === '/auth/google/start') {
@@ -71,6 +73,7 @@ export async function handleAuth(game: Game, req: IncomingMessage, res: ServerRe
     const guest = guestId ? game.players.get(guestId) : undefined;
     if (guest && !guest.googleSub && !guest.isBot) {
       guest.googleSub = claims.sub; guest.email = claims.email; guest.leftAt = undefined;
+      stats.signIn('google');
       game.onPlayers();
       finish(res, guest.token, `Your empire is safe, ${guest.name}.`);
       return true;
@@ -79,6 +82,7 @@ export async function handleAuth(game: Game, req: IncomingMessage, res: ServerRe
     let name = (claims.given_name ?? claims.email?.split('@')[0] ?? 'Ruler').replace(/[^\p{L}\p{N}_ .-]/gu, '').slice(0, 16) || 'Ruler';
     while (game.checkName(name)) name = name.slice(0, 16) + Math.floor(Math.random() * 999);
     const pl = game.create(name, false, claims.sub, claims.email);
+    stats.signIn('google');
     finish(res, pl.token, `Welcome, ${pl.name}.`);
     return true;
   }

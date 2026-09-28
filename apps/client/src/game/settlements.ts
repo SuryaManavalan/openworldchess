@@ -122,6 +122,14 @@ export function decorate(m: Mirror, s: Settlement, color: string, traffic: (x: n
     }
     for (const [dx, dy] of [[2, 0], [-2, 0]]) if (h(s.cx + dx, s.cy + dy, 403) < 0.6) put(s.cx + dx, s.cy + dy, 'bench');
   }
+  // A capital shows its relics around the heart (campaign.md §4.2): trophies everyone can see.
+  const owner = m.players.get(s.owner);
+  if (owner?.capital && owner.relics?.length && Math.max(Math.abs(owner.capital[0] - s.cx), Math.abs(owner.capital[1] - s.cy)) <= 6) {
+    let i = 0;
+    for (let r = 2; r <= 6 && i < owner.relics.length; r++)
+      for (let dy = -r; dy <= r && i < owner.relics.length; dy++) for (let dx = -r; dx <= r && i < owner.relics.length; dx++)
+        if (Math.max(Math.abs(dx), Math.abs(dy)) === r && (dx + dy) % 2 === 0 && put(s.cx + dx, s.cy + dy, `relic:${owner.relics[i]}`)) i++;
+  }
   // Props beside buildings, by what they are.
   for (const b of s.buildings) {
     const around = ring(b);

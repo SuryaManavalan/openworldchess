@@ -2,7 +2,7 @@
 // clocks, AI stand-ins, aftermath, cooldowns and ratings.
 import {
   AI_TAKEOVER_MS, CANCEL_COOLDOWN_MS, CANCEL_PROTECT_MS, FRESH_ACCOUNT_MS, COUNTDOWN_FIELD_MS, COUNTDOWN_SIEGE_MS, MIN_BATTLE_COOLDOWN_MS, REACH, FACING_DELTA,
-  cheb, distToRect, key, type BattlePublic, type BattleSummary, type BuildingType, type Facing, type Piece, type PieceKind,
+  RENOWN, cheb, distToRect, key, type BattlePublic, type BattleSummary, type BuildingType, type Facing, type Piece, type PieceKind,
 } from '@owc/shared';
 import { assemble, BattleGame, glicko2, headingOf, pickSet, regenMs, type Color } from '@owc/rules';
 import type { Game } from './game.ts';
@@ -150,7 +150,7 @@ export class Battles {
       id, kind: 'practice', cx: emp?.x ?? p.home[0], cy: (emp?.y ?? p.home[1]) - 12, whiteFacing: 0,
       white: { playerId: player, kingId: -1000, name: p.name, rating: Math.round(p.rating), color: p.color },
       black: { playerId: 'ai', kingId: -2000, name: 'Shadow of the Board', rating: Math.round(p.rating), color: '#8a8a8a' },
-      phase: 'live', startsAt: g.now, fen, moves: [], clocks: { white: 300_000, black: 300_000, turnStartedAt: g.now },
+      phase: 'live', startsAt: g.now, fen, startFen: fen, moves: [], clocks: { white: 300_000, black: 300_000, turnStartedAt: g.now },
       result: null, pieceMap, aiControlled: { white: false, black: true }, drawOfferBy: null,
     };
     const rec: BattleRec = {
@@ -179,10 +179,15 @@ export class Battles {
     if (!wk || !bk || wk.owner !== r.white.player || bk.owner !== r.black.player) {
       r.pub.phase = 'over'; r.pub.termination = 'a king was lost before the battle'; r.endedAt = now; this.onUpdate(r.pub); return;
     }
-    const eligible = (p: Piece, owner: string, k: Piece) =>
-      p.owner === owner && p.state !== 'battle' && cheb(p.x, p.y, k.x, k.y) <= REACH && (p.id === k.id || (p.cooldownUntil ?? 0) <= now) && !this.kingBusyOther(p.id, r);
+    const eligible = (p: Piece, owner: string, k: Piece, reach = REACH) =>
+      p.owner === owner && p.state !== 'battle' && cheb(p.x, p.y, k.x, k.y) <= reach && (p.id === k.id || (p.cooldownUntil ?? 0) <= now) && !this.kingBusyOther(p.id, r);
+    // Walls muster (campaign.md §4.3): a walled town defends with pieces from 14 squares.
+    const defender = g.players.get(r.black.player);
+    const walled = r.pub.kind === 'siege' && !!defender && g.chronicle.has(defender, 'walls')
+      && w.buildingsNear(bk.x, bk.y, REACH).some((b) => b.owner === r.black.player && (b.sieges ?? 0) >= 1);
+    const dReach = walled ? 14 : REACH;
     const wc = w.piecesNear(wk.x, wk.y, REACH).filter((p) => eligible(p, r.white.player, wk) && (p.kind !== 'K' || p.id === wk.id));
-    const bc = w.piecesNear(bk.x, bk.y, REACH).filter((p) => eligible(p, r.black.player, bk) && (p.kind !== 'K' || p.id === bk.id));
+    const bc = w.piecesNear(bk.x, bk.y, dReach).filter((p) => eligible(p, r.black.player, bk, dReach) && (p.kind !== 'K' || p.id === bk.id));
     const ws = pickSet(wk.id, wc, r.pub.cx, r.pub.cy).set, bs = pickSet(bk.id, bc, r.pub.cx, r.pub.cy).set;
     const { fen, pieceMap } = assemble(ws, bs);
     r.white.ids = ws.map((p) => p.id);
@@ -205,8 +210,10 @@ export class Battles {
         if (!w.sealed.has(k)) { w.sealed.set(k, r.pub.id); r.sealed.push(k); }
       }
     r.game = new BattleGame(fen, pieceMap);
+    r.pub.startFen = fen;
     r.game.start(now);
     r.pub.phase = 'live';
+    if (process.env.LOG_BATTLES) console.log(`battle ${r.pub.id} starts: ${r.pub.white.name} (${ws.length}: ${ws.map((p) => p.kind).join('')}) vs ${r.pub.black.name} (${bs.length}: ${bs.map((p) => p.kind).join('')}) · ratings ${r.pub.white.rating}/${r.pub.black.rating}`);
     this.sync(r);
   }
 
@@ -329,6 +336,7 @@ export class Battles {
       buildingsTransferred: [], emperorKilled: false, cooldownMs: 0, rated: false, ratingChange: {},
     };
     // Promotions last only the battle (battle.md §5): the pawn walks out a pawn again.
+    for (const pr of gm.promoted) { const p = w.pieces.get(pr.id); g.chronicle.note(p?.owner, 'promote'); }
     // Survivors step back into the world near their board squares.
     const survivors = new Set<number>();
     for (const [sq, id] of Object.entries(gm.pieceMap)) {
@@ -343,7 +351,7 @@ export class Battles {
     for (const id of gm.killed) g.removePiece(id);
 
     const winnerSide: Color | null = result === 'draw' ? null : result;
-    let scattered: { camp: NonNullable<ReturnType<Game['wilds']['campOf']>>; by: string } | null = null;
+    let scattered: { camp: NonNullable<ReturnType<Game['wilds']['campOf']>>; by: string; size: number } | null = null;
     if (winnerSide) {
       const win = winnerSide === 'white' ? r.white : r.black, lose = winnerSide === 'white' ? r.black : r.white;
       // The wilds (docs/specs/wilds.md §5): creatures never change sides, and camps never take land.
@@ -352,10 +360,19 @@ export class Battles {
       const loserKing = w.pieces.get(lose.kingId);
       const winKing = w.pieces.get(win.kingId);
       const kingAt: [number, number] = loserKing ? [loserKing.x, loserKing.y] : r.defenderAt;
-      const emperor = !!loserKing?.emperor;
+      // Newcomers' grace (campaign.md §7): through chapter 3, a king beaten by the wilds isn't
+      // killed. It retreats wounded with its army and can try again, so an early loss never
+      // strands a new player with no king to hunt with.
+      const loserP = g.players.get(lose.player);
+      const spared = !!wildWin && !!loserP?.chron && loserP.chron.ch <= 3;
+      const emperor = !spared && !!loserKing?.emperor;
       summary.emperorKilled = emperor;
-      // The losing king falls.
-      if (loserKing) { summary.killed.push(loserKing.id); g.removePiece(loserKing.id); }
+      // The losing king falls (unless spared).
+      if (loserKing && !spared) { summary.killed.push(loserKing.id); g.removePiece(loserKing.id); }
+      if (loserKing && spared) {
+        loserKing.cooldownUntil = now + 10 * 60_000; loserKing.protectedUntil = now + 10 * 60_000; w.touch(loserKing);
+        g.onAlert(lose.player, { kind: 'info', text: 'Your king retreats, wounded. Rest your army and try again', at: kingAt });
+      }
       const loserSurvivors = lose.ids.filter((id) => survivors.has(id) && id !== lose.kingId);
       // Reserves: the loser's other pieces that were within the fallen king's reach.
       const reserves = w.piecesNear(kingAt[0], kingAt[1], REACH).filter((p) => p.owner === lose.player && p.state !== 'battle' && !loserSurvivors.includes(p.id));
@@ -368,7 +385,7 @@ export class Battles {
         if (p.kit || fresh) { summary.killed.push(p.id); g.removePiece(p.id); return; }
         g.setOwner(p, win.player); summary.converted.push(p.id);
       };
-      for (const p of reserves) convert(p);
+      if (!spared) for (const p of reserves) convert(p);
       if (emperor) {
         for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) convert(p); }
       } else {
@@ -380,10 +397,27 @@ export class Battles {
           if (b.owner !== lose.player || distToRect(kingAt[0], kingAt[1], b.x, b.y, b.size) > REACH) continue;
           if (!emperor && w.anchorsOf(b, lose.player).length) continue;
           b.owner = win.player; b.unanchoredSince = undefined; w.dirtyBuildings.add(b.id);
+          // Capturing a kind of building opens it for you (campaign.md §8).
+          const wp = g.players.get(win.player);
+          if (wp && !wp.wild && b.type !== 'ruin' && b.type !== 'camp') { const st = g.chronicle.of(wp); if (!st.buildings.includes(b.type)) st.buildings.push(b.type); }
           summary.buildingsTransferred.push(b.id);
         }
       }
       if (emperor) this.fallOfEmperor(lose.player, kingAt);
+      // Defeating an Emperor seizes their crown (battle.md §7): one king for the victor, within
+      // their title's king cap (otherwise Renown). Not from fresh accounts (anti-farming).
+      if (emperor && !wildWin && !wildLose && !fresh) {
+        const wp = g.players.get(win.player);
+        if (wp) {
+          const kings = g.kingsOf(wp.id).length;
+          if (kings < g.chronicle.kingCap(wp) && g.chronicle.grantPiece(wp, 'K', winKing ? [winKing.x, winKing.y] : kingAt)) {
+            g.onAlert(wp.id, { kind: 'info', text: `You seized ${loserRec?.name ?? 'their'}'s crown: a new king joins your court`, at: kingAt });
+          } else {
+            g.chronicle.addRenown(wp.id, 300);
+            g.onAlert(wp.id, { kind: 'info', text: 'You seized a crown, but your title allows no more kings: +300 Renown' });
+          }
+        }
+      }
       // Cooldown: time for the winner to regenerate what they lost.
       const counts: Partial<Record<BuildingType, number>> = {};
       // Only working buildings count, at most two per king per type (safeguards.md §3).
@@ -394,7 +428,13 @@ export class Battles {
       summary.cooldownMs = Math.max(MIN_BATTLE_COOLDOWN_MS, lostKinds.reduce((s, k) => s + regenMs(k, counts, g.speed), 0));
       for (const id of win.ids) { const p = w.pieces.get(id); if (p) { p.cooldownUntil = now + summary.cooldownMs; w.touch(p); } }
       if (winKing) winKing.protectedUntil = now + summary.cooldownMs;
-      if (wildLose) scattered = { camp: wildLose, by: win.player };
+      if (wildLose) scattered = { camp: wildLose, by: win.player, size: lose.ids.length };
+      // Quests: battles won against other empires (campaign.md §5.2).
+      if (!wildWin && !wildLose) {
+        g.chronicle.note(win.player, 'win:empire');
+        g.chronicle.addRenown(win.player, r.pub.kind === 'siege' ? RENOWN.siegeWin : RENOWN.empireWin);
+        if (r.pub.kind === 'siege' && win === r.white) g.chronicle.note(win.player, 'win:siege');
+      }
     } else {
       for (const s of [r.white, r.black]) {
         const lost = s.ids.filter((id) => gm.killed.includes(id)).map((id) => kinds.get(id)!);
@@ -426,7 +466,7 @@ export class Battles {
       g.logEvent(side.player, 'battle', `${won ? 'Won' : summary.winner ? 'Lost' : 'Drew'} a ${r.pub.kind} battle against ${name} (${gm.termination})${summary.converted.length ? `, ${summary.converted.length} pieces changed sides` : ''}`);
     }
     this.onEnd(r.pub, summary, [r.white.player, r.black.player]);
-    if (scattered) g.wilds.scatter(scattered.camp, scattered.by);
+    if (scattered) g.wilds.scatter(scattered.camp, scattered.by, scattered.size);
   }
 
   /**

@@ -80,7 +80,9 @@ export const lookOf = (code: number) => LOOKS[code] ?? LOOK.meadow;
 export const palOf = (code: number, biome: number): Pal => lookOf(biome).pal[code as 0 | 1 | 2 | 3 | 4] ?? BASE[code];
 
 /** Art key for a resource node in a biome, e.g. "tree:cherry" or "ore:ruby". */
-export function nodeArt(seed: number, kind: string, x: number, y: number, biome: Biome, depleted = false): string {
+export function nodeArt(seed: number, kind: string, x: number, y: number, biome: Biome, depleted = false, hoard = false): string {
+  // Hoards left by scattered camps look like treasure caches (campaign.md §4.2).
+  if (hoard) return `hoard:${kind}`;
   const l = LOOK[biome];
   if (kind === 'tree') return depleted ? 'stump' : `tree:${l.trees[Math.floor(hash01(seed, x, y, 5) * l.trees.length)]}`;
   if (kind === 'rock') return `rock:${l.rock}`;

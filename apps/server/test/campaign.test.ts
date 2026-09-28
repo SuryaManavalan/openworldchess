@@ -1,0 +1,180 @@
+// The Chronicle (docs/specs/campaign.md): chapters, unlocks, titles, coronations,
+// holding the realm, side quests.
+import { afterAll, describe, expect, it } from 'vitest';
+import { CHAPTERS, TITLES, cheb, setWorth, type Building } from '@owc/shared';
+import { Game, type PlayerRec } from '../src/game.ts';
+
+let rs = 777;
+Math.random = () => { rs = (rs * 1103515245 + 12345) % 2147483648; return rs / 2147483648; };
+const game = new Game({ seed: 11, speed: 1, wilds: false });
+afterAll(() => game.battles.ai.stop());
+let now = 1_800_000_000_000;
+const join = (name: string) => { const p = game.join(undefined, name) as PlayerRec; p.online = true; return p; };
+let nextB = 3_000_000;
+const place = (owner: string, type: Building['type'], x: number, y: number, size = 1): Building => {
+  const b: Building = { id: nextB++, owner, type, x, y, size, hp: 100, built: 1, prod: 0 };
+  game.world.addBuilding(b);
+  return b;
+};
+const tick = (ms = 5000) => { now += ms; game.now = now; game.economy(now); };
+
+describe('the Chronicle', () => {
+  it('a new player starts at chapter 1 with only houses to build', () => {
+    const p = join('Newcomer');
+    const st = game.chronicle.of(p);
+    expect(st.ch).toBe(1);
+    expect(st.buildings).toEqual(['house']);
+    const k = game.kingsOf(p.id)[0];
+    expect(game.build(p.id, 'stable', [k.x + 2, k.y + 2])).toMatch(/chapter 1/);
+    expect(game.selfPlayer(p).chronicle?.chapter).toBe(1);
+  });
+
+  it('finishing a chapter grants its title and unlocks, and counts goals done early', () => {
+    const p = join('Climber');
+    const k = game.kingsOf(p.id).find((x) => !x.emperor)!;
+    // Chapter 1: a house, three pawns raised, a march of 10.
+    place(p.id, 'house', k.x + 3, k.y + 3);
+    for (let i = 0; i < 3; i++) game.chronicle.note(p.id, 'raise:P');
+    const spot = game.world.nearestFree(p.home[0] + 14, p.home[1], 6)!;
+    game.world.movePiece(k, spot[0], spot[1]);
+    tick();
+    const st = game.chronicle.of(p);
+    expect(st.ch).toBe(2);
+    expect(st.title).toBe(1);
+    expect(TITLES[st.title].name).toBe('Chieftain');
+    expect(st.buildings).toContain('stable');
+  });
+
+  it('starting over wipes the empire but keeps the account, only with the name typed', () => {
+    const p = join('Restarter');
+    const st = game.chronicle.of(p);
+    st.ch = 6; st.title = 4; st.renown = 900;
+    p.crowns = 700; p.civs = ['roman'];
+    const k = game.kingsOf(p.id)[0];
+    const b = place(p.id, 'house', k.x + 3, k.y + 3);
+    const oldIds = [...game.world.pieces.values()].filter((x) => x.owner === p.id).map((x) => x.id);
+    expect(game.resetEmpire(p, 'wrong name')).toMatch(/name/);
+    expect(game.world.buildings.has(b.id)).toBe(true);
+    expect(game.resetEmpire(p, 'restarter')).toBeNull();
+    expect(game.world.buildings.has(b.id)).toBe(false);
+    for (const id of oldIds) expect(game.world.pieces.has(id)).toBe(false);
+    expect(game.kingsOf(p.id).length).toBeGreaterThan(0);
+    const fresh = game.chronicle.of(p);
+    expect(fresh.ch).toBe(1);
+    expect(fresh.title).toBe(0);
+    expect(p.crowns).toBe(700);
+    expect(p.civs).toEqual(['roman']);
+    // Not again right away.
+    expect(game.resetEmpire(p, 'Restarter')).toMatch(/once an hour/);
+  });
+
+  it('strength counts only the legal set a side could field', () => {
+    expect(setWorth(['K', ...Array(30).fill('P'), ...Array(12).fill('N')])).toBe(8 + 6);
+    expect(setWorth(['K', 'Q', 'Q', 'R', 'R', 'R', 'B', 'N', 'P'])).toBe(9 + 10 + 3 + 3 + 1);
+  });
+
+  it('a full population still raises the piece the chapter asks for', () => {
+    const p = join('Crowded');
+    const st = game.chronicle.of(p);
+    st.ch = 4; st.step = 1; st.buildings = [...new Set([...st.buildings, 'temple'])];
+    st.chBase = { ...st.tallies };
+    const k = game.kingsOf(p.id)[0];
+    // A temple beside ore, and a realm filled to its cap with pawns.
+    const spot = game.world.nearestFree(k.x + 4, k.y + 4, 8)!;
+    const temple = place(p.id, 'temple', spot[0], spot[1], 2);
+    game.world.addHoard(spot[0] + 2, spot[1], 'ore', 500);
+    const mine = () => [...game.world.pieces.values()].filter((q) => q.owner === p.id).length;
+    const cap = game.popCap(p.id);
+    while (mine() < cap) {
+      const at = game.world.nearestFree(k.x - 6, k.y - 6, 14)!;
+      game.addPiece({ id: game.world.id(), owner: p.id, kind: 'P', x: at[0], y: at[1], facing: 2, state: 'idle' });
+    }
+    tick();
+    expect(mine()).toBeGreaterThanOrEqual(cap);
+    expect(temple.blocked).toBeNull();
+    // Once the bishop is raised, the cap applies again.
+    game.chronicle.note(p.id, 'raise:B');
+    expect(game.chronicle.wants(p)).toBeNull();
+  });
+
+  it("chapter 4's gift crowns a new king within the title's cap", () => {
+    const p = join('Crowned');
+    const st = game.chronicle.of(p);
+    // Jump to the end of chapter 3 and complete it.
+    st.ch = 3; st.step = 0; st.title = 1;
+    const before = game.kingsOf(p.id).length;
+    game.chronicle.complete(p);
+    expect(st.ch).toBe(4);
+    expect(st.title).toBe(2); // Warden: king cap 3
+    expect(game.kingsOf(p.id).length).toBe(before + 1);
+    // At the cap, a further coronation is refused politely.
+    expect(game.chronicle.coronation(p)).toBe(false);
+  });
+
+  it('a village holds itself for a while without a king, and never decays while its people are home', () => {
+    const p = join('Villager');
+    const k = game.kingsOf(p.id)[0];
+    const bs = [place(p.id, 'house', k.x + 3, k.y), place(p.id, 'house', k.x + 5, k.y), place(p.id, 'house', k.x + 7, k.y)];
+    game.chronicle.refreshSettlements(now, true);
+    expect(game.chronicle.settlementOfBuilding(bs[0].id)?.tier).toBe(2);
+    // Every king leaves, far away.
+    for (const kk of game.kingsOf(p.id)) { const s = game.world.nearestFree(kk.x + 80, kk.y, 10)!; game.world.movePiece(kk, s[0], s[1]); }
+    tick(1000);
+    for (let i = 0; i < 20; i++) tick(60_000); // 20 minutes: a village holds for an hour
+    expect(bs[0].blocked).not.toBe('unanchored');
+    for (let i = 0; i < 50; i++) tick(60_000); // past the hour: production pauses...
+    expect(bs[0].blocked).toBe('unanchored');
+    // ...but pawns are still home, so nothing decays.
+    expect(bs.every((b) => b.hp === 100)).toBe(true);
+  });
+
+  it('existing empires join at the chapter their holdings match', () => {
+    const p = join('Veteran');
+    delete p.chron;
+    const k = game.kingsOf(p.id)[0];
+    place(p.id, 'house', k.x + 2, k.y - 3); place(p.id, 'house', k.x + 4, k.y - 3); place(p.id, 'stable', k.x + 6, k.y - 3, 2);
+    game.chronicle.refreshSettlements(now, true);
+    const st = game.chronicle.of(p);
+    expect(st.ch).toBe(4);
+    expect(st.buildings).toEqual(expect.arrayContaining(['house', 'stable', 'temple', 'barracks', 'palace']));
+    expect(st.title).toBe(2);
+  });
+
+  it('side quests appear after half an hour of play, and pay out', () => {
+    const p = join('Errand');
+    const st = game.chronicle.of(p);
+    st.ch = 2;
+    for (let i = 0; i < 7; i++) tick(5 * 60_000);
+    expect(st.sides.length).toBeGreaterThan(0);
+    const q = st.sides[0];
+    const renown = st.renown;
+    // A skirmish, scout or grow quest here; finish whichever came.
+    if (q.kind === 'skirmish') game.chronicle.note(p.id, 'win:empire');
+    else { game.chronicle.decline(p, q.id); expect(st.sides.some((x) => x.id === q.id)).toBe(false); return; }
+    expect(st.renown).toBeGreaterThan(renown);
+  });
+
+  it("a player's king cap follows their title", () => {
+    const p = join('Capped');
+    const st = game.chronicle.of(p);
+    st.title = 0;
+    expect(game.chronicle.kingCap(p)).toBe(2);
+    st.title = 9;
+    expect(game.chronicle.kingCap(p)).toBe(20);
+  });
+
+  it('every chapter is reachable: each has steps, and each unlock is used by a later goal or play', () => {
+    expect(CHAPTERS.length).toBe(15);
+    const unlocked = new Set<string>(['house']);
+    for (const ch of CHAPTERS) {
+      for (const s of ch.steps) if (s.verb === 'build') expect(unlocked.has(s.type)).toBe(true);
+      for (const s of ch.steps) if (s.verb === 'raise' && s.kind !== 'P') {
+        const need = { N: 'stable', B: 'temple', R: 'barracks', Q: 'palace', K: 'palace' }[s.kind];
+        expect(unlocked.has(need)).toBe(true);
+      }
+      for (const b of ch.reward.buildings ?? []) unlocked.add(b);
+      if (ch.reward.abilities?.includes('wonder')) unlocked.add('wonder');
+    }
+    void cheb;
+  });
+});

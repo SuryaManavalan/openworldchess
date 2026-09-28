@@ -4,7 +4,7 @@
 import WebSocket from 'ws';
 import { Chess } from 'chess.js';
 import { Connection } from '@owc/client-core';
-import { BUILDINGS, PIECE_VALUE, REACH, WORK_AREA, cheb, distToRect, key, type BattlePublic, type BuildingType, type NodeKind, type Piece } from '@owc/shared';
+import { BUILDINGS, CHAPTERS, REACH, setWorth, WORK_AREA, cheb, distToRect, key, type BattlePublic, type BuildingType, type NodeKind, type Piece } from '@owc/shared';
 import { expected } from '@owc/rules';
 import { buildable, eloAt, terrainAt } from '@owc/worldgen';
 import type { ChessAI } from '@owc/engine';
@@ -29,6 +29,8 @@ const W: Record<Style, { build: number; attack: number; expand: number }> = {
 
 const lognormal = (median: number, sigma = 0.6) => median * Math.exp(sigma * Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random()));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** TIME_SCALE speeds bots up with a sped-up server (the campaign balance simulation). */
+const T = Math.max(1, Number(process.env.TIME_SCALE ?? 1));
 
 export class Bot {
   conn: Connection;
@@ -40,6 +42,7 @@ export class Bot {
   private lastAttack = 0;
   private lastExpand = 0;
   private lastGather = 0;
+  private lastQuest = 0;
   onToken: (t: string) => void = () => {};
 
   constructor(url: string, p: Persona, ai: ChessAI) {
@@ -57,7 +60,7 @@ export class Bot {
   private async loop() {
     while (this.alive) {
       // Bursts and lulls, never a metronome (bots.md §4).
-      await sleep(lognormal(6000, 0.5));
+      await sleep(lognormal(6000, 0.5) / T);
       if (!this.m.self) continue;
       try { this.think(); } catch (e) { console.error(this.p.name, e); }
     }
@@ -81,6 +84,8 @@ export class Bot {
     const expand = this.planExpand(kings);
     if (expand) options.push({ u: expand.u * w.expand, run: expand.run });
     this.tuneProduction(kings);
+    const quest = this.planQuest(kings);
+    if (quest) options.push(quest);
     const gather = this.planGather(kings);
     if (gather) options.push({ u: gather.u, run: gather.run });
     options.push({ u: 0.15, run: () => {} }); // idle baseline
@@ -122,7 +127,7 @@ export class Bot {
 
   private planBuild(kings: Piece[]) {
     const m = this.m;
-    if (Date.now() - this.lastBuildTry < 20_000) return null;
+    if (Date.now() - this.lastBuildTry < 20_000 / T) return null;
     const have = (t: BuildingType) => m.myBuildings().filter((b) => b.type === t).length;
     const pieces = m.myPieces().length;
     const kingsN = Math.max(1, kings.length);
@@ -136,8 +141,15 @@ export class Bot {
       ['temple', want('temple', 0.8, 0.7)],
       ['palace', want('palace', 1.1, 0.5)],
     ];
+    // The Chronicle: build only what's unlocked, and favor what the current quest asks for (campaign.md §8).
+    const chron = m.self?.chronicle;
+    const step = chron ? CHAPTERS[chron.chapter - 1]?.steps[chron.step] : undefined;
+    const allowed = (t: BuildingType) => !chron || chron.buildings.includes(t);
+    for (const w of wishlist) if (step?.verb === 'build' && step.type === w[0]) w[1] = Math.max(w[1], 2.5);
+    if (step?.verb === 'grow') for (const w of wishlist) if (w[0] === 'house') w[1] = Math.max(w[1], 2);
     wishlist.sort((a, b) => b[1] - a[1]);
     for (const [type, u] of wishlist) {
+      if (!allowed(type)) continue;
       if (u < 0.1) continue;
       for (const k of kings) {
         const site = this.findSite(type, k);
@@ -160,11 +172,60 @@ export class Bot {
     }
   }
 
+  /**
+   * Follow the Chronicle like a person would (campaign.md §8): hunt the camp a quest
+   * points at, march out when a quest asks, and name a capital when it can.
+   */
+  private planQuest(kings: Piece[]) {
+    const m = this.m;
+    const c = m.self?.chronicle;
+    if (!c || Date.now() - this.lastQuest < 45_000 / T) return null;
+    const step = CHAPTERS[c.chapter - 1]?.steps[c.step];
+    if (c.abilities.includes('capital') && !c.capital) {
+      const emp = kings.find((k) => k.emperor) ?? kings[0];
+      const b = m.myBuildings().filter((x) => x.type !== 'ruin').sort((a, z) => cheb(a.x, a.y, emp.x, emp.y) - cheb(z.x, z.y, emp.x, emp.y))[0];
+      if (b) return { u: 1, run: () => { this.lastQuest = Date.now(); this.conn.request({ t: 'capital.set', buildingId: b.id }); } };
+    }
+    if (!step) return null;
+    const idle = kings.filter((k) => !k.emperor && k.state === 'idle' && (k.cooldownUntil ?? 0) < m.serverNow());
+    const troopOf = (k: Piece) => m.myPieces().filter((p) => p.state !== 'battle' && cheb(p.x, p.y, k.x, k.y) <= REACH && (p.kind !== 'K' || p.id === k.id));
+    const at = c.target ?? c.sides.find((q) => q.camp || q.kind === 'skirmish')?.at;
+    if ((step.verb === 'hunt' || step.verb === 'free' || step.verb === 'win') && at) {
+      // The strongest idle king leads; attack if its king is in sight and we
+      // outweigh it, otherwise march closer (or wait and grow). While the
+      // newcomers' grace holds (chapters 1-3), the Emperor may lead too.
+      const might = (ps: Piece[]) => setWorth(ps.map((p) => p.kind));
+      const leaders = c.chapter <= 3 ? kings.filter((k) => k.state === 'idle' && (k.cooldownUntil ?? 0) < m.serverNow()) : idle;
+      const leader = leaders.sort((a, b) => might(troopOf(b)) - might(troopOf(a)))[0];
+      if (!leader || troopOf(leader).length < 4) return null;
+      const foe = [...m.pieces.values()].find((p) => p.kind === 'K' && p.owner && p.owner !== m.me && cheb(p.x, p.y, at[0], at[1]) <= 8);
+      const ids = troopOf(leader).map((p) => p.id);
+      if (foe && might(troopOf(leader)) < might([...m.pieces.values()].filter((p) => p.owner === foe.owner && cheb(p.x, p.y, foe.x, foe.y) <= REACH)) * 1.1) return null;
+      if (foe) return { u: 1.4, run: () => { this.lastQuest = Date.now(); this.log(`quest: attack at ${at}`); this.conn.request({ t: 'order.attack', pieceIds: ids, targetKingId: foe.id }); } };
+      return { u: 1.1, run: () => { this.lastQuest = Date.now(); this.conn.send({ t: 'order.move', pieceIds: ids, to: [at[0] - 6, at[1]] }); } };
+    }
+    if (step.verb === 'march' || step.verb === 'discover' || (step.verb === 'settle' && (at || step.minDist))) {
+      const mover = idle[0];
+      if (!mover) return null;
+      const home = m.self!.home;
+      let to: [number, number];
+      if (at) to = at;
+      else {
+        const dist = step.verb === 'march' ? step.dist + 5 : (step.verb === 'settle' ? (step.minDist ?? 25) + 10 : 60);
+        const a = Math.random() * Math.PI * 2;
+        to = [Math.round(home[0] + Math.cos(a) * dist), Math.round(home[1] + Math.sin(a) * dist)];
+      }
+      const escort = troopOf(mover).map((p) => p.id);
+      return { u: 1.1, run: () => { this.lastQuest = Date.now(); this.log(`quest: ${step.verb} to ${to}`); this.conn.send({ t: 'order.move', pieceIds: escort, to }); } };
+    }
+    return null;
+  }
+
   /** Pull stray pieces back to the king's side, like a tidy player would. */
   private planGather(kings: Piece[]) {
     const m = this.m;
     // Now and then, like a person would (and the server finds their way home itself).
-    if (Date.now() - this.lastGather < 60_000) return null;
+    if (Date.now() - this.lastGather < 60_000 / T) return null;
     const strays = m.myPieces().filter((p) => p.state === 'routed' && !p.groupId);
     if (!strays.length) return null;
     const k = kings[0];
@@ -174,19 +235,20 @@ export class Bot {
   // ---------- war ----------
 
   private strengthNear(owner: string, x: number, y: number) {
-    return [...this.m.pieces.values()].filter((p) => p.owner === owner && p.state !== 'battle' && cheb(p.x, p.y, x, y) <= REACH).reduce((s, p) => s + PIECE_VALUE[p.kind], 0);
+    return setWorth([...this.m.pieces.values()].filter((p) => p.owner === owner && p.state !== 'battle' && cheb(p.x, p.y, x, y) <= REACH).map((p) => p.kind));
   }
 
   private planAttack(kings: Piece[]) {
     const m = this.m;
-    if (Date.now() - this.lastAttack < 60_000) return null;
+    if (Date.now() - this.lastAttack < 60_000 / T) return null;
     const me = m.self!;
     // Use a non-Emperor king if possible; the Emperor only fights for high risk personas.
     const leaders = kings.filter((k) => (!k.emperor || this.p.risk > 0.85) && k.state === 'idle' && (k.cooldownUntil ?? 0) < m.serverNow());
     let best: { u: number; run: () => void } | null = null;
     for (const k of leaders) {
       const group = m.myPieces().filter((p) => p.state !== 'battle' && cheb(p.x, p.y, k.x, k.y) <= REACH && (p.kind !== 'K' || p.id === k.id));
-      const mine = group.reduce((s, p) => s + PIECE_VALUE[p.kind], 0);
+      // Only a legal set fights: count what could actually take the field.
+      const mine = setWorth(group.map((p) => p.kind));
       if (mine < 8) continue;
       for (const t of m.pieces.values()) {
         if (t.kind !== 'K' || !t.owner || t.owner === m.me || t.state === 'battle') continue;
@@ -215,7 +277,7 @@ export class Bot {
    */
   private planExpand(kings: Piece[]) {
     const m = this.m;
-    if (Date.now() - this.lastExpand < 90_000 || kings.length < 2) return null;
+    if (Date.now() - this.lastExpand < 90_000 / T || kings.length < 2) return null;
     // Only idle kings: never re-order a king that is marching (it may be on an attack).
     const spare = kings.find((k) => !k.emperor && !m.myBuildings().some((b) => distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH) && k.state === 'idle');
     const busyAnchors = kings.filter((k) => m.myBuildings().some((b) => distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH));
@@ -256,7 +318,7 @@ export class Bot {
     const mat = (c: 'w' | 'b') => chess.board().flat().filter((s) => s && s.color === c).reduce((s, p) => s + ({ p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 } as Record<string, number>)[p!.type], 0);
     const deficit = mat(side === 'w' ? 'b' : 'w') - mat(side);
     if (deficit >= 9 && b.moves.length > 16 && Math.random() < 0.35) {
-      await sleep(lognormal(2500));
+      await sleep(lognormal(2500) / T);
       this.conn.send({ t: 'emote', battleId: b.id, id: 0 });
       this.conn.send({ t: 'battle.resign', battleId: b.id });
       return;
@@ -266,7 +328,7 @@ export class Bot {
     const complexity = Math.min(2.2, 0.5 + legal / 25);
     const budget = Math.max(300, myClock / 30);
     const think = Math.min(budget * 1.5, lognormal(2200 * complexity, 0.7));
-    const [uci] = await Promise.all([this.ai.bestMove(b.fen, this.p.strength, 300), sleep(think)]);
+    const [uci] = await Promise.all([this.ai.bestMove(b.fen, this.p.strength, 300), sleep(think / T)]);
     const cur = this.m.battles.get(b.id);
     if (!cur || cur.fen !== b.fen || cur.phase !== 'live') return;
     const mv = uci ?? chess.moves({ verbose: true })[0]?.lan;

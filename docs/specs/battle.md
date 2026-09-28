@@ -96,6 +96,13 @@ Pieces captured during the battle are **gone for good** (they die).
 - Converted pieces keep their type. They're re-tinted to the winner's color, with a short banner-flip animation.
 - There is no stockpile to loot ([economy.md](economy.md) §1). The prize is the settlement itself: its site, its buildings, and whatever its nodes have left.
 
+### Seizing a crown (Decided after playtesting)
+
+- **Defeating a player's Emperor seizes their crown:** the victor gets one new king at the battlefield, within their title's king cap (campaign.md §4.1). If they're at the cap, they get 300 Renown instead.
+- Ordinary king battles give no king, so kings can't be farmed from skirmishes.
+- As with conversions, accounts younger than 2 hours give no crown (anti-farming).
+- The fallen Emperor's other crowned kings still go masterless with the rest of the empire, and any nearby king can claim them. The two starting kings never change hands.
+
 ### Draw
 
 - No conversion. Both sides keep their survivors.

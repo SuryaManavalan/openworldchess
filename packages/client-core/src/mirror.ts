@@ -44,6 +44,8 @@ export class Mirror {
   onEmote: (m: Extract<ServerMsg, { t: 'emote' }>) => void = () => {};
   onError: (msg: string, rid?: number) => void = () => {};
   onAck: (rid: number) => void = () => {};
+  /** A chapter of the Chronicle was completed (campaign.md): the unlock ceremony. */
+  onChapter: (c: { n: number; name: string; opens: string; title?: string; coronation?: boolean }) => void = () => {};
   /** A Stripe checkout page is ready (cosmetics.md). */
   onShopUrl: (url: string) => void = () => {};
   onTurn: (n: number) => void = () => {};
@@ -142,6 +144,7 @@ export class Mirror {
       case 'away': this.onAway(m); break;
       case 'err': this.onError(m.msg, m.rid); break;
       case 'ack': this.onAck(m.rid); break;
+      case 'chapter': this.onChapter(m); break;
       case 'shop.url': this.onShopUrl(m.url); if (m.rid != null) this.onAck(m.rid); break;
       case 'pong': this.clockOffset = m.serverTime - (m.at + Date.now()) / 2; break;
     }

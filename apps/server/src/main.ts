@@ -1,7 +1,7 @@
 // Server entry: the loop (TECH.md T7), persistence and networking.
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { extname, join, normalize } from 'node:path';
+import { dirname, extname, join, normalize } from 'node:path';
 import { TICK_HZ, TURN_MS } from '@owc/shared';
 import { Game } from './game.ts';
 import { Net } from './net.ts';
@@ -9,6 +9,8 @@ import { load, save } from './persist.ts';
 import { handleAuth } from './auth.ts';
 import { perf } from './perf.ts';
 import { handleShop } from './shop.ts';
+import { handleTikTok } from './tiktok.ts';
+import { handleStats, stats } from './stats.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const SEED = Number(process.env.SEED ?? 1);
@@ -28,6 +30,7 @@ game.battles.countdownScale = COUNTDOWN_SCALE;
 if (process.env.SHIELD_MS) game.shieldMs = Number(process.env.SHIELD_MS);
 if (process.env.GUEST_GRACE_MS) game.guestGraceMs = Number(process.env.GUEST_GRACE_MS);
 if (load(game, DATA)) console.log(`loaded ${game.world.pieces.size} pieces, ${game.players.size} players from ${DATA}`);
+stats.load(join(dirname(DATA), 'stats.json'), game);
 
 // Serve the built client too, so one process can run the whole game.
 const MIME: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
@@ -47,6 +50,8 @@ const server = createServer((req, res) => {
     return;
   }
   if (req.url?.startsWith('/shop/') || req.url?.startsWith('/stripe/')) { handleShop(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { res.statusCode = 500; res.end('shop error'); }); return; }
+  if (req.url?.startsWith('/api/')) { handleStats(game, req, res, () => net.liveCounts()).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end(); } }); return; }
+  if (req.url?.startsWith('/tiktok/') || req.url?.startsWith('/auth/tiktok/')) { handleTikTok(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end('tiktok error'); } }); return; }
   if (req.url?.startsWith('/auth/')) { handleAuth(game, req, res).catch(() => { res.statusCode = 500; res.end('auth error'); }); return; }
   let path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^(\.\.[/\\])+/, '');
   if (path === '/' || !extname(path)) path = '/index.html';
@@ -95,17 +100,17 @@ setInterval(() => {
   if (now - lastMine >= MINE_EVERY_MS) { lastMine = now; perf.time('net.sendAllMine', () => net.sendAllMine()); }
   if (now - lastSelf >= 2500) { lastSelf = now; perf.time('net.sendAllSelf', () => net.sendAllSelf()); }
   if (now - lastFall >= Math.min(30_000, game.guestGraceMs / 2)) { lastFall = now; game.fallOfGuests(now); }
-  if (now - lastRoll >= 60_000) { lastRoll = now; perf.roll(now); }
+  if (now - lastRoll >= 60_000) { lastRoll = now; perf.roll(now); stats.sample(net.liveCounts().humans); }
   if (now - lastMaintain >= 60_000) {
     lastMaintain = now;
     const fade = now - lastFade >= 3_600_000;
     if (fade) lastFade = now;
     perf.time('maintain', () => game.world.maintain(net.watchedChunks(), fade));
   }
-  if (now - lastSave >= SAVE_EVERY_MS) { lastSave = now; perf.time('save', () => save(game, DATA)); }
+  if (now - lastSave >= SAVE_EVERY_MS) { lastSave = now; perf.time('save', () => { save(game, DATA); stats.save(); }); }
 }, Math.min(1000 / TICK_HZ, TURN / 2));
 
-const shutdown = () => { save(game, DATA); game.battles.ai.stop(); console.log('saved'); process.exit(0); };
+const shutdown = () => { save(game, DATA); stats.save(); game.battles.ai.stop(); console.log('saved'); process.exit(0); };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 

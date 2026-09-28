@@ -22,6 +22,9 @@
 | [specs/wilds.md](specs/wilds.md) | Hordes and herds: 32 creature factions, camps, growth, raiding, aftermath, art and names. |
 | [specs/performance.md](specs/performance.md) | Budgets, observability (/metrics, ?perf, live profiling), the replay benchmark, and the optimizations in use. |
 | [specs/cosmetics.md](specs/cosmetics.md) | Cosmetic civilizations (Dravidian, Roman, Chinese, Egyptian), Crowns, the Stripe purchase flow and its setup. |
+| [specs/tiktok.md](specs/tiktok.md) | Sign in with TikTok, battle clips, posting to TikTok (direct and drafts), webhooks. |
+| [specs/stats.md](specs/stats.md) | The private usage analytics page (/stats.html): what it counts, privacy, storage, access. |
+| [specs/campaign.md](specs/campaign.md) | The Chronicle: a 15-hour campaign of chapters, titles, coronations and quests, with a new unlock every 30–60 minutes. (Proposed) |
 | [specs/safeguards.md](specs/safeguards.md) | Runaway loops (piece spam, king breeding, alt farming, server load) and the caps that stop them. |
 | [specs/client.md](specs/client.md) | Screens, rendering layers, HUD, input, performance. |
 | [specs/art.md](specs/art.md) | Art direction, style rules, the asset list, the pipeline. |

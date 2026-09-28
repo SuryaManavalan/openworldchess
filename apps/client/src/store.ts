@@ -2,11 +2,12 @@
 // itself lives in the Mirror; React re-renders on `version` bumps.
 import { create } from 'zustand';
 import type { BuildingType } from '@owc/shared';
+import type { ClipData } from './game/clip.ts';
 
 export interface AlertItem { id: number; kind: string; text: string; battleId?: number; at?: [number, number]; time: number }
 export interface Toast { id: number; text: string; tone: 'info' | 'error' | 'good'; icon?: string }
 
-export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help' | 'shop';
+export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help' | 'shop' | 'chronicle';
 
 interface Settings {
   sound: boolean;
@@ -28,6 +29,8 @@ interface UIState {
   toasts: Toast[];
   battleFocus: number | null;
   pendingAttack: { pieceIds: number[]; targetKingId: number; name: string; siege: boolean } | null;
+  /** A finished chapter being celebrated (campaign.md §5.5). */
+  ceremony: { n: number; name: string; opens: string; title?: string; coronation?: boolean } | null;
   /** A civilization to scroll to and highlight when the shop opens. */
   shopFocus: string | null;
   /** Something that isn't yours, being looked at (Inspect card). */
@@ -41,6 +44,9 @@ interface UIState {
   nameError: string | null;
   welcomeNote: string | null;
   googleEnabled: boolean;
+  tiktokEnabled: boolean;
+  /** A battle clip being shared (ShareTikTok). */
+  share: ClipData | null;
   flags: { id: number; x: number; y: number; color: string }[];
   flagMode: boolean;
   addFlag: (x: number, y: number) => void;
@@ -67,6 +73,7 @@ export const useUI = create<UIState>((set, get) => ({
   selection: [],
   inspect: null,
   shopFocus: null,
+  ceremony: null,
   sheet: null,
   buildType: null,
   ghost: null,
@@ -83,6 +90,8 @@ export const useUI = create<UIState>((set, get) => ({
   nameError: null,
   welcomeNote: null,
   googleEnabled: false,
+  tiktokEnabled: false,
+  share: null,
   flags: (() => { try { return JSON.parse(localStorage.getItem('owc.flags') ?? '[]'); } catch { return []; } })(),
   flagMode: false,
   addFlag: (x, y) => {

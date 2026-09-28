@@ -54,6 +54,7 @@ export function load(game: Game, file: string): boolean {
     // "gold" was renamed "ore" (it looks different in each biome).
     if ((n.kind as string) === 'gold') n.kind = 'ore';
     w.nodeOverlay.set(k, n);
+    if (n.hoard && !n.gone) w.indexHoard(n);
   }
   for (const [k, t] of snap.traffic ?? []) w.traffic.set(k, t);
   for (const [pid, ev] of snap.events ?? []) game.events.set(pid, ev);

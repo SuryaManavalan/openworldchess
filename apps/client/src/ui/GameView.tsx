@@ -106,7 +106,7 @@ let watchTarget: [number, number] | null = null;
 let watchUntil = 0;
 function watchMode(sc: Scene) {
   const ui = useUI.getState();
-  if (!ui.settings.watchMode || ui.settings.reduceMotion || ui.battleFocus || ui.buildType) return;
+  if (!ui.settings.watchMode || ui.settings.reduceMotion || ui.battleFocus || ui.buildType || ui.share || ui.sheet) return;
   if (Date.now() - sc.lastInput < 60_000) return;
   if (!ui.watching) ui.set({ watching: true });
   if (!watchTarget || Date.now() > watchUntil) {

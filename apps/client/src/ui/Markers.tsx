@@ -9,7 +9,7 @@ import { scene } from './GameView.tsx';
 import { TIER_NAME } from '../game/settlements.ts';
 import { Icon } from './Icon.tsx';
 
-interface Marker { key: string; x: number; y: number; kind: 'flag' | 'town' | 'mytown' | 'emperor'; label: string; color: string; id?: number }
+interface Marker { key: string; x: number; y: number; kind: 'flag' | 'town' | 'mytown' | 'emperor' | 'quest'; label: string; color: string; id?: number }
 
 const PIN_ZOOM = 0.35;
 
@@ -20,6 +20,10 @@ function collect(flags: { id: number; x: number; y: number; color: string }[]): 
     const mine = st.owner === mirror.me;
     out.push({ key: `t${st.id}`, x: st.cx, y: st.cy, kind: mine ? 'mytown' : 'town', label: `${st.name} · ${TIER_NAME[st.tier]}`, color: mirror.players.get(st.owner)?.color ?? '#999' });
   }
+  // Quest targets (campaign.md §5.5): the main step's and any side quests'.
+  const c = mirror.self?.chronicle;
+  if (c?.target) out.push({ key: 'q-main', x: c.target[0], y: c.target[1], kind: 'quest', label: 'Quest', color: '#f3d27a' });
+  for (const q of c?.sides ?? []) if (q.at) out.push({ key: `q-${q.id}`, x: q.at[0], y: q.at[1], kind: 'quest', label: 'Side quest', color: '#cfe6a4' });
   const emp = mirror.myPieces().find((p) => p.emperor);
   if (emp) out.push({ key: 'emp', x: emp.x, y: emp.y, kind: 'emperor', label: 'Emperor', color: mirror.self?.color ?? '#e3b23c' });
   return out;
@@ -51,8 +55,8 @@ export function Markers() {
         if (m.kind === 'emperor') { const e = mirror.myPieces().find((p) => p.emperor); if (e) { m.x = e.x; m.y = e.y; } }
         const [sx, sy] = sc.toScreen(m.x, m.y);
         const onScreen = sx > inset.l && sx < W - inset.r && sy > inset.t && sy < H - inset.b;
-        const wantsArrow = m.kind === 'flag' || m.kind === 'emperor' || m.kind === 'mytown';
-        const showPin = onScreen && (m.kind === 'flag' || far);
+        const wantsArrow = m.kind === 'flag' || m.kind === 'emperor' || m.kind === 'mytown' || m.kind === 'quest';
+        const showPin = onScreen && (m.kind === 'flag' || m.kind === 'quest' || far);
         if (showPin) {
           node.style.display = '';
           node.className = `marker pin ${m.kind}`;
@@ -98,7 +102,7 @@ export function Markers() {
       {list.map((m) => (
         <div key={m.key} data-k={m.key} className={`marker ${m.kind}`} style={{ display: 'none', ['--c' as string]: m.color }} onClick={() => go(m.key)}>
           <span className="tip" />
-          <span className="icon"><Icon name={m.kind === 'flag' ? 'flag' : m.kind === 'emperor' ? 'crown' : m.kind === 'mytown' ? 'castle' : 'house'} size={14} stroke={2.4} /></span>
+          <span className="icon"><Icon name={m.kind === 'flag' ? 'flag' : m.kind === 'emperor' ? 'crown' : m.kind === 'mytown' ? 'castle' : m.kind === 'quest' ? 'target' : 'house'} size={14} stroke={2.4} /></span>
           <span className="name">{m.kind === 'flag' ? '' : m.label}</span>
           <span className="dist" />
           {m.kind === 'flag' && <button className="x" aria-label="Remove flag" onClick={(e) => { e.stopPropagation(); ui.removeFlag(m.id!); }}><Icon name="close" size={11} stroke={2.6} /></button>}

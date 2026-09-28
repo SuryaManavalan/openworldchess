@@ -7,6 +7,8 @@ import { useUI } from '../store.ts';
 import { ascendedUrl, creatureUrl, pieceUrl } from '../game/textures.ts';
 import { ROLE_NAME } from './Inspect.tsx';
 import { audio } from '../audio/audio.ts';
+import { clipData } from '../game/clip.ts';
+import { TikTokMark } from './ShareTikTok.tsx';
 
 const FILES = 'abcdefgh';
 import { EMOTE_ICONS, EMOTE_LABELS, Icon } from './Icon.tsx';
@@ -24,6 +26,21 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
   const side = battle.white.playerId === me ? 'white' : battle.black.playerId === me ? 'black' : null;
   const bottom = side ?? 'white';
   const chess = useMemo(() => { try { return new Chess(battle.fen || undefined); } catch { return new Chess(); } }, [battle.fen]);
+  // Your move shows the moment you make it, while the server confirms (no snap back to the old square).
+  const [pending, setPending] = useState<{ from: string; to: string; promotion?: string; base: string } | null>(null);
+  const live = pending && pending.base === battle.fen ? pending : null;
+  const view = useMemo(() => {
+    if (!live) return chess;
+    const c = new Chess(chess.fen());
+    try { c.move({ from: live.from, to: live.to, promotion: live.promotion }); } catch { return chess; }
+    return c;
+  }, [chess, live]);
+  // A move the server never takes (a race with the clock) falls back after a moment.
+  useEffect(() => { if (!live) return; const t = setTimeout(() => setPending(null), 2500); return () => clearTimeout(t); }, [live]);
+  const play = (uci: string) => {
+    commands.battleMove(battle.id, uci);
+    setPending({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4], base: battle.fen });
+  };
   const [sel, setSel] = useState<string | null>(null);
   const [promo, setPromo] = useState<{ from: string; to: string } | null>(null);
   const [confirmResign, setConfirmResign] = useState(false);
@@ -50,7 +67,7 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
   }, [battle.fen]);
 
   const turn = chess.turn() === 'w' ? 'white' : 'black';
-  const myTurn = side === turn && battle.phase === 'live';
+  const myTurn = side === turn && battle.phase === 'live' && !live;
   void now; // re-render every 100ms for the clocks
   const serverNow = mirror.serverNow();
   const clock = (c: 'white' | 'black') => {
@@ -74,7 +91,7 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
     const mv = chess.moves({ square: from as Square, verbose: true }).find((m) => m.to === to);
     if (!mv) return false;
     if (mv.promotion) { setPromo({ from, to }); return true; }
-    commands.battleMove(battle.id, from + to);
+    play(from + to);
     setSel(null);
     return true;
   };
@@ -123,10 +140,10 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
     for (let f = 0; f < 8; f++) {
       const sq = bottom === 'white' ? FILES[f] + (8 - rk) : FILES[7 - f] + (rk + 1);
       const light = (f + rk) % 2 === 0;
-      const p = chess.get(sq as Square);
+      const p = view.get(sq as Square);
       const dragging = drag?.from === sq;
       rows.push(
-        <div key={sq} className={`sq ${light ? 'light' : 'dark'} ${changed.has(sq) ? 'last' : ''} ${sel === sq ? 'sel' : ''} ${inCheckSq === sq ? 'check' : ''}`}
+        <div key={sq} className={`sq ${light ? 'light' : 'dark'} ${(live ? sq === live.from || sq === live.to : changed.has(sq)) ? 'last' : ''} ${sel === sq ? 'sel' : ''} ${inCheckSq === sq ? 'check' : ''}`}
           onPointerDown={(e) => {
             if (!myTurn) return;
             const pc = chess.get(sq as Square);
@@ -143,7 +160,7 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
           {f === 0 && <span className="coord r">{sq[1]}</span>}
           {rk === 7 && <span className="coord f">{sq[0]}</span>}
           {legalFrom.includes(sq as Square) && <span className={p || epTargets.includes(sq) ? 'hint cap' : 'hint'} />}
-          {p && <img src={pieceImg(p.type, p.color, sq)} className={dragging ? 'ghosted' : wildOf(p.color) ? 'wild' : ''} style={wildOf(p.color) ? { ['--glow' as string]: FACTIONS[wildOf(p.color)!]?.art.accent } : undefined} draggable={false} alt="" title={pieceTitle(p.type, p.color, sq)} />}
+          {p && <img src={pieceImg(p.type, p.color, live && sq === live.to ? live.from : sq)} className={dragging ? 'ghosted' : wildOf(p.color) ? 'wild' : ''} style={wildOf(p.color) ? { ['--glow' as string]: FACTIONS[wildOf(p.color)!]?.art.accent } : undefined} draggable={false} alt="" title={pieceTitle(p.type, p.color, sq)} />}
         </div>,
       );
     }
@@ -178,11 +195,11 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
         {player(top)}
         <div className="board-wrap">
           <div className="board" ref={boardRef}>{rows}</div>
-          {drag && (() => { const pc = chess.get(drag.from as Square); return pc ? <img className="drag-piece" style={{ left: drag.x, top: drag.y }} src={pieceImg(pc.type, pc.color, drag.from)} alt="" /> : null; })()}
+          {drag && (() => { const pc = chess.get(drag.from as Square); return pc ? <img className="drag-piece" style={{ left: drag.x, top: drag.y, width: (boardRef.current?.clientWidth ?? 608) / 8, height: (boardRef.current?.clientWidth ?? 608) / 8 }} src={pieceImg(pc.type, pc.color, drag.from)} alt="" /> : null; })()}
           {promo && (
             <div className="promo">
               {(['q', 'r', 'b', 'n'] as const).map((k) => (
-                <button key={k} onClick={() => { commands.battleMove(battle.id, promo.from + promo.to + k); setPromo(null); setSel(null); }}>
+                <button key={k} onClick={() => { play(promo.from + promo.to + k); setPromo(null); setSel(null); }}>
                   <img src={pieceImg(k, side === 'white' ? 'w' : 'b', '')} alt={k} />
                 </button>
               ))}
@@ -199,7 +216,12 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
             <div className="board-cover over">
               <div className="result">{battle.result === 'draw' || !battle.result ? 'Draw' : battle.result === side ? 'Victory' : side ? 'Defeat' : `${battle[battle.result].name} wins`}</div>
               <div>{battle.termination}</div>
-              <button className="btn" onClick={() => ui.set({ battleFocus: null })}>Back to the world</button>
+              <div className="over-actions">
+                <button className="btn" onClick={() => ui.set({ battleFocus: null })}>Back to the world</button>
+                {side && ui.tiktokEnabled && battle.startFen && battle.moves.length >= 2 && (
+                  <button className="btn tiktok" onClick={() => { const d = clipData(battle, side); if (d) ui.set({ share: d, battleFocus: null }); }}><TikTokMark /> Share clip</button>
+                )}
+              </div>
             </div>
           )}
           {emoteShown && <div className="emote-pop"><Icon name={emoteShown} size={72} stroke={1.8} /></div>}

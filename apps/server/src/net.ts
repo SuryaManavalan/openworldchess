@@ -2,9 +2,11 @@
 // and per-client filtering of world events.
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage, Server } from 'node:http';
+import { stats } from './stats.ts';
 import {
   ClientMsg, PROTOCOL_VERSION, TURN_MS, chunkKey, chunkOf,
   type BattlePublic, type BattleSummary, type Building, type NodeState, type Piece, type ServerMsg, type TurnMove,
+  type PlayerSelf,
 } from '@owc/shared';
 import type { Alert, Game, PlayerRec } from './game.ts';
 import { perf } from './perf.ts';
@@ -17,6 +19,8 @@ interface Session {
   pathBudget: number;
   lastPath: number;
   player?: PlayerRec;
+  /** Watching without an empire (?watch, for filming): gets world updates, sends no orders. */
+  watcher?: boolean;
   subs: Set<string>;
   watching: Set<number>;
   lastMsg: number;
@@ -42,6 +46,10 @@ export class Net {
     wss.on('connection', (ws: WebSocket, req: IncomingMessage) => this.connect(ws, req));
     game.onAlert = (pid, a) => { game.logEvent(pid, a.kind, a.text); this.alert(pid, a); };
     game.onPlayers = () => this.broadcastPlayers();
+    game.chronicle.onChapter = (pid, info) => {
+      const who = game.players.get(pid); if (who && !who.isBot) stats.chapter(info.n);
+      for (const s of this.sessions) if (s.player?.id === pid) { this.send(s, { t: 'chapter', ...info }); this.send(s, { t: 'self', self: game.selfPlayer(s.player) }); }
+    };
     game.onSelf = (pid) => { for (const s of this.sessions) if (s.player?.id === pid) this.send(s, { t: 'self', self: game.selfPlayer(s.player) }); };
     // Camps of the wilds are only simulated where people are looking (bots don't count).
     game.wilds.viewed = () => this.viewedChunks();
@@ -56,7 +64,7 @@ export class Net {
 
   broadcast(m: ServerMsg) {
     const data = JSON.stringify(m);
-    for (const s of this.sessions) if (s.player && s.ws.readyState === s.ws.OPEN) s.ws.send(data);
+    for (const s of this.sessions) if ((s.player || s.watcher) && s.ws.readyState === s.ws.OPEN) s.ws.send(data);
   }
 
   private connect(ws: WebSocket, req: IncomingMessage) {
@@ -96,6 +104,16 @@ export class Net {
     this.lastType = msg.t;
     if (msg.t === 'hello') {
       if (msg.v !== PROTOCOL_VERSION) { s.ws.close(4001, 'upgrade-required'); return; }
+      if (msg.watch) {
+        // Watchers: no empire, a few at a time.
+        if ([...this.sessions].filter((o) => o.watcher).length >= 10) return this.send(s, { t: 'err', msg: 'Too many watchers right now', code: 'bad-name' });
+        s.watcher = true;
+        const self = { id: 'watcher', name: 'Watcher', color: '#8a8a8a', emblem: 0, rating: 0, online: true, guest: false, guestGraceMs: 0, popCap: 0, emperorId: null, shieldUntil: 0, home: [0, 0] } as unknown as PlayerSelf;
+        this.send(s, { t: 'welcome', v: PROTOCOL_VERSION, token: '', self, seed: g.world.seed, turn: g.turn, turnMs: this.turnMs, serverTime: now, nextTurnAt: this.nextTurnAt });
+        this.send(s, { t: 'battles', battles: g.battles.active() });
+        this.send(s, { t: 'players', players: [...g.players.values()].filter((x) => !x.wild || x.wild.awake !== false).map((x) => g.publicPlayer(x)) });
+        return;
+      }
       // New accounts per address are limited (safeguards.md §5); local bots are exempt.
       const isNew = !(msg.token && g.tokens.has(msg.token));
       const local = /^(::1|127\.0\.0\.1|::ffff:127\.0\.0\.1)$/.test(s.ip);
@@ -108,6 +126,7 @@ export class Net {
       if (isNew && !('error' in joined) && !local) this.newAccounts.get(s.ip)?.push(now);
       if ('error' in joined) return this.send(s, { t: 'err', msg: joined.error, code: joined.code });
       const p = joined;
+      stats.player(p, isNew);
       const lastSeen = p.lastSeen;
       p.leftAt = undefined;
       s.player = p;
@@ -122,6 +141,10 @@ export class Net {
       return;
     }
     if (msg.t === 'ping') return this.send(s, { t: 'pong', at: msg.at, serverTime: now });
+    if (s.watcher) {
+      if (msg.t === 'sub' && now - s.lastSub >= 250) { s.lastSub = now; this.subscribe(s, msg.chunks.slice(0, 81)); }
+      return;
+    }
     const p = s.player;
     if (!p) return this.send(s, { t: 'err', msg: 'Say hello first' });
     const reply = (rid: number | undefined, err: string | null) => {
@@ -153,6 +176,15 @@ export class Net {
         break;
       }
       case 'civ.buy': reply(msg.rid, buyCiv(g, p, msg.civ)); break;
+      case 'empire.reset': {
+        const e = g.resetEmpire(p, msg.name);
+        reply(msg.rid, e);
+        if (!e) this.send(s, { t: 'self', self: g.selfPlayer(p) });
+        break;
+      }
+      case 'capital.set': reply(msg.rid, g.chronicle.setCapital(p, msg.buildingId)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
+      case 'quest.decline': g.chronicle.decline(p, msg.id); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
+      case 'muster': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.muster(p.id, msg.kingId)); break;
       case 'civ.equip': {
         // Only one you own (or null for the classic look).
         if (msg.civ === null || p.civs?.includes(msg.civ)) { p.civ = msg.civ ?? undefined; this.broadcastPlayers(); this.send(s, { t: 'self', self: g.selfPlayer(p) }); }
@@ -188,7 +220,7 @@ export class Net {
         t: 'chunk', cx, cy,
         pieces: w.piecesInChunk(cx, cy),
         buildings: w.buildingsInChunk(cx, cy),
-        nodes: w.nodesInChunk(cx, cy).map(({ x, y, kind, capacity, remaining }) => ({ x, y, kind, capacity, remaining })),
+        nodes: w.nodesInChunk(cx, cy).map(({ x, y, kind, capacity, remaining, hoard }) => ({ x, y, kind, capacity, remaining, hoard })),
         traffic: w.trafficInChunk(cx, cy),
       });
     }
@@ -208,12 +240,12 @@ export class Net {
     const buildings: Building[] = [...w.dirtyBuildings].map((id) => w.buildings.get(id)!).filter(Boolean);
     const removedB = [...w.removedBuildings];
     const nodes: NodeState[] = [...w.dirtyNodes].map((k) => w.nodeRecByKey(k)!).filter(Boolean)
-      .map(({ x, y, kind, capacity, remaining, gone }) => ({ x, y, kind, capacity, remaining: gone ? -1 : remaining }));
+      .map(({ x, y, kind, capacity, remaining, gone, hoard }) => ({ x, y, kind, capacity, remaining: gone ? -1 : remaining, hoard }));
     w.dirtyPieces.clear(); w.movedPieces.clear(); w.removedPieces.clear(); w.dirtyBuildings.clear(); w.removedBuildings.clear(); w.dirtyNodes.clear();
     const at = this.nextTurnAt - this.turnMs;
     for (const s of this.sessions) {
-      if (!s.player) continue;
-      const mine = s.player.id, bot = s.player.isBot;
+      if (!s.player && !s.watcher) continue;
+      const mine = s.player?.id ?? '', bot = !!s.player?.isBot;
       const seen = (p: Piece) => p.owner === mine || inSubs(s, p.x, p.y);
       // The client already knew the piece (it started in view) and gets this move: nothing else to send.
       const gotMove = (p: Piece) => { const m = moveOf.get(p.id); return !!m && m[3] === p.x && m[4] === p.y && inSubs(s, m[1], m[2]); };
@@ -233,7 +265,14 @@ export class Net {
   }
 
   /** Chunks people (not bots) are looking at. */
-  viewedChunks() { const out = new Set<string>(); for (const s of this.sessions) if (s.player && !s.player.isBot) for (const k of s.subs) out.add(k); return out; }
+  /** People, watchers and bots connected right now. */
+  liveCounts() {
+    let humans = 0, watchers = 0, bots = 0;
+    for (const s of this.sessions) { if (s.watcher) watchers++; else if (s.player?.isBot) bots++; else if (s.player) humans++; }
+    return { humans, watchers, bots };
+  }
+
+  viewedChunks() { const out = new Set<string>(); for (const s of this.sessions) if ((s.player && !s.player.isBot) || s.watcher) for (const k of s.subs) out.add(k); return out; }
 
   /** Chunks someone is looking at (kept in memory). */
   watchedChunks() { const out = new Set<string>(); for (const s of this.sessions) for (const k of s.subs) out.add(k); return out; }
@@ -261,6 +300,12 @@ export class Net {
   }
 
   private battleEnd(b: BattlePublic, summary: BattleSummary, _involved: string[]) {
+    // Analytics: battles a person fought in (bot-vs-bot and bot-vs-camp don't count).
+    const side = (id: string) => this.game.players.get(id);
+    const w = side(b.white.playerId), k = side(b.black.playerId);
+    const human = [w, k].some((x) => x && !x.isBot && !x.wild);
+    if (b.kind === 'practice') { if (human) stats.battle('practice'); }
+    else if (human) stats.battle(w?.wild || k?.wild ? 'wild' : 'pvp');
     this.broadcast({ t: 'battle.end', battleId: b.id, result: b.result ?? 'draw', termination: b.termination ?? '', summary });
     // Only the people involved need a fresh copy of their holdings.
     for (const s of this.sessions) if (s.player && _involved.includes(s.player.id)) this.sendMine(s);

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Open World Chess · stats</title>
+<style>
+  :root { --bg: #23211f; --surface: #2d2a27; --ink: #ece6da; --ink2: #b8b0a2; --muted: #8a8275; --grid: rgba(236, 230, 218, 0.1); --mark: #95b957; --mark-hi: #c2de8c; --gold: #e3b23c; --bad: #e8837a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; padding: 24px 16px 60px; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 700; margin: 0; }
+  .sub { color: var(--muted); font-size: 12px; margin: 4px 0 20px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 28px 0 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--surface); border: 1px solid var(--grid); border-radius: 10px; padding: 14px 16px; }
+  .tile b { display: block; font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile span { color: var(--ink2); font-size: 12px; }
+  .tile small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .tile.live b::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--mark); margin-right: 8px; vertical-align: 5px; box-shadow: 0 0 0 4px rgba(149,185,87,.18); }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--grid); border-radius: 10px; padding: 14px 16px 10px; position: relative; }
+  .card h3 { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+  .card p { margin: 0 0 8px; color: var(--muted); font-size: 11.5px; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .axis text { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .bar { fill: var(--mark); }
+  .hit:hover + .bar { fill: var(--mark-hi); }
+  .hit { fill: transparent; cursor: default; }
+  .vlabel { fill: var(--ink2); font-size: 10px; text-anchor: middle; font-variant-numeric: tabular-nums; }
+  #tip { position: fixed; pointer-events: none; background: #3a3632; border: 1px solid var(--grid); border-radius: 6px; padding: 5px 8px; font-size: 12px; color: var(--ink); white-space: nowrap; z-index: 5; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+  #tip b { font-variant-numeric: tabular-nums; }
+  .funnel { display: grid; gap: 6px; }
+  .frow { display: grid; grid-template-columns: minmax(120px, 190px) 1fr 110px; gap: 10px; align-items: center; font-size: 12.5px; }
+  .frow .track { height: 14px; background: rgba(236,230,218,.06); border-radius: 0 4px 4px 0; }
+  .frow .fill { height: 100%; background: var(--mark); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .frow .val { text-align: right; color: var(--ink2); font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+  td { padding: 6px 8px; border-bottom: 1px solid rgba(236,230,218,.05); color: var(--ink2); font-variant-numeric: tabular-nums; }
+  td:first-child { color: var(--ink); }
+  .scroll { overflow-x: auto; }
+  .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; font-size: 12.5px; }
+  .kv div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid rgba(236,230,218,.05); padding: 4px 0; }
+  .kv span { color: var(--muted); } .kv b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kv b.warn { color: var(--bad); }
+  details { margin-top: 8px; } summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+  #gate { max-width: 360px; margin: 18vh auto 0; text-align: center; }
+  #gate input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--grid); background: var(--surface); color: var(--ink); font: inherit; margin: 12px 0; }
+  button { padding: 9px 16px; border-radius: 8px; border: 0; background: var(--mark); color: #1d2412; font: inherit; font-weight: 700; cursor: pointer; }
+  .ghost { background: none; color: var(--muted); border: 1px solid var(--grid); font-weight: 400; padding: 5px 10px; font-size: 12px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  [hidden] { display: none !important; }
+  @media (max-width: 520px) { .frow { grid-template-columns: 110px 1fr 80px; } .tile b { font-size: 24px; } }
+</style>
+</head>
+<body>
+<div id="gate" hidden>
+  <h1>Open World Chess · stats</h1>
+  <p class="sub">Enter the stats key.</p>
+  <input id="key" type="password" autocomplete="off" placeholder="stats key" />
+  <button id="go">Open</button>
+  <p id="err" class="sub"></p>
+</div>
+<main id="app" hidden>
+  <div class="row"><h1>Open World Chess · stats</h1><span><button class="ghost" id="refresh">Refresh</button> <button class="ghost" id="forget">Forget key</button></span></div>
+  <p class="sub" id="asof"></p>
+  <div class="tiles" id="tiles"></div>
+
+  <h2>Players</h2>
+  <div class="charts">
+    <div class="card"><h3>Peak players online per day</h3><p>The most people connected at once (bots don't count)</p><div id="c-peak"></div></div>
+    <div class="card"><h3>New empires per day</h3><p>People who started playing for the first time</p><div id="c-newp"></div></div>
+    <div class="card"><h3>Players per day</h3><p>Everyone who played that day</p><div id="c-players"></div></div>
+    <div class="card"><h3>Hours played per day</h3><p>Total time people spent connected</p><div id="c-hours"></div></div>
+  </div>
+
+  <h2>Visitors and where they came from</h2>
+  <div class="charts">
+    <div class="card"><h3>Visitors per day</h3><p>Browsers that opened the site (first-party count, from the day this page was added)</p><div id="c-visitors"></div></div>
+    <div class="card"><h3>Visitors from TikTok per day</h3><p>New visitors whose visit came from TikTok (referrer, in-app browser or utm_source)</p><div id="c-tiktok"></div></div>
+    <div class="card"><h3>Visitors per hour</h3><p>Last 48 hours, Pacific time: spikes after a post show up here first</p><div id="c-hour"></div></div>
+    <div class="card"><h3>Where new visitors came from</h3><p>All time</p><table id="t-src"></table></div>
+  </div>
+
+  <h2>Engagement</h2>
+  <div class="charts">
+    <div class="card"><h3>Days visited per person</h3><p>How many different days each visitor has opened the site</p><div id="c-ret"></div><p id="ret-note"></p></div>
+    <div class="card"><h3>Where players are in the Chronicle</h3><p>Current chapter of everyone who played in the last 7 days</p><div id="c-ch"></div></div>
+    <div class="card"><h3>Battles per day</h3><p>Battles a person fought in (field, siege, camp and practice)</p><div id="c-battles"></div></div>
+    <div class="card"><h3>Revenue per day</h3><p>Crown packs, US dollars (before Stripe fees)</p><div id="c-rev"></div></div>
+  </div>
+
+  <h2>Funnel, all time</h2>
+  <div class="card"><div class="funnel" id="funnel"></div><p id="funnel-note" style="margin-top:8px"></p></div>
+
+  <h2>Server right now</h2>
+  <div class="card"><div class="kv" id="health"></div></div>
+
+  <h2>Recent purchases</h2>
+  <div class="card scroll"><table id="t-buy"></table></div>
+  <h2>Recent sign-ins</h2>
+  <div class="card scroll"><table id="t-sign"></table></div>
+  <details><summary>Daily numbers as a table</summary><div class="card scroll"><table id="t-days"></table></div></details>
+</main>
+<div id="tip" hidden></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const tip = $('tip');
+const KEY = 'owc_stats_key';
+const TZ = 'America/Los_Angeles';
+const fmt = (n) => Number(n).toLocaleString('en-US');
+const money = (c) => `$${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
+const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 3600 ? `${Math.max(1, Math.round(s / 60))} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+const pct = (a, b) => (b ? `${((100 * a) / b).toFixed(1)}%` : '—');
+
+function niceMax(v) { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 2.5, 5, 10]) if (v <= m * p) return m * p; return 10 * p; }
+
+// One series per chart: one hue, bars from the baseline, a quiet grid, a hover tooltip, sparse labels.
+function bars(el, rows, { label = (r) => r.day, shortLabel = (r) => String(label(r)).slice(5), value = (r) => r.n, unit = '', show = fmt } = {}) {
+  if (!rows.length || rows.every((r) => !value(r))) { el.innerHTML = '<p style="color:var(--muted);font-size:12px;margin:18px 0">No data yet</p>'; return; }
+  const W = 520, H = 170, L = 38, R = 6, T = 14, B = 22;
+  const vals = rows.map(value), top = Math.max(...vals), max = niceMax(Math.max(top, 1));
+  const n = rows.length, slot = (W - L - R) / n, bw = Math.max(2, Math.min(28, slot - 2));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  let g = '';
+  // Whole-number counts never get a half-step gridline (no "2.5 players").
+  const whole = vals.every((v) => Number.isInteger(v));
+  for (const t of [0, 0.5, 1]) { const v = max * t; if (whole && !Number.isInteger(v)) continue; g += `<line class="gridline" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${show(v)}</text>`; }
+  const every = Math.ceil(n / 7);
+  let topShown = false;
+  rows.forEach((r, i) => {
+    const v = value(r), x = L + i * slot + (slot - bw) / 2, h = Math.max(v > 0 ? 1.5 : 0, y(0) - y(v));
+    const rad = Math.min(4, bw / 2, h);
+    g += `<rect class="hit" x="${L + i * slot}" y="${T}" width="${slot}" height="${H - T - B}" data-t="${String(label(r)).replace(/"/g, '')}" data-v="${show(v)}${unit}"/>`;
+    g += `<path class="bar" d="M${x} ${y(0)}V${y(0) - h + rad}q0 ${-rad} ${rad} ${-rad}h${bw - 2 * rad}q${rad} 0 ${rad} ${rad}V${y(0)}Z"/>`;
+    if (i % every === 0 || i === n - 1) g += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${shortLabel(r)}</text>`;
+    const isTop = v === top && !topShown;
+    if (isTop) topShown = true;
+    if (i === n - 1 || isTop) g += `<text class="vlabel" x="${x + bw / 2}" y="${y(v) - 4}">${show(v)}</text>`;
+  });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img"><g class="axis">${g}</g></svg>`;
+  el.querySelectorAll('.hit').forEach((h) => {
+    h.addEventListener('pointermove', (ev) => { tip.hidden = false; tip.innerHTML = `${h.dataset.t} · <b>${h.dataset.v}</b>`; tip.style.left = Math.min(innerWidth - 170, ev.clientX + 12) + 'px'; tip.style.top = ev.clientY - 34 + 'px'; });
+    h.addEventListener('pointerleave', () => (tip.hidden = true));
+  });
+}
+
+function table(el, head, rows) {
+  el.innerHTML = `<thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${head.length}">Nothing yet</td></tr>`}</tbody>`;
+}
+
+async function load() {
+  const key = localStorage.getItem(KEY);
+  if (!key) return gate();
+  let d;
+  try {
+    const r = await fetch('/api/stats', { headers: { 'x-stats-key': key }, cache: 'no-store' });
+    if (!r.ok) throw new Error('wrong key');
+    d = await r.json();
+  } catch { localStorage.removeItem(KEY); return gate('That key did not work'); }
+  $('gate').hidden = true; $('app').hidden = false;
+  const t = d.totals, td = d.today, lv = d.live;
+  $('asof').textContent = `As of ${new Date(d.generatedAt).toLocaleString('en-US', { timeZone: TZ, dateStyle: 'medium', timeStyle: 'short' })} Pacific · days are Pacific time · visitor counts start ${new Date(d.since).toLocaleDateString('en-US', { timeZone: TZ })} · bots never count · refreshes every minute`;
+  $('tiles').innerHTML = [
+    [lv.humans, 'online now', `${fmt(lv.bots)} bots · ${fmt(lv.watchers)} watching`, 'live'],
+    [td.peak, 'peak today', `${fmt(td.players)} played today`],
+    [td.visitors, 'visitors today', `${fmt(td.newVisitors)} new`],
+    [td.newPlayers, 'new empires today', ''],
+    [t.visitors, 'visitors', `${pct(t.returned, t.visitors)} came back another day`],
+    [t.players, 'empires started', `${pct(t.playersReturned, t.players)} played another day`],
+    [t.signedIn, 'signed-in accounts', 'Google or TikTok'],
+    [money(t.revenueCents), 'revenue', `${fmt(t.purchases)} packs · ${fmt(t.purchasers)} buyers`],
+    [t.playerHours, 'hours played', `${fmt(t.battles)} battles`],
+  ].map(([b, s, sm, cls]) => `<div class="tile ${cls ?? ''}"><b>${typeof b === 'number' ? fmt(b) : b}</b><span>${s}</span><small>${sm}</small></div>`).join('');
+
+  bars($('c-peak'), d.byDay.peak);
+  bars($('c-newp'), d.byDay.newPlayers);
+  bars($('c-players'), d.byDay.players);
+  bars($('c-hours'), d.byDay.playerHours, { unit: ' h', show: (v) => (Math.round(v * 10) / 10).toLocaleString('en-US') });
+  bars($('c-visitors'), d.byDay.visitors);
+  bars($('c-tiktok'), d.byDay.tiktok);
+  bars($('c-hour'), d.byHour, { label: (r) => `${r.hour} PT`, shortLabel: (r) => r.hour.slice(11, 13) + 'h', value: (r) => r.visitors });
+  const src = Object.entries(t.sources).sort((a, b) => b[1] - a[1]), srcTotal = src.reduce((a, [, n]) => a + n, 0);
+  table($('t-src'), ['source', 'visitors', 'share'], src.map(([s, n]) => [s, fmt(n), pct(n, srcTotal)]));
+  bars($('c-ret'), d.retention, { label: (r) => `${r.days}${r.days >= 10 ? '+' : ''} day${r.days > 1 ? 's' : ''}`, shortLabel: (r) => `${r.days}${r.days >= 10 ? '+' : ''}d` });
+  const tracked = d.retention.reduce((a, r) => a + r.n, 0), atLeast = (k) => d.retention.filter((r) => r.days >= k).reduce((a, r) => a + r.n, 0);
+  $('ret-note').textContent = tracked ? [2, 3, 7].map((k) => `${k}+ days: ${fmt(atLeast(k))} (${pct(atLeast(k), tracked)})`).join(' · ') : '';
+  bars($('c-ch'), d.chapterNow, { label: (r) => `Chapter ${r.ch}`, shortLabel: (r) => `ch ${r.ch}` });
+  bars($('c-battles'), d.byDay.battles);
+  bars($('c-rev'), d.byDay.revenueCents, { show: money });
+
+  const base = Math.max(t.visitors, t.players), done = (n) => t.chapterDone[n] ?? 0;
+  const steps = [['opened the site', t.visitors], ['started an empire', t.players], ['finished chapter 1', done(1)], ['finished chapter 2', done(2)], ['finished chapter 3', done(3)], ['finished chapter 5', done(5)], ['finished chapter 10', done(10)], ['finished the Chronicle', done(15)], ['signed in', t.signedIn], ['bought Crowns', t.purchasers]];
+  $('funnel').innerHTML = steps.map(([name, v]) => `<div class="frow"><span>${name}</span><div class="track"><div class="fill" style="width:${base ? Math.min(100, (100 * v) / base) : 0}%"></div></div><span class="val">${fmt(v)} · ${pct(v, base)}</span></div>`).join('');
+  $('funnel-note').textContent = t.players > t.visitors ? 'Empires include players from before visitor counting began, so the first step is short for now.' : '';
+
+  const p = lv.perf || {}, lag = p.loopLagMs?.p99, turn = p.timings?.turn?.avgMs;
+  $('health').innerHTML = [
+    ['memory', `${fmt(lv.rssMb)} MB`, lv.rssMb > 600],
+    ['up for', lv.uptimeMin < 120 ? `${lv.uptimeMin} min` : `${Math.round(lv.uptimeMin / 60)} h`],
+    ['event loop p99', lag != null ? `${Math.round(lag)} ms` : '—', lag > 200],
+    ['world turn avg', turn != null ? `${Math.round(turn)} ms` : '—', turn > 150],
+    ['live battles', fmt(lv.battles)],
+    ['camps awake', fmt(lv.campsAwake)],
+    ['pieces', fmt(lv.pieces)],
+    ['buildings', fmt(lv.buildings)],
+  ].map(([k, v, warn]) => `<div><span>${k}</span><b class="${warn ? 'warn' : ''}">${v}</b></div>`).join('');
+
+  table($('t-buy'), ['pack', 'amount', 'when'], d.recent.purchases.map((x) => [`${fmt(x.crowns)} Crowns`, money(x.cents), ago(x.at)]));
+  table($('t-sign'), ['with', 'when'], d.recent.signIns.map((x) => [x.kind === 'tiktok' ? 'TikTok' : 'Google', ago(x.at)]));
+  table($('t-days'), ['day', 'visitors', 'new visitors', 'players', 'new empires', 'peak', 'hours', 'battles', 'sign-ins', 'revenue'],
+    d.days.slice().reverse().map((x) => [x.day, fmt(x.visitors), fmt(x.newVisitors), fmt(x.players), fmt(x.newPlayers), fmt(x.peak), (Math.round(x.playerMinutes / 6) / 10).toString(), fmt(x.battles.pvp + x.battles.wild + x.battles.practice), fmt(x.signIns.google + x.signIns.tiktok), money(x.revenueCents)]));
+}
+function gate(msg = '') { $('app').hidden = true; $('gate').hidden = false; $('err').textContent = msg; }
+$('go').onclick = () => { const k = $('key').value.trim(); if (k) { localStorage.setItem(KEY, k); load(); } };
+$('key').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('go').click(); });
+$('refresh').onclick = load;
+$('forget').onclick = () => { localStorage.removeItem(KEY); gate(); };
+// The key can arrive once in the URL fragment (never sent to the server); then it's remembered.
+function takeKeyFromHash() {
+  const m = location.hash.match(/key=([^&]+)/);
+  if (!m) return false;
+  localStorage.setItem(KEY, decodeURIComponent(m[1]));
+  history.replaceState(null, '', location.pathname);
+  return true;
+}
+addEventListener('hashchange', () => { if (takeKeyFromHash()) load(); });
+takeKeyFromHash();
+load();
+setInterval(() => { if (!document.hidden && !$('app').hidden) load(); }, 60000);
+</script>
+</body>
+</html>

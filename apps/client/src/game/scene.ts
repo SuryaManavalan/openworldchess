@@ -1,11 +1,11 @@
 // The world view: camera, chunk streaming, and live views of pieces,
 // buildings and resource nodes, animated from server turns (movement.md §8).
 import { Application, Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
-import { CHUNK, REACH, cheb, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
+import { BUILDINGS, CHUNK, REACH, cheb, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
 import { biomeAt, hash01 } from '@owc/worldgen';
 import { Chess } from 'chess.js';
 import type { Mirror, MoveEvent } from '@owc/client-core';
-import { ascendedTexture, buildingTexture, campTexture, creatureTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
+import { ascendedTexture, relicTexture, buildingTexture, campTexture, creatureTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
 import { nodeArt } from './biomeArt.ts';
 import { paintChunk, paintChunkFar, terrainCodes, biomeCodes, textureFrom, TPX, FAR_TPX } from './terrain.ts';
 import { Fx } from './fx.ts';
@@ -322,7 +322,7 @@ export class Scene {
       this.nodes.set(k, s);
     }
     // Each biome grows its own trees, rock, ore and crops (visuals.md §11).
-    const variant = nodeArt(this.mirror.seed, n.kind, n.x, n.y, biomeAt(this.mirror.seed, n.x, n.y), n.kind === 'tree' && n.remaining <= 0);
+    const variant = nodeArt(this.mirror.seed, n.kind, n.x, n.y, biomeAt(this.mirror.seed, n.x, n.y), n.kind === 'tree' && n.remaining <= 0 && !n.hoard, n.hoard);
     const tex = variant === 'stump' ? stumpTexture(() => this.syncNode(n)) : nodeTexture(variant, () => this.syncNode(n));
     if (tex) s.texture = tex;
     const frac = n.capacity ? n.remaining / n.capacity : 1;
@@ -649,7 +649,7 @@ export class Scene {
     // from, and the reach of the king that would hold it (economy.md §2–3).
     const ui = useUI.getState();
     if (ui.buildType && ui.ghost) {
-      const size = ({ house: 1, stable: 2, temple: 2, barracks: 2, palace: 3 } as const)[ui.buildType];
+      const size = BUILDINGS[ui.buildType].size;
       const { x, y, ok } = ui.ghost;
       const good = ok ? 0x95e05a : 0xff5a45, light = ok ? 0xe8ffc8 : 0xffc2b8;
       const king = m.myKings().filter((k) => k.state !== 'battle').sort((a, b) => cheb(a.x, a.y, x, y) - cheb(b.x, b.y, x, y))[0];
@@ -735,7 +735,7 @@ export class Scene {
       used.add(id);
       let s = this.decorSprites.get(id);
       if (!s) { s = new Sprite(); s.anchor.set(0.5, 0.86); this.objects.addChild(s); this.decorSprites.set(id, s); }
-      const tex = decorTexture(d.kind, d.color, d.variant);
+      const tex = d.kind.startsWith('relic:') ? relicTexture(d.kind.slice(6)) : decorTexture(d.kind, d.color, d.variant);
       if (tex) s.texture = tex;
       const wx = (d.x + 0.5) * S, wy = (d.y + 0.5) * S;
       const size = d.kind === 'gate' || d.kind === 'belltower' ? S * 1.25 : d.kind === 'tower' ? S * 1.1 : d.kind === 'stall' || d.kind === 'well' ? S * 0.95 : S * 0.78;

@@ -34,7 +34,9 @@ The layout is chosen by viewport size and input type (`pointer: coarse` plus wid
 | Zoom | Pinch | Scroll wheel |
 | Rotate the camera 90° | **Two-finger twist**, snapping to 90° with a haptic tick | Q / E |
 | Select a piece | Tap it | Click |
-| Select a king's group | **Double-tap** the king (or any of its pieces) | Double-click, or click the troop in the troop list |
+| Select a king's army | **Tap** the king (or its chip in the troop bar): its **best legal army**, the chess set it would fight with (a queen, 2 rooks, 2 bishops, 2 knights, 8 pawns), filled with its nearest ready pieces | Click the king, or its troop in the troop list |
+| Select everything under a king | **Double-tap** the king (or any of its pieces), or **All** in the action row | Double-click, or **All** |
+| Leave pieces behind | Tap a piece type in the action row's selection chips: each tap drops one (the one farthest from the king) | Same (click) |
 | Select a custom group | **Long-press, then draw a loop** around pieces (lasso) | Left-drag a box on empty ground |
 | Add to the selection | Tap more pieces while the selection chip shows "+" | Shift + click / Shift + drag |
 | **Move** | **Drag from any selected piece to the destination** (see below) | Right-click the destination |

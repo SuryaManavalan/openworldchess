@@ -1,7 +1,7 @@
 // The HUD (ux.md §4–5). Phone: information on top, actions in the thumb zone,
 // detail in bottom sheets. Desktop: side panels and hotkeys. Same features.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BUILDINGS, PIECE_NAME, REACH, cheb, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
+import { BUILDINGS, CHAPTERS, PIECE_NAME, REACH, TITLES, cheb, setWorth, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
 import { eloAt, terrainAt } from '@owc/worldgen';
 import { commands, conn, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
@@ -9,7 +9,9 @@ import { scene, input } from './GameView.tsx';
 import { buildingUrl, pieceUrl } from '../game/textures.ts';
 import { audio } from '../audio/audio.ts';
 import { BattleView } from './BattleView.tsx';
+import { ShareTikTok } from './ShareTikTok.tsx';
 import { AwayReport, Guide, SignIn, SignInNudge, Welcome } from './Onboarding.tsx';
+import { ChapterCeremony, ChronicleBook, ChronicleTracker } from './Chronicle.tsx';
 import { Inspect, HoverTag } from './Inspect.tsx';
 import { Shop, Coin } from './Shop.tsx';
 import { CivShowcase } from './CivShowcase.tsx';
@@ -18,17 +20,21 @@ import { Markers } from './Markers.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
-const NODE_NAME: Record<string, string> = { tree: 'wood', rock: 'stone', ore: 'ore', wheat: 'wheat' };
+const NODE_NAME: Record<string, string> = { tree: 'wood', rock: 'stone', ore: 'ore', wheat: 'crops' };
+
+/** ?cinema: the world without the interface, for filming footage (docs/marketing). Battles still show. */
+const CINEMA = typeof location !== 'undefined' && new URLSearchParams(location.search).has('cinema');
 
 export function HUD() {
   const ui = useUI();
   const battle = ui.battleFocus != null ? mirror.battles.get(ui.battleFocus) : undefined;
   return (
-    <div className={`hud layout-${ui.layout}`}>
+    <div className={`hud layout-${ui.layout}${CINEMA ? ' cinema' : ''}`}>
       <Markers />
       <TopBar />
       <Alerts />
-      <Guide />
+      {mirror.self?.chronicle ? <ChronicleTracker /> : <Guide />}
+      <ChapterCeremony />
       <Toasts />
       {ui.layout === 'desktop' && <SidePanel />}
       <BottomDock />
@@ -43,6 +49,7 @@ export function HUD() {
       <SignInNudge />
       <CivShowcase />
       <SignIn />
+      <ShareTikTok />
       <Welcome />
       {ui.watching && <div className="watch-pill">Watching your lands · touch to take over</div>}
     </div>
@@ -60,6 +67,7 @@ function TopBar() {
       <div className="me">
         <span className="chip" style={{ background: self?.color ?? '#888' }} />
         <b>{self?.name ?? '…'}</b>
+        {self?.chronicle && ui.layout !== 'phone' && <span className="badge title" title="Your title in the Chronicle">{TITLES[self.chronicle.title].name}</span>}
         <span className="muted">{self?.rating ?? ''}</span>
         {self?.guest && <button className="badge guest" onClick={() => window.dispatchEvent(new Event('owc:signin'))}>{ui.layout === 'phone' ? 'Sign in' : 'Guest · sign in'}</button>}
         {shielded && <span className="badge shield" title="New players can't be attacked for a while"><Icon name="shield" size={13} />{ui.layout === 'phone' ? '' : ' shielded'}</span>}
@@ -73,6 +81,7 @@ function TopBar() {
       </div>
       <div className="top-actions">
         <button className={`icon-btn ${ui.flagMode ? 'on' : ''}`} aria-label="Place a flag" title="Place a flag (F)" onClick={() => { ui.set({ flagMode: !ui.flagMode }); if (!ui.flagMode) ui.toast(ui.layout === 'phone' ? 'Tap the map to place a flag' : 'Click the map to place a flag', 'info', 'flag'); }}><Icon name="flag" size={19} /></button>
+        <button className="icon-btn" aria-label="The Chronicle" title="The Chronicle" onClick={() => ui.set({ sheet: ui.sheet === 'chronicle' ? null : 'chronicle' })}><Icon name="book" size={19} /></button>
         <button className="icon-btn shop-btn" aria-label="Civilizations shop" title="Civilizations" onClick={() => ui.set({ sheet: ui.sheet === 'shop' ? null : 'shop' })}><Coin size={19} /></button>
         <button className="icon-btn" aria-label="Help" onClick={() => ui.set({ sheet: ui.sheet === 'help' ? null : 'help' })}><Icon name="help" size={19} /></button>
         <button className="icon-btn" aria-label="Settings" onClick={() => ui.set({ sheet: ui.sheet === 'settings' ? null : 'settings' })}><Icon name="menu" size={19} /></button>
@@ -138,7 +147,7 @@ function KingChip({ k, compact }: { k: Piece; compact?: boolean }) {
   return (
     <button className={`king-chip ${selected ? 'on' : ''} ${inBattle ? 'battle' : ''}`}
       onClick={() => {
-        const g = input?.groupOf(k) ?? [k.id];
+        const g = input?.armyOf(k) ?? [k.id];
         ui.select(g); g.slice(0, 12).forEach((_, i) => audio.select(i));
         scene?.centerOn(k.x, k.y);
       }}>
@@ -168,13 +177,28 @@ function BottomDock() {
       {!ui.buildType && sel.length > 0 && (
         <div className="action-row">
           <span className="sel-summary">
-            {KIND_ORDER.map((k) => { const n = sel.filter((p) => p.kind === k).length; return n ? <span key={k} className="kc"><img src={pieceUrl(k, 'light', mirror.self?.color ?? '#888', k === 'K' && sel.some((p) => p.emperor), mirror.self?.civ)} alt="" />{n > 1 && n}</span> : null; })}
+            {KIND_ORDER.map((k) => {
+              const n = sel.filter((p) => p.kind === k).length;
+              if (!n) return null;
+              // Tap a kind to leave one behind (the one farthest from the king): easy to drop the queen from a raid.
+              const drop = () => {
+                const lead = sel.find((p) => p.kind === 'K') ?? sel[0];
+                const of = sel.filter((p) => p.kind === k).sort((a, b) => cheb(b.x, b.y, lead.x, lead.y) - cheb(a.x, a.y, lead.x, lead.y));
+                ui.select(ui.selection.filter((id) => id !== of[0].id));
+              };
+              const img = <img src={pieceUrl(k, 'light', mirror.self?.color ?? '#888', k === 'K' && sel.some((p) => p.emperor), mirror.self?.civ)} alt="" />;
+              // The king leads: it isn't dropped from its own army.
+              if (k === 'K') return <span key={k} className="kc king">{img}{n > 1 && n}</span>;
+              return <button key={k} className="kc" title={`Leave a ${PIECE_NAME[k].toLowerCase()} behind`} onClick={drop}>{img}{n > 1 && n}<span className="minus">−</span></button>;
+            })}
           </span>
           {pending ? <>
             <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>Move here</button>
             <button className="btn ghost" onClick={() => { if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; ui.bump(); }} aria-label="Cancel"><Icon name="close" size={16} /></button>
           </> : <>
+            {(() => { const k = sel.find((p) => p.kind === 'K'); const all = k && input ? input.groupOf(k) : []; return k && all.length > sel.length ? <button className="btn ghost" title="Everything under this king, not just its best army" onClick={() => ui.select(all)}>All {all.length}</button> : null; })()}
             <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
+            {mirror.self?.chronicle?.abilities.includes('muster') && sel.length === 1 && sel[0].kind === 'K' && <button className="btn ghost" title="Gather every piece within 20 squares to this king" onClick={() => commands.muster(sel[0].id).then((e) => e && ui.toast(e, 'error'))}><Icon name="horn" size={15} /> Muster</button>}
             {ui.layout === 'phone' && <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>+ Add</button>}
             <button className="btn ghost" onClick={() => ui.select([])}>Clear</button>
           </>}
@@ -212,14 +236,28 @@ function SidePanel() {
   );
 }
 
+/** Camps and rival buildings seen this session (drawn on the minimap with Cartography). */
+const SEEN = new Map<number, { x: number; y: number; camp: boolean; color: string }>();
+
 function BuildList() {
   const ui = useUI();
   const color = mirror.self?.color ?? '#888';
-  const types: BuildingType[] = ['house', 'stable', 'temple', 'barracks', 'palace'];
+  const chron = mirror.self?.chronicle;
+  // The Chronicle opens buildings chapter by chapter; the Wonder appears once it's earned (campaign.md §3).
+  const types: BuildingType[] = ['house', 'stable', 'temple', 'barracks', 'palace', ...(chron?.buildings.includes('wonder') ? ['wonder' as const] : [])];
+  const opensAt = (t: BuildingType) => CHAPTERS.find((c) => c.reward.buildings?.includes(t))?.n;
   return (
     <div className="build-list">
       {types.map((t) => {
         const s = BUILDINGS[t];
+        const locked = !!chron && !chron.buildings.includes(t);
+        if (locked) return (
+          <div key={t} className="build-card locked" title="Opens as you progress through the Chronicle">
+            <img src={buildingUrl(t, color, mirror.self?.civ)} alt="" />
+            <span className="bname">{t[0].toUpperCase() + t.slice(1)}</span>
+            <span className="bmeta"><Icon name="lock" size={12} /> Opens after chapter {opensAt(t)}</span>
+          </div>
+        );
         return (
           <button key={t} className={`build-card ${ui.buildType === t ? 'on' : ''}`} onClick={() => {
             ui.set({ buildType: ui.buildType === t ? null : t, sheet: ui.layout === 'phone' ? null : ui.sheet });
@@ -228,7 +266,7 @@ function BuildList() {
           }}>
             <img src={buildingUrl(t, color, mirror.self?.civ)} alt="" />
             <span className="bname">{t[0].toUpperCase() + t.slice(1)}</span>
-            <span className="bmeta">{s.produces.map((k) => PIECE_NAME[k]).join(' / ')} · needs {s.needs.map((n) => NODE_NAME[n]).join(' + ')} nearby</span>
+            <span className="bmeta">{t === 'wonder' ? 'A monument the world can see · in your capital' : `${s.produces.map((k) => PIECE_NAME[k]).join(' / ')} · needs ${s.needs.map((n) => NODE_NAME[n]).join(' + ')} nearby`}</span>
             <span className="bcost">{Object.entries(s.cost).map(([k, v]) => `${v} ${NODE_NAME[k]}`).join(', ')}</span>
           </button>
         );
@@ -243,7 +281,7 @@ function Details() {
   const b = id != null ? mirror.buildings.get(id) : undefined;
   if (!b || b.type === 'ruin') return <p className="muted">Tap one of your buildings to see it here.</p>;
   const spec = BUILDINGS[b.type as BuildingType];
-  const why: Record<string, string> = { unanchored: 'No king nearby: it is decaying', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': 'At your population cap. Each king supports 16 pieces, +6 per nearby house (up to 3). More kings raise it', building: 'Under construction', paused: 'Paused by you' };
+  const why: Record<string, string> = { unanchored: 'No king nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': 'At your population cap. Each king supports 16 pieces, +6 per nearby house (up to 3). More kings raise it', building: 'Under construction', paused: 'Paused by you' };
   return (
     <div className="details">
       <h3>{b.type[0].toUpperCase() + b.type.slice(1)}</h3>
@@ -251,6 +289,11 @@ function Details() {
       <p>{b.blocked ? why[b.blocked] : `Producing ${spec.produces.map((k) => PIECE_NAME[k]).join('/')} · ${b.rate ?? 1}× speed from local richness`}</p>
       <p className="muted">Condition {b.hp}/100</p>
       <button className="btn ghost small" onClick={() => commands.pause(b.id, !b.paused)}>{b.paused ? <><Icon name="play" size={14} /> Resume production</> : <><Icon name="pause" size={14} /> Pause production</>}</button>
+      {mirror.self?.chronicle?.abilities.includes('capital') && (
+        mirror.self.chronicle.capital && Math.max(Math.abs(mirror.self.chronicle.capital[0] - b.x), Math.abs(mirror.self.chronicle.capital[1] - b.y)) <= 10
+          ? <p className="muted"><Icon name="crown" size={13} /> Your capital: it holds itself forever and crowns kings faster.</p>
+          : <button className="btn ghost small" onClick={() => commands.setCapital(b.id).then((e) => e && ui.toast(e, 'error'))}><Icon name="crown" size={14} /> Make this town your capital</button>
+      )}
       {b.type === 'palace' && (
         <div className="seg">
           {(['alt', 'K', 'Q'] as const).map((m) => <button key={m} className={b.palaceMode === m ? 'on' : ''} onClick={() => commands.palaceMode(b.id, m)}>{m === 'alt' ? 'Alternate' : m === 'K' ? 'Kings' : 'Queens'}</button>)}
@@ -274,6 +317,7 @@ function Sheet() {
         {ui.sheet === 'settings' && <Settings />}
         {ui.sheet === 'help' && <Help />}
         {ui.sheet === 'shop' && <Shop />}
+        {ui.sheet === 'chronicle' && <ChronicleBook />}
         {ui.layout === 'phone' && ui.sheet === 'build' && <Minimap />}
       </div>
     </div>
@@ -315,6 +359,49 @@ function Settings() {
       <label className="row"><span>Attack alerts outside the app</span><button className="btn ghost" onClick={() => { try { Notification.requestPermission(); } catch { /* */ } }}>Allow</button></label>
       <label className="row"><span>{mirror.self?.guest ? 'Playing as a guest' : `Signed in${mirror.self?.email ? ` as ${mirror.self.email}` : ''}`}</span><button className="btn ghost" onClick={() => window.dispatchEvent(new Event('owc:signin'))}>{mirror.self?.guest ? 'Sign in' : 'Account'}</button></label>
       <label className="row col"><span>Name</span><span style={{ display: 'flex', gap: 8 }}><input id="set-name" value={name} maxLength={20} onChange={(e) => setName(e.target.value)} style={{ flex: 1 }} /><button className="btn ghost" onClick={() => conn.send({ t: 'profile', name: name.trim() })}>Rename</button></span></label>
+      <StartOver />
+    </div>
+  );
+}
+
+/** Reset the empire and play from scratch: asked twice, the second time by typing its name. */
+function StartOver() {
+  const ui = useUI();
+  const self = mirror.self;
+  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (!self) return null;
+  const pieces = mirror.myPieces().length, buildings = mirror.myBuildings().filter((b) => b.type !== 'ruin').length;
+  const go = async () => {
+    setBusy(true); setErr(null);
+    const e = await commands.resetEmpire(typed);
+    if (e) { setErr(e); setBusy(false); return; }
+    ui.toast('A new beginning', 'good');
+    setTimeout(() => location.reload(), 600);
+  };
+  return (
+    <div className="start-over">
+      {step === 0 && <label className="row"><span>Start over from scratch</span><button className="btn ghost danger-text" onClick={() => setStep(1)}>Start over…</button></label>}
+      {step === 1 && <div className="confirm-box">
+        <b>Start your empire over?</b>
+        <p>Your {pieces} pieces and {buildings} buildings will be gone for good, and the Chronicle begins again at chapter 1 somewhere new. You keep your name, your sign-in, your Crowns and your civilizations.</p>
+        <div className="row-actions">
+          <button className="btn danger" onClick={() => setStep(2)}>Yes, continue</button>
+          <button className="btn ghost" onClick={() => setStep(0)}>Keep my empire</button>
+        </div>
+      </div>}
+      {step === 2 && <div className="confirm-box">
+        <b>This can't be undone.</b>
+        <p>Type <b>{self.name}</b> to confirm.</p>
+        <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={self.name} autoFocus />
+        {err && <p className="field-error">{err}</p>}
+        <div className="row-actions">
+          <button className="btn danger" disabled={busy || typed.trim().toLowerCase() !== self.name.toLowerCase()} onClick={go}>{busy ? 'Starting over…' : 'Reset my empire'}</button>
+          <button className="btn ghost" onClick={() => { setStep(0); setTyped(''); setErr(null); }}>Cancel</button>
+        </div>
+      </div>}
     </div>
   );
 }
@@ -341,7 +428,8 @@ function AttackConfirm() {
   const mine = a.pieceIds.map((id) => mirror.pieces.get(id)).filter(Boolean) as Piece[];
   const target = mirror.pieces.get(a.targetKingId);
   const theirs = target ? [...mirror.pieces.values()].filter((p) => p.owner === target.owner && cheb(p.x, p.y, target.x, target.y) <= REACH) : [];
-  const val = (ps: Piece[]) => ps.reduce((s, p) => s + ({ K: 0, Q: 9, R: 5, B: 3, N: 3, P: 1 } as const)[p.kind], 0);
+  // What each side could actually field: one legal chess set.
+  const val = (ps: Piece[]) => setWorth(ps.map((p) => p.kind));
   return (
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && ui.set({ pendingAttack: null })}>
       <div className="sheet confirm">
@@ -393,6 +481,16 @@ function Minimap() {
       g.fillRect(mx - 1, my - 1, p.kind === 'K' ? 4 : 2, p.kind === 'K' ? 4 : 2);
     }
     for (const b of mirror.buildings.values()) { const [mx, my] = toMap(b.x, b.y); g.fillStyle = '#2b2622'; g.fillRect(mx - 2, my - 2, 4, 4); }
+    // Cartography (campaign.md §4.4): camps and rival settlements you've seen stay on your map.
+    for (const b of mirror.buildings.values()) if (b.owner && b.owner !== mirror.me) SEEN.set(b.id, { x: b.x, y: b.y, camp: b.type === 'camp', color: mirror.players.get(b.owner)?.color ?? '#999' });
+    if (mirror.self?.chronicle?.abilities.includes('cartography'))
+      for (const [id, s] of SEEN) {
+        if (mirror.buildings.has(id)) continue;
+        const [mx, my] = toMap(s.x, s.y);
+        if (mx < 0 || my < 0 || mx > size || my > size) continue;
+        g.fillStyle = s.camp ? '#b5543a' : s.color; g.strokeStyle = '#2b2622'; g.lineWidth = 1;
+        g.beginPath(); if (s.camp) g.arc(mx, my, 2.5, 0, Math.PI * 2); else g.rect(mx - 2.5, my - 2.5, 5, 5); g.fill(); g.stroke();
+      }
     if (scene?.ready) {
       const [mx, my] = toMap(scene.cam.x, scene.cam.y);
       const w = (scene.app.screen.width / (64 * scene.cam.zoom)) / span * size, h = (scene.app.screen.height / (64 * scene.cam.zoom)) / span * size;

@@ -9,6 +9,7 @@ import * as creatureArt from 'owc-art/creatures';
 import * as natureArt from 'owc-art/nature';
 import * as campsArt from 'owc-art/camps';
 import * as ascendedArt from 'owc-art/ascended';
+import * as campaignArt from 'owc-art/campaign';
 import * as dravidianArt from 'owc-art/civ-dravidian';
 import * as romanArt from 'owc-art/civ-roman';
 import * as chineseArt from 'owc-art/civ-chinese';
@@ -21,15 +22,19 @@ const BUILDINGS = worldArt.BUILDINGS as unknown as Record<string, ArtFn>;
 const RESOURCES = worldArt.RESOURCES as unknown as Record<string, ArtFn>;
 const DECOR = decorArt.DECOR as unknown as Record<string, (o?: { team?: string; awning?: string }) => string>;
 type Art0 = Record<string, () => string>;
-const NATURE: Record<string, Art0> = { tree: natureArt.TREES as unknown as Art0, rock: natureArt.ROCKS as unknown as Art0, ore: natureArt.ORES as unknown as Art0, crop: natureArt.CROPS as unknown as Art0 };
+const NATURE: Record<string, Art0> = { hoard: campaignArt.HOARDS as unknown as Art0, tree: natureArt.TREES as unknown as Art0, rock: natureArt.ROCKS as unknown as Art0, ore: natureArt.ORES as unknown as Art0, crop: natureArt.CROPS as unknown as Art0 };
 const creature = creatureArt.creature as unknown as (f: unknown, kind: PieceKind) => string;
 const campArt = campsArt.campArt as unknown as (name: string, f: unknown) => string;
 /** Cosmetic civilizations (cosmetics.md): each replaces every piece and building. */
 const CIV_ART: Record<string, { PIECES: Record<string, ArtFn>; BUILDINGS: Record<string, ArtFn> }> = {
   dravidian: dravidianArt as never, roman: romanArt as never, chinese: chineseArt as never, egyptian: egyptianArt as never,
 };
+/** The Wonder in each style, relics, and hoards (campaign.md §4). */
+const WONDERS = campaignArt.WONDERS as unknown as Record<string, ArtFn>;
+const RELICS = campaignArt.RELICS as unknown as Record<string, () => string>;
+const HOARDS = campaignArt.HOARDS as unknown as Record<string, () => string>;
 const piecesOf = (civ?: string) => (civ && CIV_ART[civ]?.PIECES) || PIECES;
-const buildingsOf = (civ?: string) => (civ && CIV_ART[civ]?.BUILDINGS) || BUILDINGS;
+const buildingsOf = (civ?: string): Record<string, ArtFn> => ({ ...((civ && CIV_ART[civ]?.BUILDINGS) || BUILDINGS), wonder: WONDERS[civ && WONDERS[civ] ? civ : 'classic'] });
 const ART_NAME: Record<PieceKind, string> = { K: 'king', Q: 'queen', R: 'elephant', B: 'bishop', N: 'knight', P: 'pawn' };
 export const RES = 128; // raster size per 100x100 art unit
 
@@ -81,6 +86,12 @@ export function nodeTexture(kind: string, onReady?: () => void) {
 }
 
 /** A creature of the wilds (docs/specs/wilds.md): the faction's art for a chess role. */
+/** A relic statue for a capital's plaza (campaign.md §4.2). */
+export function relicTexture(relic: string, onReady?: () => void) {
+  return get(`relic:${relic}`, () => (RELICS[relic] ?? RELICS.dragon)(), 96, onReady);
+}
+void HOARDS;
+
 export function creatureTexture(faction: string, kind: PieceKind, onReady?: () => void) {
   return get(`c:${faction}:${kind}`, () => creature(FACTIONS[faction], kind), RES, onReady);
 }

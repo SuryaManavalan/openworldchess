@@ -17,6 +17,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { civById, packById } from '@owc/shared';
+import { stats } from './stats.ts';
 import type { Game, PlayerRec } from './game.ts';
 
 const SECRET = process.env.STRIPE_SECRET_KEY ?? '';
@@ -33,7 +34,7 @@ export async function createCheckout(p: PlayerRec, packId: string): Promise<{ ur
   if (!pack) return { error: 'No such pack' };
   if (!shopOpen()) return { error: 'The shop opens soon' };
   // Purchases belong to an account: guests' empires fall, and with them anything bought.
-  if (!p.googleSub) return { error: 'Sign in with Google first: your Crowns are saved to your account' };
+  if (!p.googleSub && !p.tiktokId) return { error: 'Sign in first: your Crowns are saved to your account' };
   const form = new URLSearchParams({
     mode: 'payment',
     'line_items[0][quantity]': '1',
@@ -75,6 +76,7 @@ export function creditPack(game: Game, playerId: string, packId: string, session
   if (p.receipts.includes(sessionId)) return true; // a retried webhook
   p.receipts.push(sessionId);
   p.crowns = (p.crowns ?? 0) + pack.crowns;
+  stats.purchase(p.id, pack.cents, pack.crowns);
   game.logEvent(p.id, 'shop', `Got ${pack.crowns} Crowns`);
   game.onAlert(p.id, { kind: 'info', text: `${pack.crowns.toLocaleString('en-US')} Crowns added. Thank you!` });
   game.onSelf(p.id);

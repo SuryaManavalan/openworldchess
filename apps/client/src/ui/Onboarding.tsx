@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { useUI } from '../store.ts';
 import { pieceUrl } from '../game/textures.ts';
 import { scene } from './GameView.tsx';
+import { TikTokMark, tiktokStart } from './ShareTikTok.tsx';
 
 const get = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const put = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
@@ -46,6 +47,7 @@ export function Welcome() {
         {ui.nameError && <p className="field-error">{ui.nameError}</p>}
         <button className="btn big" disabled={busy} onClick={enter}>{busy ? 'Entering…' : 'Play now'}</button>
         {ui.googleEnabled && <a className="btn ghost big google" href="/auth/google/start">Continue with Google</a>}
+        {ui.tiktokEnabled && <a className="btn ghost big tiktok" href="/auth/tiktok/start"><TikTokMark /> Continue with TikTok</a>}
         <p className="muted small">No sign-up needed. Sign in later to keep your empire.</p>
       </div>
     </div>
@@ -63,7 +65,7 @@ export function SignIn() {
     // Leaving as a guest: the browser shows its own "leave site?" prompt.
     const beforeUnload = (e: BeforeUnloadEvent) => { if (mirror.self?.guest && mirror.myPieces().length) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('beforeunload', beforeUnload);
-    fetch('/auth/config').then((r) => r.json()).then((c) => ui.set({ googleEnabled: !!c.google })).catch(() => {});
+    fetch('/auth/config').then((r) => r.json()).then((c) => ui.set({ googleEnabled: !!c.google, tiktokEnabled: !!c.tiktok })).catch(() => {});
     if (get('owc.signedin') === '1' && !sessionStorage.getItem('owc.signedin.toast')) { sessionStorage.setItem('owc.signedin.toast', '1'); setTimeout(() => ui.toast('Signed in. Your empire is safe.', 'good'), 1500); }
     return () => { window.removeEventListener('owc:signin', onOpen); window.removeEventListener('beforeunload', beforeUnload); };
   }, []);
@@ -79,11 +81,15 @@ export function SignIn() {
           <p>You're playing as a guest. <b>If you don't sign in, your empire will fall</b> {mins} minutes after you leave: your pieces go masterless for anyone to claim, and the name <b>{self.name}</b> becomes free again.</p>
           {ui.googleEnabled
             ? <a className="btn big google" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', textDecoration: 'none' }} href={`/auth/google/start?token=${encodeURIComponent(token)}`}>Sign in with Google</a>
-            : <p className="muted">Sign-in is being set up. Check back soon.</p>}
+            : !ui.tiktokEnabled && <p className="muted">Sign-in is being set up. Check back soon.</p>}
+          {ui.tiktokEnabled && <a className="btn big tiktok" style={{ display: 'flex', width: '100%', marginTop: 8, textDecoration: 'none' }} href={tiktokStart()}><TikTokMark /> Sign in with TikTok</a>}
           <button className="btn ghost" style={{ width: '100%', marginTop: 8 }} onClick={() => setOpen(false)}>Keep playing as a guest</button>
         </> : <>
           <h3>Signed in</h3>
-          <p>Your empire is tied to {self.email ?? 'your Google account'}. It stands while you're away (the AI defends your battles), and you can continue on any device.</p>
+          <p>Your empire is tied to {self.email ?? (self.tiktok ? `your TikTok account (${self.tiktok.name})` : 'your account')}. It stands while you're away (the AI defends your battles), and you can continue on any device.</p>
+          {ui.tiktokEnabled && (self.tiktok
+            ? <p className="muted small">TikTok connected as <b>{self.tiktok.name}</b>, for sharing battle clips. <button className="link" onClick={() => fetch('/tiktok/disconnect', { method: 'POST', headers: { 'x-owc-token': token } }).then(() => ui.toast('TikTok disconnected', 'info'))}>Disconnect</button></p>
+            : <a className="btn ghost tiktok-outline" style={{ width: '100%', marginBottom: 8, textDecoration: 'none' }} href={tiktokStart()}><TikTokMark /> Connect TikTok to share battle clips</a>)}
           <button className="btn ghost" style={{ width: '100%' }} onClick={() => setOpen(false)}>Close</button>
         </>}
       </div>

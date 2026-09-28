@@ -1,16 +1,20 @@
 // The wilds (docs/specs/wilds.md): camps appear by players, grow, raid troops in
 // the field, and scatter when their king falls. Creatures never change sides.
 import { afterAll, describe, expect, it } from 'vitest';
-import { FACTIONS, cheb, type Building } from '@owc/shared';
+import { FACTIONS, cheb, setWorth, type Building } from '@owc/shared';
 import { Game, type PlayerRec } from '../src/game.ts';
 import { CAMP_CELL } from '../src/wilds.ts';
 
+// Spawn spots and camp behavior use Math.random: seed it so these tests are reproducible.
+let rs = 424242;
+Math.random = () => { rs = (rs * 1103515245 + 12345) % 2147483648; return rs / 2147483648; };
 const game = new Game({ seed: 5, speed: 1 });
 game.battles.countdownScale = 0;
 game.shieldMs = 0;
 afterAll(() => game.battles.ai.stop());
 const join = (name: string) => { const p = game.join(undefined, name) as PlayerRec; p.online = true; return p; };
-let now = Date.now();
+// A fixed clock too (camp roaming hashes the time).
+let now = 1_800_000_000_000;
 const tick = (ms = 5001) => { now += ms; game.now = now; game.economy(now); game.worldTurn(now); game.battles.tick(now); };
 
 describe('wilds', () => {
@@ -88,6 +92,7 @@ describe('wilds', () => {
     game.world.movePiece(other, spot2[0], spot2[1]);
     horde.wild!.lastAttack = 0;
     for (let i = 0; i < 80 && ![...game.battles.recs.values()].some((r) => r.black.kingId === other.id); i++) tick(600);
+    if (process.env.DBG_RAID) console.log('DBG', { hk: [hk.x, hk.y, hk.state, hk.groupId], other: [other.x, other.y, other.state], can: game.battles.canTarget(other, horde.id), last: horde.wild!.lastAttack, size: game.wilds.piecesOf(horde).length, online: p.online, battles: [...game.battles.recs.values()].map((r) => [r.white.player === horde.id, r.black.kingId, r.pub.phase]), settle: game.world.buildingsNear(other.x, other.y, 10).filter((b) => b.owner === other.owner).length });
     expect([...game.battles.recs.values()].some((r) => r.white.player === horde.id && r.black.kingId === other.id)).toBe(true);
   });
 
@@ -112,8 +117,36 @@ describe('wilds', () => {
     expect([...game.world.pieces.values()].some((p) => p.owner === camp.id)).toBe(false);
     expect(game.world.buildings.has(camp.wild!.buildingId)).toBe(false);
     expect(game.holdings(hero.id).pieces.every((p) => !p.wild)).toBe(true);
-    expect(game.holdings(hero.id).pieces.length).toBeLessThanOrEqual(before);
+    // Any newcomers are freed captives (pawns and knights of the hero's own), never creatures.
+    const newcomers = game.holdings(hero.id).pieces.filter((q) => q.id > 0).length - before;
+    expect(newcomers).toBeLessThanOrEqual(5);
+    // Spoils (campaign.md §4.2): a hoard where the camp stood.
+    const hoards = game.world.nodesNear(camp.wild!.x, camp.wild!.y, 2, 6).filter((n) => n.hoard);
+    expect(hoards.length).toBe(1);
+    expect(hoards[0].capacity).toBeGreaterThan(200);
     expect(game.wilds.cleared.has(camp.wild!.cell)).toBe(true);
     void cheb;
+  });
+
+  it('a hunt with nothing beatable in reach gets a young band of its own, once', () => {
+    const p = join('Latecomer');
+    const st = game.chronicle.of(p);
+    st.ch = 2; st.step = 1; st.chBase = { ...st.tallies };
+    // Every camp around has grown into a full army.
+    for (const c of game.wilds.camps()) { if (c.wild!.awake === false) c.wild!.roster = ['K', 'Q', 'R', 'R', 'B', 'B', 'N', 'N', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'P']; }
+    for (const c of game.wilds.camps()) if (c.wild!.awake !== false) game.wilds.remove(c);
+    const at = game.selfPlayer(p).chronicle?.target;
+    expect(at).toBeTruthy();
+    const q = game.wilds.camps().find((c) => c.wild!.quarryFor === p.id)!;
+    expect(q).toBeTruthy();
+    // Weaker than the strongest legal set the player could field (a crowd of pawns fights as eight).
+    const mine = setWorth(game.world.piecesNear(p.home[0], p.home[1], 40).filter((x) => x.owner === p.id).map((x) => x.kind));
+    expect(setWorth(game.wilds.piecesOf(q).map((x) => x.kind))).toBeLessThan(mine);
+    expect(cheb(at![0], at![1], q.wild!.x, q.wild!.y)).toBeLessThanOrEqual(1);
+    // It doesn't grow, and a second look doesn't raise another.
+    const size = game.wilds.piecesOf(q).length;
+    for (let i = 0; i < 20; i++) tick(60_000);
+    expect(game.wilds.piecesOf(q).length).toBe(size);
+    expect(game.wilds.quarry(p.id, p.home, 20, now)).toBeNull();
   });
 });
