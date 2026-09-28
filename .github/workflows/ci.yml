@@ -1,5 +1,9 @@
 name: CI
 on: [push, pull_request]
+# Deploys to production never overlap: a push while one runs waits its turn.
+concurrency:
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'deploy-main' || github.run_id }}
+  cancel-in-progress: false
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -14,3 +18,24 @@ jobs:
       - run: pnpm build
       - name: Resource balance (small sample)
         run: node packages/worldgen/sim/balance.ts 120 3
+
+  # Pushes and merges to main go live once every check above passes.
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: SSH key and the server's pinned identity
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Deploy
+        run: KEY="$HOME/.ssh/deploy_key" STRICT=yes bash deploy/deploy.sh
+
