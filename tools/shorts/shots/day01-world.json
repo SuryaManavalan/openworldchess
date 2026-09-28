@@ -1,0 +1,14 @@
+{
+  "base": "https://openworldchess.com",
+  "out": "out/day01/world.mp4",
+  "seconds": 21,
+  "center": [-30, -114],
+  "path": [
+    { "t": 0, "zoom": 1.7 },
+    { "t": 8, "zoom": 0.34, "dx": 0, "dy": -8 },
+    { "t": 14, "zoom": 0.26, "dx": 8, "dy": -63 },
+    { "t": 21, "zoom": 0.23, "dx": -85, "dy": -50 }
+  ],
+  "ease": "inOut",
+  "rotate": 6
+}

@@ -1,0 +1,67 @@
+# 30 days, one video a day
+
+Seven pillars, repeated in different ways. Each idea comes back with a new hook,
+new wording or a new format; winners get more remixes (see Measuring in
+`reference/production.md`).
+
+| Pillar | The idea |
+|---|---|
+| **W** World | The whole world is one endless chessboard. |
+| **S** Stakes | Every battle is a real game of chess, and losing costs you land. |
+| **M** Memes | Chess culture, twisted: en passant, the rook, promotion, blunders. |
+| **L** Lore | The wilds: 32 factions, dragons, relics, rare lands. |
+| **P** Progress | The Chronicle: Settler → High King, crowns, wonders. |
+| **H** History | Chaturanga, shah mat, empires, the four civilizations. |
+| **Z** Zen | Hypnotic motion, mantras, no gameplay. |
+
+Formats: **G** gameplay · **H** hybrid (motion + gameplay) · **Z** pure motion.
+Voice: **C** Chronicler · **K** Caster · **—** none (music and sound only).
+
+## The calendar
+
+| Day | Pillar | Format | Hook (card 1) | The video | Voice | End line / CTA |
+|---|---|---|---|---|---|---|
+| 1 | W | G | **The whole world is a chessboard.** | Start zoomed in on one pawn; one continuous zoom-out reveals towns, armies, forests, rivers, more towns, forever. Titles: "Every square. Every army. Real players." | C | Play free in your browser. |
+| 2 | S | G | **What happens after checkmate?** | A siege: a real mate lands, then the world view: the defender's survivors flee, the buildings turn to our color. "Checkmate takes the town." | K | Your first king is waiting. |
+| 3 | M | G | **Google en passant.** | A pawn marches across the world into battle; a real en passant in a battle. "Holy hell." Then: "…now do it in a war." | K | Comment if you'd have seen it. |
+| 4 | Z | Z | **Every empire begins with one house.** | Hypnotic: one house, then fields, then a village grows in slow, satisfying steps; pawns emerge on a beat. Loops back to the single house. | C | One more house. |
+| 5 | L | H | **32 monster factions. 1 board.** | Faction sigils and creature art slam by on the beat (goblins → Dragon Brood), then real camp footage and a battle vs creatures. | K | Which one do you fight first? |
+| 6 | M | G | **The rook is a war elephant.** | Elephant rooks marching in the world, then a rook-lift mate. "THE ELEPHANTTT." Close with the true story: in India the rook is still called *haathi*. | K | Protect your elephants. |
+| 7 | S | G | **He hung his queen. In a war.** | A real blunder (ours, staged in a practice battle, labeled), then the punishment and the town it cost. "Look for checks. Look for captures. Look for kingdoms." | K | Would you have seen it? |
+| 8 | P | H | **Settler → High King.** | Title cards stack with a stomp each (the 10 titles), intercut with the empire growing. "15 chapters. One crown at a time." | C | Where will you stop? |
+| 9 | Z | Z | **Calculate. Commit. Conquer.** | Kinetic mantra over an endless zoom through tiling boards. Three words, three beats, then the loop. | C | — (name only) |
+| 10 | W | G | **Knights hop. Pawns trudge. Elephants march.** | Satisfying close-ups of each piece's world movement, one per beat, then the whole army moving together. | — | Every piece moves in character. |
+| 11 | S | G | **Protect the Emperor.** | The gold-crowned Emperor, a close call in a battle, the save. "Lose him and you start over." | K | Guard him with your life. |
+| 12 | H | H | **Chess was born as a war.** | Chaturanga: the army of four limbs (infantry, cavalry, elephants, chariots) on parchment art, then our world full of those armies. "We gave it the war back." | C | Play the war. |
+| 13 | M | G | **Promotion is temporary here.** | A pawn reaches the end, becomes a ghostly queen, wins the battle, then walks home a pawn. "Glory is borrowed. Victory is yours." | K | Worth it? |
+| 14 | L | G | **Here be dragons.** | A march across the ash plains toward a Dragon Brood hoard; the battle; the Dragon's Skull relic. | C | The dragon is waiting. |
+| 15 | W | G | **The land has an Elo.** | The minimap's Elo layer lights up the rating bands; then march from a low-rated land into a high-rated one: richer ore, stronger neighbors. "Climb the map." | K | What's your rating? |
+| 16 | Z | Z | **Protect the king. Expand the realm.** | Pieces orbiting a king in slow, perfect circles; each ring adds a piece type. Hypnotic, loops seamlessly. | C | — |
+| 17 | S | G | **POV: you just seized a crown.** | Beating an Emperor; the crown flies to your side; you now command another king. | K | Seize yours. |
+| 18 | M | H | **1. e4 … then conquer the world.** | A chess opening on a small board, the camera pulls back and the board becomes the world, and the pawn keeps walking. | — | The board never ends. |
+| 19 | L | G | **The goblins resigned.** | A camp battle vs the Goblin Warband: a crushing win, the camp scatters, the hoard. "L goblins." | K | GG. |
+| 20 | P | G | **Macro in the world. Micro on the board.** | Split screen: top, the empire building (houses, stables, temples); bottom, the battle board mid-game. | K | APM won't save you. Calculation will. |
+| 21 | H | H | **Shah mat: the king is helpless.** | The origin of "checkmate" in a single slow card; then the real mate; then "the king is helpless. The town is yours." | C | Say it with us. |
+| 22 | Z | Z | **The board doesn't end.** | Infinite zoom: a board inside a square inside a board, forever, with the mantra. | C | Neither does the war. |
+| 23 | S | G | **Lose this game, lose the town.** | Tension edit: clocks ticking, the defender's town in the background, a time scramble to the finish. | K | Lock in. |
+| 24 | L | H | **Free the captives.** | A bandit camp, captive pieces held; the battle; the captives walk home. | C | Some fights are rescues. |
+| 25 | W | G | **Let him cook.** | Sped-up (labeled) build: an empty field becomes a walled town with roads over one session. | K | Cooking since chapter 1. |
+| 26 | P | G | **A wonder the whole world can see.** | The Wonder rising in a capital; the camera pulls back to show it among the world's towns. | C | Build something that outlasts you. |
+| 27 | M | G | **Bongcloud, but it's a real army.** | A king marching out ahead of its army across the world (the bongcloud joke), then pulling it off in battle. | K | Would you? |
+| 28 | H | H | **Dravidian. Roman. Chinese. Egyptian.** | The four civilizations' pieces and buildings in rotation; one world, four styles. | — | Choose your civilization. |
+| 29 | Z | Z | **A pawn walks. A kingdom follows.** | A single pawn walking across endless squares; with each step, the world grows behind it: houses, towers, a crown. | C | Take the first step. |
+| 30 | W | G | **Chess. But the board never ends.** | The recap: best moments of the month in a fast montage (mate, dragon, crown, zoom-out), ending on the endless board. | K | Play free at openworldchess.com |
+
+## After day 30
+
+- Take the top five by 2-second hold and average watch %; make three remixes of each
+  (new hook, new wording, new music) for month two.
+- Anything under 20% hold gets one new hook and a second try.
+- Add a weekly format that can run forever (for example, "Battle of the week": the
+  best real game on the server, with the players' permission).
+
+## Log
+
+| Day | Posted | File | Hook used | Views (48h) | 2s hold | Avg watch % | Shares | Notes |
+|---|---|---|---|---|---|---|---|---|
+| 1 | not yet | `out/day01/day01.mp4` (timeline `tools/shorts/timelines/day01.json`) | "The whole world is a chessboard." | | | | | First video made with the toolkit. Footage: FrostQueen481's town → grey_blunder → AshKnight971. |
