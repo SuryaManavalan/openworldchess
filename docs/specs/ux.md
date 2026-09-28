@@ -185,3 +185,15 @@ An attack gives **60 seconds** of warning ([battle.md](battle.md) §2). A warnin
 
   CI runs Playwright with mobile emulation for layout checks. Before each milestone, the team plays for real on actual devices.
 - **Definition of done:** every milestone ([ROADMAP.md](../ROADMAP.md)) counts as done only when it works on a phone in portrait **and** on desktop.
+
+## Phone layout (audited 2026-09-28)
+
+Audited at 360×740, 390×844 and 844×390 (landscape), screen by screen:
+- **The top bar** has a solid background, so it reads over any terrain. On small phones it drops the shield badge; the battles button only shows while a battle is on.
+- **One column under the top bar:** the quest banner (foldable to one line), then alerts (at most two on a phone), then toasts. They stack, so they never overlap. News alerts fade after 9 s; attacks and battles stay up for 20 s.
+- **The column steps aside** while a sheet, a confirmation, an inspect card or a battle is open.
+- **Selection:** the chosen pieces in one row and the actions in another, each swiping sideways. The hint line only shows when a tap is waiting for its place (paving, clearing).
+- **Sheets and confirmations** all have the full-width handle: tap or swipe down to close.
+- **Landscape:** in a battle, the board takes the screen's height with the players, clocks and buttons beside it; the quest column keeps to 460px.
+- **Edge markers** stay within the visible map (not under the desktop side panel).
+

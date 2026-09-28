@@ -24,92 +24,117 @@ function tip(s: Step, phone: boolean): string | null {
   }
 }
 
+/** How to do each step of the pilgrimage with the controls (campaign.md §5.3). */
+const PILGRIM_TIPS = [
+  'Select elephants, tap Clear land, and drag over the grove (Show me finds it).',
+  'Select a bishop, walk it into the clearing, then tap Raise altar: the altar goes up beside it.',
+  'Select knights, tap Pave, and tap the altar: they pave a road from where they stand.',
+];
+
 /** Keep which quest is in focus across reloads. */
 function setFocus(id: number | null) {
   useUI.getState().set({ questFocus: id });
   try { if (id) localStorage.setItem('owc.questFocus', String(id)); else localStorage.removeItem('owc.questFocus'); } catch { /* private mode */ }
 }
 
+/** Fold the quest banner down to one line, or open it again (remembered). */
+function setMin(min: boolean) {
+  useUI.getState().set({ trackerMin: min });
+  try { localStorage.setItem('owc.trackerMin', min ? '1' : '0'); } catch { /* private mode */ }
+}
+
 /**
- * The quest tracker (campaign.md §5.5): the banner shows the chapter's step, or a side quest
- * you've focused. New side quests arrive as offers to accept or decline; accepted ones go in
- * your list, and tapping one focuses it. Declined quests come back later, so a mis-tap never
- * loses one for good.
+ * The quest banner (campaign.md §5.5): the chapter's step, or a side quest you've focused.
+ * It folds down to a one-line pill so it doesn't take the screen. Side quests (offers and
+ * your list) live in the Chronicle, whose button shows a badge when one is offered.
  */
 export function ChronicleTracker() {
   const ui = useUI();
-  const [open, setOpen] = useState(false);
-  const [confirm, setConfirm] = useState<number | null>(null);
+  const [confirm, setConfirm] = useState(false);
   const c = mirror.self?.chronicle;
   if (!c || ui.battleFocus != null) return null;
   const ch = CHAPTERS[c.chapter - 1];
   const step = ch?.steps[c.step];
   const show = (at?: [number, number]) => { if (at) scene?.flyTo(at[0], at[1], Math.max(scene.cam.zoom, 0.7)); };
-  const offers = c.sides.filter((q) => q.state === 'offered');
-  const mine = c.sides.filter((q) => q.state !== 'offered');
-  const focused = mine.find((q) => q.id === ui.questFocus);
-  if (!ch && !c.sides.length) return null; // the Epilogue: side quests only
-  const [have, need] = c.progress;
-  const t = step && c.chapter <= 2 ? tip(step, ui.layout === 'phone') : null;
-  const decline = (id: number) => {
-    if (confirm !== id) { setConfirm(id); return; }
-    commands.declineQuest(id); setConfirm(null);
-    if (ui.questFocus === id) setFocus(null);
-  };
+  const focused = c.sides.find((q) => q.state !== 'offered' && q.id === ui.questFocus);
+  if (!focused && !(ch && step)) return null;
+  const line = focused ? focused.line : step!.line;
+  const [have, need] = focused ? focused.progress ?? [0, 0] : c.progress;
+  const kicker = focused ? `Side quest · +${focused.renown} Renown` : `Chapter ${ch!.n} · ${ch!.name}`;
+  const target = focused ? focused.at : c.target;
+  if (ui.trackerMin) return (
+    <div className="tracker">
+      <button className={`mini ${focused ? 'side-focus' : ''}`} aria-label="Show the quest" onClick={() => setMin(false)}>
+        <Icon name={focused ? 'star' : 'book'} size={15} />
+        <span className="mini-line">{line}</span>
+        {need > 1 && <em>{have}/{need}</em>}
+        <Icon name="chevron" size={13} style={{ transform: 'rotate(90deg)' }} />
+      </button>
+    </div>
+  );
+  const t = !focused && step && c.chapter <= 2 ? tip(step, ui.layout === 'phone') : null;
   return (
     <div className="tracker">
-      {focused ? (
-        <div className="main side-focus">
-          <button className="book" aria-label="Back to the chapter" onClick={() => setFocus(null)}><Icon name="star" size={18} /></button>
-          <div className="body">
-            <span className="kicker">Side quest · +{focused.renown} Renown</span>
-            <b>{focused.line}</b>
-            {focused.progress && focused.progress[1] > 1 && <span className="prog"><span style={{ width: `${(100 * focused.progress[0]) / focused.progress[1]}%` }} /><em>{focused.progress[0]}/{focused.progress[1]}</em></span>}
+      <div className={`main ${focused ? 'side-focus' : ''}`}>
+        <button className="book" aria-label="Open the Chronicle" onClick={() => ui.set({ sheet: 'chronicle' })}><Icon name={focused ? 'star' : 'book'} size={18} /></button>
+        <div className="body">
+          <span className="kicker">{kicker}</span>
+          <b>{line}</b>
+          {need > 1 && <span className="prog"><span style={{ width: `${(100 * have) / need}%` }} /><em>{have}/{need}</em></span>}
+          {t && <span className="tip">{t}</span>}
+          {focused?.kind === 'pilgrimage' && <span className="tip keep">{PILGRIM_TIPS[focused.stage ?? 0]}</span>}
+          {focused && (
             <span className="focus-actions">
               {ch && <button className="chip" onClick={() => setFocus(null)}><Icon name="book" size={12} /> Chapter {ch.n}</button>}
-              <button className={`chip ${confirm === focused.id ? 'warn' : ''}`} onClick={() => decline(focused.id)}>{confirm === focused.id ? 'Drop it? It comes back later' : 'Drop'}</button>
+              <button className={`chip ${confirm ? 'warn' : ''}`} onClick={() => { if (!confirm) { setConfirm(true); return; } commands.declineQuest(focused.id); setFocus(null); setConfirm(false); }}>{confirm ? 'Drop it? It comes back later' : 'Drop'}</button>
             </span>
-          </div>
-          {focused.at && <button className="link show" onClick={() => show(focused.at)}><Icon name="target" size={15} /> Show me</button>}
+          )}
         </div>
-      ) : ch && step && (
-        <div className="main">
-          <button className="book" aria-label="Open the Chronicle" onClick={() => ui.set({ sheet: 'chronicle' })}><Icon name="book" size={18} /></button>
-          <div className="body">
-            <span className="kicker">Chapter {ch.n} · {ch.name}</span>
-            <b>{step.line}</b>
-            {need > 1 && <span className="prog"><span style={{ width: `${(100 * have) / need}%` }} /><em>{have}/{need}</em></span>}
-            {t && <span className="tip">{t}</span>}
-          </div>
-          {c.target && <button className="link show" onClick={() => show(c.target)}><Icon name="target" size={15} /> Show me</button>}
+        <div className="side-btns">
+          <button className="icon-btn small" aria-label="Fold the quest away" onClick={() => setMin(true)}><Icon name="chevron" size={14} style={{ transform: 'rotate(-90deg)' }} /></button>
+          {target && <button className="link show" onClick={() => show(target)}><Icon name="target" size={15} /> Show</button>}
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Side quests, in the Chronicle (campaign.md §5.5): offers to accept or decline (declined
+ * ones come back later), and your list, where tapping one follows it in the quest banner.
+ */
+function SideQuests() {
+  const ui = useUI();
+  const [confirm, setConfirm] = useState<number | null>(null);
+  const c = mirror.self?.chronicle;
+  if (!c?.sides.length) return <p className="muted small">Side quests appear here as you play (from chapter 2): errands from the land around you, for Renown.</p>;
+  const offers = c.sides.filter((q) => q.state === 'offered'), mine = c.sides.filter((q) => q.state !== 'offered');
+  const fly = (at?: [number, number]) => { if (at) { scene?.flyTo(at[0], at[1], Math.max(scene.cam.zoom, 0.7)); ui.set({ sheet: null }); } };
+  const decline = (id: number) => { if (confirm !== id) { setConfirm(id); return; } commands.declineQuest(id); setConfirm(null); if (ui.questFocus === id) setFocus(null); };
+  return (
+    <div className="side-quests">
       {offers.map((q) => (
-        <div key={q.id} className="offer">
-          <span className="kicker"><Icon name="star" size={12} /> A quest is offered · +{q.renown} Renown</span>
+        <div key={q.id} className="sq offer">
+          <span className="kicker"><Icon name="star" size={12} /> Offered · +{q.renown} Renown</span>
           <span className="line">{q.line}</span>
-          <span className="offer-actions">
-            {q.at && <button className="link" onClick={() => show(q.at)}>Where?</button>}
+          <span className="sq-actions">
+            {q.at && <button className="link" onClick={() => fly(q.at)}>Where?</button>}
             <button className={`btn small ghost ${confirm === q.id ? 'warn' : ''}`} onClick={() => decline(q.id)}>{confirm === q.id ? 'Sure? It comes back later' : 'Decline'}</button>
-            <button className="btn small gold" onClick={() => { void commands.acceptQuest(q.id); setFocus(q.id); setConfirm(null); }}>Accept</button>
+            <button className="btn small gold" onClick={() => { void commands.acceptQuest(q.id); setFocus(q.id); setMin(false); setConfirm(null); }}>Accept</button>
           </span>
         </div>
       ))}
-      {mine.length > 0 && (
-        <div className={`sides ${open ? 'open' : ''}`}>
-          <button className="sides-head" onClick={() => setOpen(!open)}>
-            <Icon name="star" size={13} /> {mine.length} side quest{mine.length > 1 ? 's' : ''}{focused ? '' : ' · tap one to follow it'}
-            <Icon name="chevron" size={13} style={{ transform: open ? 'rotate(-90deg)' : 'rotate(90deg)', marginLeft: 'auto' }} />
-          </button>
-          {open && mine.map((q) => (
-            <button key={q.id} className={`side ${q.id === ui.questFocus ? 'on' : ''}`} onClick={() => { setFocus(q.id === ui.questFocus ? null : q.id); show(q.at); setOpen(false); }}>
-              <Icon name={q.id === ui.questFocus ? 'target' : 'star'} size={13} />
-              <span>{q.line} <em>+{q.renown}</em></span>
-            </button>
-          ))}
-          {open && <button className="sides-close" aria-label="Hide side quests" onClick={() => setOpen(false)}><span className="grabber" /></button>}
+      {mine.map((q) => (
+        <div key={q.id} className={`sq ${q.id === ui.questFocus ? 'on' : ''}`}>
+          <span className="line">{q.line} <em>+{q.renown}</em></span>
+          {q.progress && q.progress[1] > 1 && <span className="muted small">{q.progress[0]}/{q.progress[1]}</span>}
+          <span className="sq-actions">
+            {q.at && <button className="link" onClick={() => fly(q.at)}>Where?</button>}
+            <button className={`btn small ghost ${confirm === q.id ? 'warn' : ''}`} onClick={() => decline(q.id)}>{confirm === q.id ? 'Drop it? It comes back' : 'Drop'}</button>
+            <button className={`btn small ${q.id === ui.questFocus ? 'gold' : 'ghost'}`} onClick={() => { setFocus(q.id === ui.questFocus ? null : q.id); setMin(false); }}>{q.id === ui.questFocus ? 'Following' : 'Follow'}</button>
+          </span>
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -144,6 +169,8 @@ export function ChronicleBook() {
   return (
     <div className="chronicle-book">
       <h3>The Chronicle</h3>
+      <h4>Side quests</h4>
+      <SideQuests />
       <div className="standing">
         <span><Icon name="crown" size={15} /> {TITLES[c.title].name}</span>
         <span><Icon name="star" size={15} /> {c.renown.toLocaleString()} Renown</span>

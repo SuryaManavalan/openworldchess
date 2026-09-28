@@ -19,6 +19,7 @@ import { PerfOverlay, perfOn } from './PerfOverlay.tsx';
 import { Markers } from './Markers.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { SheetGrab } from './SheetGrab.tsx';
+import { checkPlacement } from '../game/placement.ts';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
 const NODE_NAME: Record<string, string> = { tree: 'wood', rock: 'stone', ore: 'ore', wheat: 'crops' };
@@ -33,10 +34,14 @@ export function HUD() {
     <div className={`hud layout-${ui.layout}${CINEMA ? ' cinema' : ''}`}>
       <Markers />
       <TopBar />
-      <Alerts />
-      {mirror.self?.chronicle ? <ChronicleTracker /> : <Guide />}
+      {/* On phones these stack in one column under the top bar, so they never overlap. */}
+      <div className={`top-stack ${ui.layout === 'phone' && (ui.sheet || ui.pendingAttack || ui.pendingClear || ui.inspect || battle) ? 'covered' : ''}`}>
+        {mirror.self?.chronicle ? <ChronicleTracker /> : <Guide />}
+        <Alerts />
+        {ui.layout === 'phone' && <Toasts />}
+      </div>
       <ChapterCeremony />
-      <Toasts />
+      {ui.layout !== 'phone' && <Toasts />}
       {ui.layout === 'desktop' && <SidePanel />}
       <BottomDock />
       <Sheet />
@@ -79,11 +84,11 @@ function TopBar() {
         <span className="stat kstat" title="Kings"><img src={pieceUrl('K', 'light', self?.color ?? '#888', false, self?.civ)} alt="" />{pieces.filter((p) => p.kind === 'K').length}</span>
         <span className="stat bstat" title="Buildings"><Icon name="house" size={16} />{mirror.myBuildings().filter((b) => b.type !== 'ruin').length}</span>
         <DayClock />
-        <button className="link stat" aria-label="Battles" onClick={() => ui.set({ sheet: 'battles' })}><Icon name="swords" size={17} />{live.length || ''}</button>
+        {(ui.layout !== 'phone' || live.length > 0) && <button className="link stat" aria-label="Battles" onClick={() => ui.set({ sheet: 'battles' })}><Icon name="swords" size={17} />{live.length || ''}</button>}
       </div>
       <div className="top-actions">
         <button className={`icon-btn ${ui.flagMode ? 'on' : ''}`} aria-label="Place a flag" title="Place a flag (F)" onClick={() => { ui.set({ flagMode: !ui.flagMode }); if (!ui.flagMode) ui.toast(ui.layout === 'phone' ? 'Tap the map to place a flag' : 'Click the map to place a flag', 'info', 'flag'); }}><Icon name="flag" size={19} /></button>
-        <button className="icon-btn" aria-label="The Chronicle" title="The Chronicle" onClick={() => ui.set({ sheet: ui.sheet === 'chronicle' ? null : 'chronicle' })}><Icon name="book" size={19} /></button>
+        <button className="icon-btn" aria-label="The Chronicle" title="The Chronicle" onClick={() => ui.set({ sheet: ui.sheet === 'chronicle' ? null : 'chronicle' })}><Icon name="book" size={19} />{(() => { const n = self?.chronicle?.sides.filter((q) => q.state === 'offered').length ?? 0; return n ? <span className="dot-badge" aria-label={`${n} quest${n > 1 ? 's' : ''} offered`}>{n}</span> : null; })()}</button>
         <button className="icon-btn shop-btn" aria-label="Civilizations shop" title="Civilizations" onClick={() => ui.set({ sheet: ui.sheet === 'shop' ? null : 'shop' })}><Coin size={19} /></button>
         <button className="icon-btn" aria-label="Help" onClick={() => ui.set({ sheet: ui.sheet === 'help' ? null : 'help' })}><Icon name="help" size={19} /></button>
         <button className="icon-btn" aria-label="Settings" onClick={() => ui.set({ sheet: ui.sheet === 'settings' ? null : 'settings' })}><Icon name="menu" size={19} /></button>
@@ -105,7 +110,7 @@ function Alerts() {
   const ui = useUI();
   return (
     <div className="alerts">
-      {ui.alerts.map((a) => {
+      {ui.alerts.slice(0, ui.layout === 'phone' ? 2 : 4).map((a) => {
         const b = a.battleId != null ? mirror.battles.get(a.battleId) : undefined;
         const secs = b && b.phase === 'countdown' ? Math.max(0, Math.ceil((b.startsAt - mirror.serverNow()) / 1000)) : null;
         return (
@@ -194,6 +199,7 @@ function BottomDock() {
               return <button key={k} className="kc" title={`Leave a ${PIECE_NAME[k].toLowerCase()} behind`} onClick={drop}>{img}{n > 1 && n}<span className="minus">−</span></button>;
             })}
           </span>
+          <span className="sel-actions">
           {pending ? <>
             <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>Move here</button>
             <button className="btn ghost" onClick={() => { if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; ui.bump(); }} aria-label="Cancel"><Icon name="close" size={16} /></button>
@@ -202,12 +208,24 @@ function BottomDock() {
             <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
             {/* Works (movement.md §9): knights pave, elephants clear. */}
             {sel.some((p) => p.kind === 'N') && <button className={`btn ghost ${ui.orderMode === 'pave' ? 'on' : ''}`} title="Knights pave a road from here to where you tap" onClick={() => ui.set({ orderMode: ui.orderMode === 'pave' ? null : 'pave' })}>Pave</button>}
+            {/* A bishop raises an altar beside itself (economy.md §8). */}
+            {sel.some((p) => p.kind === 'B') && mirror.self?.chronicle?.buildings.includes('temple') && <button className="btn ghost" title="Raise an altar beside this bishop" onClick={() => {
+              const b = sel.find((p) => p.kind === 'B')!;
+              // The first good spot beside the bishop (an altar needs one within 2 squares).
+              const spots: [number, number][] = [];
+              for (let r = 1; r <= 2; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) spots.push([b.x + dx, b.y + dy]);
+              const at = spots.find(([x, y]) => checkPlacement('altar', x, y).ok) ?? spots[0];
+              ui.select([]);
+              ui.set({ buildType: 'altar' });
+              input?.updateGhost(at);
+            }}>Raise altar</button>}
             {sel.some((p) => p.kind === 'R') && <button className={`btn ghost ${ui.orderMode === 'clear' ? 'on' : ''}`} title="Elephants clear the trees (and, if you choose, rock and ore) in an area" onClick={() => ui.set({ orderMode: ui.orderMode === 'clear' ? null : 'clear' })}>Clear land</button>}
             {mirror.self?.chronicle?.abilities.includes('muster') && sel.length === 1 && sel[0].kind === 'K' && <button className="btn ghost" title="Gather every piece within 20 squares to this king" onClick={() => commands.muster(sel[0].id).then((e) => e && ui.toast(e, 'error'))}><Icon name="horn" size={15} /> Muster</button>}
             {ui.layout === 'phone' && <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>+ Add</button>}
             <button className="btn ghost" onClick={() => ui.select([])}>Deselect</button>
           </>}
-          {!pending && <span className="hint-text">{ui.orderMode === 'pave' ? `Tap where the road should go: ${sel.filter((p) => p.kind === 'N').length} knight${sel.filter((p) => p.kind === 'N').length > 1 ? 's' : ''} will pave it` : ui.orderMode === 'clear' ? 'Drag over the land to clear, or tap its middle' : ui.layout === 'phone' ? 'Drag from your pieces to a square, or onto an enemy' : 'Right-click a square to move · on an enemy to attack'}</span>}
+          </span>
+          {!pending && (ui.layout !== 'phone' || ui.orderMode) && <span className="hint-text">{ui.orderMode === 'pave' ? `Tap where the road should go: ${sel.filter((p) => p.kind === 'N').length} knight${sel.filter((p) => p.kind === 'N').length > 1 ? 's' : ''} will pave it` : ui.orderMode === 'clear' ? 'Drag over the land to clear, or tap its middle' : ui.layout === 'phone' ? 'Drag from your pieces to a square, or onto an enemy' : 'Right-click a square to move · on an enemy to attack'}</span>}
         </div>
       )}
       {ui.layout === 'phone' && (
@@ -466,7 +484,7 @@ function ClearConfirm() {
       <div className="sheet confirm">
         <SheetGrab onClose={close} />
         <h3>Clear this land?</h3>
-        <p>{x1 - x0 + 1}×{y1 - y0 + 1} squares: {count.tree} tree{count.tree === 1 ? '' : 's'}{count.rock ? `, ${count.rock} rock` : ''}{count.ore ? `, ${count.ore} ore` : ''}. {crew} elephant{crew > 1 ? 's' : ''} {nothing ? '' : `will take about ${secs < 90 ? `${Math.max(5, secs)} seconds` : `${Math.round(secs / 60)} minutes`}.`}</p>
+        <p>{nothing && !count.rock && !count.ore ? `Nothing to clear in these ${x1 - x0 + 1}×${y1 - y0 + 1} squares: no trees, rock or ore.` : `${x1 - x0 + 1}×${y1 - y0 + 1} squares: ${count.tree} tree${count.tree === 1 ? '' : 's'}${count.rock ? `, ${count.rock} rock` : ''}${count.ore ? `, ${count.ore} ore` : ''}.`} {nothing ? '' : `${crew} elephant${crew > 1 ? 's' : ''} will take about ${secs < 90 ? `${Math.max(5, secs)} seconds` : `${Math.round(secs / 60)} minutes`}.`}</p>
         {(count.rock > 0 || count.ore > 0) && (
           <label className="check-row"><input type="checkbox" checked={hard} onChange={(e) => setHard(e.target.checked)} /> Also break rock and ore</label>
         )}
@@ -491,6 +509,7 @@ function AttackConfirm() {
   return (
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && ui.set({ pendingAttack: null })}>
       <div className="sheet confirm">
+        <SheetGrab onClose={() => ui.set({ pendingAttack: null })} />
         <h3>Attack {a.name}?</h3>
         {a.kingless && <p>Their troop has no king: one of its pawns will command it, as its king for this battle.</p>}
         <p>{a.raid ? 'A raid: one of your pawns leads as the king for this battle only. If you lose, only that pawn falls; the rest walk home.' : `${a.siege ? 'A siege: they get 60 seconds to prepare.' : 'A field battle: 15 seconds until it starts.'} Both sides fight with at most one chess set. If your king falls, the pieces with it are lost.`}</p>

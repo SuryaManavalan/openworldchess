@@ -73,7 +73,8 @@ export function Markers() {
         node.className = `marker arrow ${m.kind}`;
         const w = node.offsetWidth || 60, h = node.offsetHeight || 32;
         // Keep the whole chip on screen, and step past chips already placed.
-        let left = Math.max(8, Math.min(W - w - 8, cx + dx * k - w / 2));
+        // (Within the visible map: not under the desktop side panel.)
+        let left = Math.max(inset.l - 4, Math.min(W - inset.r - w - 4, cx + dx * k - w / 2));
         let top = Math.max(inset.t - 10, Math.min(H - inset.b - h + 10, cy + dy * k - h / 2));
         for (let tries = 0; tries < 6 && placed.some((p) => left < p.x + p.w + 4 && left + w + 4 > p.x && top < p.y + p.h + 4 && top + h + 4 > p.y); tries++) {
           if (kx < ky) top += h + 6; else left += (dx > 0 ? -1 : 1) * (w + 6);

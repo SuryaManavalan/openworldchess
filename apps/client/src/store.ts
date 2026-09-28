@@ -40,6 +40,8 @@ interface UIState {
   hint: string | null;
   /** The side quest shown in the top banner instead of the chapter (campaign.md §5.5); null: the chapter. */
   questFocus: number | null;
+  /** The quest banner folded down to one line (remembered). */
+  trackerMin: boolean;
   /** A work order waiting for its place (movement.md §9): where to pave to, or what to clear. */
   orderMode: 'pave' | 'clear' | null;
   /** An area chosen for elephants to clear, waiting for confirmation. */
@@ -90,6 +92,7 @@ export const useUI = create<UIState>((set, get) => ({
   layout: 'desktop',
   settings: loadSettings(),
   hint: null,
+  trackerMin: (() => { try { return localStorage.getItem('owc.trackerMin') === '1'; } catch { return false; } })(),
   orderMode: null,
   pendingClear: null,
   questFocus: (() => { try { const v = Number(localStorage.getItem('owc.questFocus')); return v > 0 ? v : null; } catch { return null; } })(),
@@ -125,7 +128,8 @@ export const useUI = create<UIState>((set, get) => ({
   alert: (a) => {
     const id = nextId++;
     set({ alerts: [{ ...a, id, time: Date.now() }, ...get().alerts].slice(0, 4) });
-    setTimeout(() => get().dismissAlert(id), 20_000);
+    // News fades sooner than danger: attacks and battles stay up until they matter.
+    setTimeout(() => get().dismissAlert(id), a.kind === 'info' ? 9_000 : 20_000);
   },
   dismissAlert: (id) => set({ alerts: get().alerts.filter((x) => x.id !== id) }),
   setSettings: (p) => {

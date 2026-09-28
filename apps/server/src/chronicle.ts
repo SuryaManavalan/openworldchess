@@ -52,6 +52,7 @@ const MAX_OFFERS = 2;
 /** A declined quest comes back as an offer after this much play. */
 const SHELF_MS = 20 * 60_000;
 const active = (q: SideQuest) => q.state !== 'offered';
+const PILGRIM_ALTAR = 'A pilgrimage, 2 of 3: build an Altar in the clearing. Bring a bishop there, then choose Altar from the build menu (or select the bishop and tap Raise altar).';
 
 const keyOf = (s: Step): string | null => {
   switch (s.verb) {
@@ -633,13 +634,14 @@ export class Chronicle {
       q.progress = [Math.max(0, q.trees! - left), q.trees!];
       if (left <= Math.floor(q.trees! * 0.2)) {
         q.stage = 1; q.progress = undefined;
-        q.line = 'A pilgrimage, 2 of 3: raise an altar in the clearing. A bishop must stand beside the spot.';
+        q.line = PILGRIM_ALTAR;
         this.game.onAlert(p.id, { kind: 'info', text: 'The grove is cleared. Now raise an altar there', at: q.at });
       }
       return false;
     }
     const altar = w.buildingsNear(x0 + 5, y0 + 5, 9).find((b) => b.owner === p.id && b.type === 'altar' && b.built >= 1);
     if (q.stage === 1) {
+      if (q.line !== PILGRIM_ALTAR) q.line = PILGRIM_ALTAR; // quests offered before the wording changed
       if (!altar) return false;
       q.stage = 2; q.at = [altar.x, altar.y];
       q.line = 'A pilgrimage, 3 of 3: pave a road with knights from the altar to your town.';

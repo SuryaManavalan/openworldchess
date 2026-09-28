@@ -195,9 +195,10 @@ Rewards stay small and **never outgrow the main quest**. Side quests give variet
 ### 5.5 Presentation
 
 - **Tracker:** a compact card, top left (where the guide sits now), with the main step, its progress ("2/3 knights") and Show me.
-  - **Offers** appear under it as cards: the quest, its reward, *Where?*, **Decline** (tap twice; it says the quest will come back) and **Accept**.
-  - **Your side quests** sit in a list under that, collapsed to one line. Tap one to **focus** it: the top card then shows that quest (its progress, Show me, and *Drop*), with a chip back to the chapter. Focus is remembered across reloads.
-  - Every control is at least 36–44px tall, with no small close buttons beside the list (a thumb reaching to close it used to decline a quest by accident).
+  - It **folds down** to a one-line pill (the chevron), and opens again with a tap; the choice is remembered. On phones it takes one line instead of a card.
+  - **Side quests live in the Chronicle** (as of 2026-09-28), at the top of the book: offers with *Where?*, **Decline** (tap twice; it says the quest will come back) and **Accept**, then your quests with *Where?*, *Drop* and **Follow**. The Chronicle button shows a badge while a quest is offered, and a short alert says so once.
+  - **Following** a side quest puts it in the banner (its progress, Show, a how-to tip for the pilgrimage, *Drop*), with a chip back to the chapter. It's remembered across reloads.
+  - Every control is at least 36–44px tall, with no small close buttons beside a list (a thumb reaching to close one used to decline a quest by accident).
 - **Sheets:** every bottom sheet has a full-width handle: tap it, or swipe it down (the sheet follows your finger), to close.
 - **Map:** quest targets get a gold pin that joins the existing marker system (flags, settlement pins, edge arrows), so off-screen targets show as edge arrows with distances.
 - **Moments:**

@@ -406,6 +406,7 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .tracker .chip { width: auto; height: auto; flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 12px; font-weight: 800; color: var(--ink); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 99px; padding: 5px 10px; min-height: 30px; cursor: pointer; }
 .layout-phone .tracker { top: calc(54px + var(--safe-top)); left: 8px; right: 8px; width: auto; }
 .layout-phone .tracker .tip { display: none; }
+.layout-phone .tracker .tip.keep { display: block; }
 .ceremony { position: relative; overflow: hidden; width: min(440px, calc(100vw - 32px)); background: var(--panel-2); border: 1px solid rgba(243, 210, 122, 0.5); border-radius: 20px; padding: 26px 22px 20px; text-align: center; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); animation: showcase-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2); display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .ceremony .rays { position: absolute; inset: -80%; background: repeating-conic-gradient(from 0deg, rgba(243, 210, 122, 0.08) 0deg 8deg, transparent 8deg 22deg); animation: rays 26s linear infinite; pointer-events: none; }
 .ceremony > * { position: relative; }
@@ -490,3 +491,55 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .check-row { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 700; cursor: pointer; }
 .check-row input { width: 20px; height: 20px; accent-color: #e3b23c; }
 .warn-text { color: #ffb4a0; font-size: 13px; line-height: 1.4; }
+
+/* ---------- phone layout: one column under the top bar (nothing overlaps) ---------- */
+.top-stack { display: contents; }
+.layout-phone .top-stack { position: absolute; top: calc(54px + var(--safe-top)); left: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 20; pointer-events: none; }
+.layout-phone .top-stack > * { position: static; transform: none; width: auto; pointer-events: auto; }
+.layout-phone .top-stack > .toasts { pointer-events: none; align-items: center; }
+.layout-phone .alert { padding: 8px 10px; font-size: 13.5px; }
+/* The quest banner folded to one line. */
+.tracker .mini { display: flex; align-items: center; gap: 8px; min-height: 40px; width: 100%; background: var(--panel); color: var(--ink); border: 1px solid rgba(243, 210, 122, 0.35); border-radius: 99px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
+.tracker .mini svg:first-child { color: #f3d27a; flex: none; }
+.tracker .mini.side-focus { border-color: rgba(207, 230, 164, 0.5); }
+.tracker .mini .mini-line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.tracker .mini em { font-style: normal; color: #f3d27a; }
+.tracker .side-btns { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.tracker .side-btns .icon-btn.small { width: 32px; height: 32px; }
+/* Side quests in the Chronicle. */
+.side-quests { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.side-quests .sq { display: flex; flex-direction: column; gap: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.side-quests .sq.offer { border-color: rgba(207, 230, 164, 0.45); }
+.side-quests .sq.on { border-color: rgba(243, 210, 122, 0.6); }
+.side-quests .kicker { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: #cfe6a4; }
+.side-quests .line { font-weight: 700; line-height: 1.35; }
+.side-quests .line em { font-style: normal; color: #cfe6a4; font-weight: 800; }
+.side-quests .sq-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.side-quests .sq-actions .link { margin-right: auto; background: none; border: 0; color: #f3d27a; font-weight: 800; cursor: pointer; min-height: 36px; }
+.side-quests .btn { min-height: 36px; }
+.side-quests .btn.gold { background: linear-gradient(180deg, #f7d774, #e3b23c); color: #23211f; font-weight: 900; border: 0; box-shadow: 0 3px 0 #a97f1f; }
+.side-quests .warn { color: #ffb4a0; }
+.icon-btn { position: relative; }
+.dot-badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: #cfe6a4; color: #23211f; font-size: 11px; font-weight: 900; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--panel); }
+
+/* ---------- phone audit fixes (2026-09-28) ---------- */
+/* The top bar reads over any terrain. */
+.layout-phone .topbar { background: rgba(30, 28, 25, 0.94); box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28); padding-bottom: 6px; }
+@media (max-width: 379px) { .layout-phone .topbar .badge.shield { display: none; } .layout-phone .topbar .badge.guest { padding: 3px 7px; font-size: 12px; } }
+/* Behind a sheet, a confirm or a battle, the quest banner and alerts step aside. */
+.layout-phone .top-stack.covered { display: none; }
+/* Selection: the pieces in one swipeable row, the actions in another; no hint unless it's needed. */
+.sel-actions { display: contents; }
+.layout-phone .action-row:not(.build-row) { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px; }
+.layout-phone .action-row .sel-summary { display: flex; gap: 6px; overflow-x: auto; flex-wrap: nowrap; padding-top: 6px; scrollbar-width: none; }
+.layout-phone .action-row .sel-actions { display: flex; gap: 6px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+.layout-phone .action-row .sel-actions .btn { flex: none; min-height: 40px; padding: 8px 12px; white-space: nowrap; }
+.layout-phone .action-row .hint-text { font-size: 12.5px; }
+/* Landscape phones: the board takes the height, everything else sits beside it; the quest
+   column keeps to a readable width instead of spanning the screen. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .battle { width: auto; max-width: 100%; display: grid; grid-template-columns: auto minmax(220px, 340px); grid-auto-rows: min-content; column-gap: 12px; align-content: start; overflow: hidden; }
+  .battle > .board-wrap { grid-column: 1; grid-row: 1 / span 30; width: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); max-width: none; }
+  .battle > *:not(.board-wrap) { grid-column: 2; }
+  .layout-phone .top-stack { right: auto; width: min(460px, calc(100% - 16px)); }
+}
