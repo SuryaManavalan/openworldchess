@@ -65,7 +65,9 @@ export function findPath(sx: number, sy: number, tx: number, ty: number, free: F
   let bestK = start, bestH = heur(sx, sy, tx, ty);
   const goal = pk(tx, ty);
   for (let n = 0; heap.size && n < maxExpand; n++) {
-    if (opts.deadline && (n & 1023) === 1023 && Date.now() > opts.deadline) break;
+    // Checked often: a step into land nobody has loaded generates its chunk (several ms each),
+    // so a search can overrun its budget badly between rare checks.
+    if (opts.deadline && (n & 63) === 63 && Date.now() > opts.deadline) break;
     const k = heap.pop();
     if (k === goal) { bestK = k; break; }
     const [x, y] = upk(k);
@@ -102,9 +104,18 @@ export function findPathLong(sx: number, sy: number, tx: number, ty: number, fre
   if (Math.max(Math.abs(tx - sx), Math.abs(ty - sy)) <= 48) return findPath(sx, sy, tx, ty, free, 20000, opts);
   // A cell is passable if a few of its squares can be walked.
   // Permissive on purpose: narrow fords and passes must still show up at this scale.
+  // Each cell is looked at once. Looking can generate the land there (several ms a chunk),
+  // so past the deadline an unseen cell counts as closed and the search winds down.
+  const cells = new Map<number, boolean>();
   const cellOk = (cx: number, cy: number) => {
-    for (const oy of [1, 4, 7]) for (const ox of [1, 4, 7]) if (free(cx * CELL + ox, cy * CELL + oy)) return true;
-    return false;
+    const k = pk(cx, cy);
+    const seen = cells.get(k);
+    if (seen !== undefined) return seen;
+    if (Date.now() > deadline) return false;
+    let ok = false;
+    for (const oy of [1, 4, 7]) for (const ox of [1, 4, 7]) if (!ok && free(cx * CELL + ox, cy * CELL + oy)) ok = true;
+    cells.set(k, ok);
+    return ok;
   };
   const ctx = Math.floor(tx / CELL), cty = Math.floor(ty / CELL);
   const blocked = new Set<string>();
@@ -116,18 +127,22 @@ export function findPathLong(sx: number, sy: number, tx: number, ty: number, fre
   for (let attempt = 0; attempt < 30 && Date.now() < deadline; attempt++) {
     const csx = Math.floor(px / CELL), csy = Math.floor(py / CELL);
     const coarse = findPath(csx, csy, ctx, cty, (x, y) => (x === csx && y === csy) || (x === ctx && y === cty) || (!blocked.has(`${x},${y}`) && cellOk(x, y)), maxCoarse, { deadline });
-    const way: [number, number, number, number][] = [];
-    for (let i = 2; i < coarse.length; i += 2) {
+    // Waypoints are found as they're reached, not all up front: looking one up can generate
+    // the land around it, and the whole route may be far longer than this budget walks.
+    const waypoint = (i: number): [number, number, number, number] | null => {
+      if (i >= coarse.length) return [tx, ty, ctx, cty];
       const [cx, cy] = coarse[i];
-      let p: [number, number] | null = null;
-      for (let r = 0; r < 4 && !p; r++)
-        for (let dy = -r; dy <= r && !p; dy++) for (let dx = -r; dx <= r && !p; dx++)
-          if (free(cx * CELL + 4 + dx, cy * CELL + 4 + dy)) p = [cx * CELL + 4 + dx, cy * CELL + 4 + dy];
-      if (p) way.push([p[0], p[1], cx, cy]);
-    }
-    way.push([tx, ty, ctx, cty]);
+      for (let r = 0; r < 4; r++)
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++)
+          if (free(cx * CELL + 4 + dx, cy * CELL + 4 + dy)) return [cx * CELL + 4 + dx, cy * CELL + 4 + dy, cx, cy];
+      return null;
+    };
     let failed = false;
-    for (const [wx, wy, cx, cy] of way) {
+    for (let i = 2; i < coarse.length + 2; i += 2) {
+      if (Date.now() > deadline) break;
+      const w = waypoint(Math.min(i, coarse.length));
+      if (!w) continue;
+      const [wx, wy, cx, cy] = w;
       const leg = findPath(px, py, wx, wy, free, 12000, opts);
       const end = leg.at(-1);
       if (!end || Math.max(Math.abs(end[0] - wx), Math.abs(end[1] - wy)) > 2) {
@@ -138,6 +153,7 @@ export function findPathLong(sx: number, sy: number, tx: number, ty: number, fre
       }
       out.push(...leg);
       [px, py] = end;
+      if (i >= coarse.length) break;
     }
     if (!failed) break;
   }

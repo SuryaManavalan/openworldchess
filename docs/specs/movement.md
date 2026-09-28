@@ -95,6 +95,11 @@ A troop has a **heading**: the direction of its path, snapped to N, E, S or W. P
   - Long routes: **two levels**. A coarse A* over 8×8-square cells finds the way around lakes and mountain ranges; cells are passable if any sampled square is, so narrow fords still count. Fine A* then connects waypoints along the coarse route.
   - If a waypoint turns out unreachable at the fine level, its cell is marked blocked and the coarse route is re-planned (within a 250ms budget).
   - **Legs:** a troop that reaches the end of a partial route plans the next leg. It only gives up after 8 legs in a row that don't get closer.
+  - **Budgets hold** (2026-09-28): a plan stops at its time budget (80 ms for bots, 250 ms for people), give or take one chunk. Planning into land nobody has loaded generates it, at several ms a chunk, so:
+    - the search checks the clock every 64 steps;
+    - the coarse search looks at each cell once, and treats cells it hasn't looked at yet as closed once the time is up;
+    - waypoints are found as the route reaches them, not all up front.
+    Before this, a bot's 80 ms order could take 290–515 ms. What isn't planned in time is planned in the next legs.
 - **Per-piece move:** each world turn, each piece makes the gait move that best closes on its formation slot. A piece stuck for 3 turns searches a wider area for a way around.
 - **Getting through:**
   - The owner's **idle pieces step aside**: they swap places with a marching piece.
