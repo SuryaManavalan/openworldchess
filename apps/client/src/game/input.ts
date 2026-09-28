@@ -297,8 +297,7 @@ export class Input {
     const target = this.scene.pickPiece(at[0], at[1], 0.75);
     const enemy = !!target && target.owner !== mirror.me;
     const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
-    const ok = sel.some((p) => p.kind === 'K') || mirror.myKings().some((k) => cheb(k.x, k.y, to[0], to[1]) <= REACH);
-    this.scene.pathPreview = { from: [lead.x, lead.y], to, ok, attack: enemy };
+    this.scene.pathPreview = { from: [lead.x, lead.y], to, ok: true, attack: enemy };
   }
 
   private finishCommand(at: [number, number]) {
@@ -315,18 +314,16 @@ export class Input {
     const enemyOwner = target && target.owner !== mirror.me ? target.owner : b && b.owner && b.owner !== mirror.me ? b.owner : null;
     if (enemyOwner) {
       const ref = target ?? { x: b!.x, y: b!.y };
-      const king = target?.kind === 'K' ? target : [...mirror.pieces.values()]
+      const kings = [...mirror.pieces.values()]
         .filter((p) => p.owner === enemyOwner && p.kind === 'K' && p.state !== 'battle')
-        .sort((a, c) => cheb(a.x, a.y, ref.x, ref.y) - cheb(c.x, c.y, ref.x, ref.y))[0];
-      if (!king) { ui.toast('No enemy king there to challenge', 'error'); return; }
-      // Raiding the wilds needs no king (battle.md §9): a pawn in the troop leads as its commander.
-      const hasKing = sel.some((id) => mirror.pieces.get(id)?.kind === 'K');
+        .sort((a, c) => cheb(a.x, a.y, ref.x, ref.y) - cheb(c.x, c.y, ref.x, ref.y));
+      // A piece answers through the king whose reach it's in. A troop out on its own without
+      // a king can still be attacked: the server names one of its pawns commander (battle.md §9).
+      const inReach = kings[0] && cheb(kings[0].x, kings[0].y, ref.x, ref.y) <= REACH ? kings[0] : undefined;
       const wild = !!mirror.players.get(enemyOwner)?.wild;
-      const raid = !hasKing && wild && sel.some((id) => mirror.pieces.get(id)?.kind === 'P');
-      if (!hasKing && !raid) { ui.toast(wild ? 'A raid on the wilds needs a king or at least one pawn' : 'An attack on an empire needs a king in your selection', 'error'); audio.error(); return; }
-      const siege = [...mirror.buildings.values()].some((bl) => bl.owner === enemyOwner && cheb(bl.x, bl.y, king.x, king.y) <= REACH);
-      ui.set({ pendingAttack: { pieceIds: sel, targetKingId: king.id, name: mirror.players.get(enemyOwner)?.name ?? 'enemy', siege, raid } });
-      audio.attack(); haptic(20);
+      const king = target?.kind === 'K' ? target : inReach ?? (target && !wild ? target : kings[0]);
+      if (!king) { ui.toast('No enemy king there to challenge', 'error'); return; }
+      this.attack(sel, king, enemyOwner);
       return;
     }
     const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
@@ -337,6 +334,18 @@ export class Input {
     const key = sel.slice().sort((a, b) => a - b).join(',');
     this.scene.moveTargets.set(key, { to, ids: sel, attack: false, t0: performance.now() });
     commands.move(sel, to).then((err) => { if (err) { audio.error(); this.scene.moveTargets.delete(key); } });
+  }
+
+  /** Challenge an enemy king: a confirm sheet first (ux.md §3). Raiding the wilds needs no king (battle.md §9): a pawn leads as commander. */
+  private attack(sel: number[], king: Piece, enemyOwner: string) {
+    const ui = useUI.getState();
+    const hasKing = sel.some((id) => mirror.pieces.get(id)?.kind === 'K');
+    const wild = !!mirror.players.get(enemyOwner)?.wild;
+    const raid = !hasKing && wild && sel.some((id) => mirror.pieces.get(id)?.kind === 'P');
+    if (!hasKing && !raid) { ui.toast(wild ? 'A raid on the wilds needs a king or at least one pawn' : 'An attack on an empire needs a king in your selection', 'error'); audio.error(); return; }
+    const siege = [...mirror.buildings.values()].some((bl) => bl.owner === enemyOwner && cheb(bl.x, bl.y, king.x, king.y) <= REACH);
+    ui.set({ pendingAttack: { pieceIds: sel, targetKingId: king.id, name: mirror.players.get(enemyOwner)?.name ?? 'enemy', siege, raid, kingless: king.kind !== 'K' || undefined } });
+    audio.attack(); haptic(20);
   }
 
   private selectWithSound(ids: number[]) {

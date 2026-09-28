@@ -37,15 +37,16 @@ Each piece moves in the world the way it moves in chess:
 
 ## 4. Troops
 
-### Command rule (Proposed): one reach rule for everything
+### Command rule: pieces go anywhere; buildings stay near kings
 
-- **Every piece must stay within 10 squares (Chebyshev distance) of one of its owner's kings.** This is the same reach that keeps buildings standing ([economy.md](economy.md) §2). There's one rule for pieces and buildings alike, and no city radius.
-- **One exception:** merchants on a trade run travel as caravans between their owner's towns (visuals.md §10). They can't fight or be attacked.
-- A **troop** is simply the pieces moving with a king. When you drag a group that includes a king, the group moves together. When you drag pieces that have no king, they can go anywhere within reach of any of your kings, but no farther. The path preview stops at the edge of reach.
-- **Why:**
-  - It matches the decided rule that an attacker must bring a king. Every army in the field can fight, and every fight is king against king.
-  - It makes kings the true bottleneck. The palace produces them slowly, so the number of armies a player can field is limited.
-  - It removes the edge case of a king-less troop that can't be battled.
+- **Any selection can be sent anywhere**, with or without a king (as of 2026-09-28). Before that, pieces without a king were held within 10 squares of one of your kings. Troops without kings became useful when pawns could lead raids on the wilds ([battle.md](battle.md) §9).
+- **Buildings** still need a king within 10 squares (Chebyshev distance) to keep working ([economy.md](economy.md) §2).
+- A **troop** is the pieces moving together. With a king, it's led by the king. Without one, the piece nearest the destination leads.
+- **Posted pieces:** pieces you send somewhere without a king are *posted* there. They stay where you sent them instead of drifting home.
+- **Drifting home:** pieces that end up outside every king's reach without being sent there (left behind when their king walked off, or survivors of a lost raid) drift toward the nearest king.
+- **Merchants** on a trade run travel as caravans between their owner's towns (visuals.md §10). They can't fight or be attacked.
+- **Attacking** an empire still needs a king in the troop; raiding a wild camp needs a king or a pawn.
+- **Posted troops can be attacked:** a pawn among them defends as its commander ([battle.md](battle.md) §9). Survivors who flee a lost battle are no longer posted, and head home.
 - **Routing:** pieces that lose their king (the survivors who flee after a lost battle, [battle.md](battle.md) §7) become a **routed band**. It drifts toward the owner's nearest king on its own. It can't be given orders and can't be engaged. Once it's within reach of that king, it becomes normal pieces again.
 
 ### Formation
@@ -123,7 +124,7 @@ A troop has a **heading**: the direction of its path, snapped to N, E, S or W. P
 | F | Cycle formation (line, column) |
 | Touch | Tap to select; long-press a square for the order menu |
 
-Selecting pieces without a king lets you move them only **within reach of your kings** (the command rule, §4), for example to guard a settlement or clear a building site.
+Pieces selected without a king can be sent anywhere (the command rule, §4): to guard a settlement, clear a building site, scout, or raid a wild camp.
 
 ## 8. Animation (per gait)
 

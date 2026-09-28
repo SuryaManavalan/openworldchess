@@ -84,7 +84,8 @@ export interface GroupRec {
   /** Where the group was ordered to (long routes are planned in legs). */
   target?: [number, number];
   /** Pieces that were outside every king's reach when ordered: they may walk home through open country. */
-  strays?: Set<number>;
+  /** A background walk home (not a player's order): it just ends if hopelessly stuck. */
+  homeward?: boolean;
   /** Consecutive legs that didn't get closer (8 in a row: the target is unreachable). */
   legs?: number;
   legFrom?: number;
@@ -402,21 +403,17 @@ export class Game {
   }
 
   /** Move a selection (movement.md §4, §7). Returns an error message or null. */
-  orderMove(player: string, ids: number[], to: [number, number], attack?: number, planMs?: number, commander?: number): string | null {
+  /**
+   * `post`: the player sent these pieces there themselves. Any selection may go anywhere
+   * (movement.md §4); pieces sent without a king are posted where they arrive and don't
+   * drift home (background walks home don't post).
+   */
+  orderMove(player: string, ids: number[], to: [number, number], attack?: number, planMs?: number, commander?: number, post = false): string | null {
     const pieces = this.orderable(player, ids);
     if (!pieces.length) return 'Nothing to move';
-    let [tx, ty] = to;
+    const [tx, ty] = to;
     const king = pieces.find((p) => p.kind === 'K') ?? (commander != null ? pieces.find((p) => p.id === commander) : undefined);
-    if (!king) {
-      // Without a king, the group can only go where one of your kings reaches.
-      if (!this.inReach(player, tx, ty)) {
-        const k = this.nearestKing(player, tx, ty);
-        if (!k) return 'No king to lead them';
-        const d = cheb(k.x, k.y, tx, ty);
-        tx = Math.round(k.x + ((tx - k.x) * REACH) / d);
-        ty = Math.round(k.y + ((ty - k.y) * REACH) / d);
-      }
-    }
+    for (const p of pieces) p.posted = post && !king ? true : undefined;
     for (const p of pieces) if (p.groupId) this.leaveGroup(p);
     const leader = king ?? pieces.reduce((a, b) => (cheb(a.x, a.y, tx, ty) <= cheb(b.x, b.y, tx, ty) ? a : b));
     const endPath = perf.start('path.order');
@@ -428,8 +425,7 @@ export class Game {
     endPath();
     const gid = this.world.id();
     const state = newGroup(gid, pieces, path, [leader.x, leader.y]);
-    const strays = king ? undefined : new Set(pieces.filter((p) => !this.inReach(player, p.x, p.y, 1)).map((p) => p.id));
-    this.groups.set(gid, { state, owner: player, kingId: king?.id, raid: commander != null || undefined, attack: attack != null ? { targetKingId: attack, lastRepath: this.turn } : undefined, target: [tx, ty], legs: 0, strays: strays?.size ? strays : undefined });
+    this.groups.set(gid, { state, owner: player, kingId: king?.id, raid: commander != null || undefined, attack: attack != null ? { targetKingId: attack, lastRepath: this.turn } : undefined, target: [tx, ty], legs: 0, homeward: !king && !post ? true : undefined });
     for (const p of pieces) { p.groupId = gid; p.state = 'moving'; p.routine = undefined; this.world.touch(p); }
     return null;
   }
@@ -456,9 +452,9 @@ export class Game {
     for (const p of this.orderable(player, ids)) this.leaveGroup(p);
   }
 
-  orderAttack(player: string, ids: number[], targetKingId: number): string | null {
-    const target = this.world.pieces.get(targetKingId);
-    if (!target || target.kind !== 'K' || !target.owner || target.owner === player) return 'Pick an enemy king';
+  orderAttack(player: string, ids: number[], targetId: number): string | null {
+    const target = this.defenderOf(this.world.pieces.get(targetId));
+    if (!target || !target.owner || target.owner === player) return 'Pick an enemy king or troop';
     const pieces = this.orderable(player, ids);
     let king = pieces.find((p) => p.kind === 'K');
     // Raiding the wilds (battle.md §9): any troop with a pawn may attack a camp without a king.
@@ -481,6 +477,22 @@ export class Game {
     // Already in range? Engage now. Otherwise march there.
     if (this.engaged(king, target)) return this.battles.engage(king, target);
     return this.orderMove(player, pieces.map((p) => p.id), [target.x, target.y], target.id, undefined, raid ? king.id : undefined);
+  }
+
+  /**
+   * Who answers an attack on this piece (battle.md §9): a king, or the king whose reach it's
+   * in. A troop out on its own without a king is still fair game: its pawn nearest the
+   * piece (or, with no pawn, the piece itself) takes command and defends as its king.
+   */
+  defenderOf(p: Piece | undefined): Piece | undefined {
+    if (!p?.owner || p.state === 'battle' || p.state === 'masterless') return undefined;
+    if (p.kind === 'K') return p;
+    const near = this.world.piecesNear(p.x, p.y, REACH).filter((q) => q.owner === p.owner && q.state !== 'battle');
+    const king = near.filter((q) => q.kind === 'K').sort((a, b) => cheb(a.x, a.y, p.x, p.y) - cheb(b.x, b.y, p.x, p.y))[0];
+    if (king) return king;
+    if (this.wilds.campOf(p.owner)) return undefined; // a camp is always answered by its king
+    const pawns = near.filter((q) => q.kind === 'P' && cheb(q.x, q.y, p.x, p.y) <= 3);
+    return pawns.length ? pawns.reduce((a, b) => (cheb(a.x, a.y, p.x, p.y) <= cheb(b.x, b.y, p.x, p.y) ? a : b)) : p;
   }
 
   /** Attack range (battle.md §2): near the target king, or any piece or building it holds. */
@@ -621,14 +633,9 @@ export class Game {
         return !q.groupId && q.state === 'idle' ? q : null;
       };
       const lite = !pieces.some((p) => this.watched(p.x, p.y));
-      // A troop marching with its king stays beside it: only king-less pieces are held to the reach rule square by square.
-      const hasKing = g.kingId != null && pieces.some((p) => p.id === g.kingId);
-      const within = (p: Piece, x: number, y: number) => hasKing || p.kind === 'K' || !!g.strays?.has(p.id) || this.inReach(g.owner, x, y, 1);
       const step = () => stepGroup(g.state, pieces, {
         free: (gp, x, y) => {
           const p = gp as unknown as Piece;
-          // Without a king, pieces stay within reach, except one already outside it, which may walk home.
-          if (!within(p, x, y)) return false;
           return w.free(x, y, p.id) || (w.walkable(x, y) && !!yields(p, x, y));
         },
         walkable: (x, y) => w.walkable(x, y),
@@ -638,12 +645,12 @@ export class Game {
           if (this.routeBudget <= 0) return null;
           this.routeBudget--;
           const p = gp as unknown as Piece;
-          return findPath(p.x, p.y, tx, ty, (x, y) => w.walkable(x, y) && within(p, x, y), lite ? 1500 : 4000, { orth: p.kind === 'P' || p.kind === 'R' });
+          return findPath(p.x, p.y, tx, ty, (x, y) => w.walkable(x, y), lite ? 1500 : 4000, { orth: p.kind === 'P' || p.kind === 'R' });
         },
         tree: (x, y) => w.treeAt(x, y),
         fell: (gp, x, y) => {
           const n = w.nodeAt(x, y);
-          if (!n || n.kind !== 'tree' || n.remaining <= 0 || !within(gp as unknown as Piece, x, y)) return false;
+          if (!n || n.kind !== 'tree' || n.remaining <= 0) return false;
           w.drawNode(n, n.remaining, this.now);
           return true;
         },
@@ -663,7 +670,7 @@ export class Game {
       const owner = this.players.get(g.owner);
       if (owner && this.chronicle.has(owner, 'roads') && this.turn % 2 === 0 && !g.state.done && (w.traffic.get(g.state.lead[0] * 134217728 + g.state.lead[1]) ?? 0) >= 60) step();
       // A stray's walk home that's hopelessly stuck just ends (it drifts, and may try again later).
-      if (g.strays && !g.kingId && pieces.every((p) => (g.state.stuck[p.id] ?? 0) >= 8)) {
+      if (g.homeward && pieces.every((p) => (g.state.stuck[p.id] ?? 0) >= 8)) {
         for (const p of pieces) { p.groupId = undefined; p.state = 'idle'; w.touch(p); }
         this.groups.delete(gid);
         continue;
@@ -712,6 +719,8 @@ export class Game {
         // Merchants on a trade run travel as caravans between towns.
         if (p.routine === 'merchant' || p.routine === 'merchant:back' || p.routine === 'trade') continue;
         if (p.kind === 'K') { if (p.state === 'routed') { p.state = 'idle'; w.touch(p); } continue; }
+        // Pieces their player posted out there stay where they were sent.
+        if (p.posted && p.state === 'idle') continue;
         if (this.inReach(p.owner, p.x, p.y)) { if (p.state === 'routed') { p.state = 'idle'; w.touch(p); this.driftStuck.delete(p.id); } continue; }
         const k = this.nearestKing(p.owner, p.x, p.y);
         // Creatures without a king just melt back into the wild.

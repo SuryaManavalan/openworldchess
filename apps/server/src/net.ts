@@ -159,7 +159,7 @@ export class Net {
         // At most ~4 subscription changes a second, 30 new chunks each (world generation is CPU).
         if (now - s.lastSub < 250) break;
         s.lastSub = now; this.subscribe(s, msg.chunks.slice(0, 81)); break;
-      case 'order.move': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderMove(p.id, msg.pieceIds, msg.to)); break;
+      case 'order.move': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderMove(p.id, msg.pieceIds, msg.to, undefined, undefined, undefined, true)); break;
       case 'order.stop': g.orderStop(p.id, msg.pieceIds); break;
       case 'order.attack': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderAttack(p.id, msg.pieceIds, msg.targetKingId)); break;
       case 'order.cancelAttack': g.battles.cancel(p.id, msg.battleId); break;

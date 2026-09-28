@@ -133,7 +133,7 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
     const wild = mirror.players.get(color === 'w' ? battle.white.playerId : battle.black.playerId)?.wild;
     const kind = type.toUpperCase() as PieceKind;
     const pid = battle.pieceMap[sq];
-    if (pid != null && type === 'k' && battle.commanders?.includes(pid)) return `${wild ? creatureName(wild, 'P') : 'Pawn'}, commanding this raid as its king (for this battle only)`;
+    if (pid != null && type === 'k' && battle.commanders?.includes(pid)) return `${wild ? creatureName(wild, 'P') : 'Pawn'}, commanding this troop as its king (for this battle only)`;
     if (pid != null && type !== 'p' && battle.promoted?.includes(pid)) return `${wild ? creatureName(wild, 'P') : 'Pawn'}, fighting as a ${ROLE_NAME[kind].toLowerCase()} for this battle only`;
     return wild ? `${creatureName(wild, kind)} (${ROLE_NAME[kind]})` : undefined;
   };

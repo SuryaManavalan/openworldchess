@@ -134,10 +134,16 @@ As built on 2026-09-28. Code: `Game.orderAttack`, `Game.orderMove` (`commander`)
 Nobody should have to march a king out of its city to clear a camp. **Any troop with at least one pawn can attack a wild camp**, without a king:
 - **The commander:** the troop's pawn nearest the camp (and not recovering from a battle) is named its **commander** and fights as the king, for this battle only. It is shown as a gold, ethereal king around the pawn, titled "Commander" (the same ghost-king art as a promoted pawn, in gold).
 - **Beyond reach:** a raid may march past your kings' reach, since it's going to fight, not to settle.
+- **Ordering it:** tap or drag onto the camp (its pieces or its tent), then confirm.
 - **The set** is picked around the commander exactly as around a king (§4).
 - **Losing:** checkmating the commander wins the battle as usual. If the raid loses, the commander (a pawn) falls, and that's the only extra loss: the troop's reserves aren't converted, as they would be if a king fell, and they walk home.
 - **Winning** pays like any camp victory (rating, renown, loot).
 - **Rules that stay:** attacking another **empire** still needs a king in the troop, and a troop with a king is always led by its king.
+
+**Defending without a king.** Pieces can be sent anywhere without a king (movement.md §4), and such a troop can be attacked like any other:
+- Attacking a piece means attacking the king whose reach it's in. If it's out on its own, with no king of its owner within 10 squares, its **pawn nearest the targeted piece** (within 3 squares; with no pawn, the targeted piece itself) takes command and defends as its king, shown the same way (`Game.defenderOf`).
+- **If the defenders lose:** the commander falls, and the rest follow the usual rules (§7): pieces that fought flee home, and reserves change hands. Only a failed raid **on the wilds** costs nothing beyond its commander.
+- The attacker still needs a king (it's an attack on an empire).
 
 ## 10. Spectating (Wizard101 style)
 

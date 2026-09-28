@@ -66,8 +66,9 @@ export class Battles {
   }
 
   canTarget(target: Piece, attacker: string): string | null {
-    if (this.kingBusy(target.id)) return 'That king is already in a battle';
-    if ((target.protectedUntil ?? 0) > this.game.now) return 'That king is protected after a recent battle';
+    const who = target.kind === 'K' ? 'That king' : 'That troop';
+    if (this.kingBusy(target.id)) return `${who} is already in a battle`;
+    if ((target.protectedUntil ?? 0) > this.game.now) return `${who} is protected after a recent battle`;
     const owner = target.owner ? this.game.players.get(target.owner) : undefined;
     if (owner && owner.shieldUntil > this.game.now && this.w.elo(target.x, target.y) <= 1050) return 'That player is new and shielded';
     if (target.owner === attacker) return 'That is your own king';
@@ -380,8 +381,7 @@ export class Battles {
         loserKing.cooldownUntil = now + 10 * 60_000; loserKing.protectedUntil = now + 10 * 60_000; w.touch(loserKing);
         g.onAlert(lose.player, { kind: 'info', text: `Your ${loserKing.kind === 'K' ? 'king' : 'commander'} retreats, wounded. Rest your army and try again`, at: kingAt });
       }
-      // A raid's commander was only a pawn (battle.md §9): losing it costs nothing more. Nobody
-      // near it changes hands, and the raiders walk home.
+      // A commander is a pawn standing in for a king (battle.md §9): a raid or a kingless troop.
       const commanderLost = !!loserKing && loserKing.kind !== 'K';
       const loserSurvivors = lose.ids.filter((id) => survivors.has(id) && id !== lose.kingId);
       // Reserves: the loser's other pieces that were within the fallen king's reach.
@@ -395,11 +395,16 @@ export class Battles {
         if (p.kit || fresh) { summary.killed.push(p.id); g.removePiece(p.id); return; }
         g.setOwner(p, win.player); summary.converted.push(p.id);
       };
-      if (!spared && !commanderLost) for (const p of reserves) convert(p);
+      // A kingless troop beaten by an empire changes hands like any other (its commander
+      // stood in for a king); only a beaten raid on the wilds costs nothing but its pawn.
+      const raidLost = commanderLost && !!wildWin;
+      if (!spared && !raidLost) for (const p of reserves) convert(p);
+      // A beaten raid's troop walks home (it was posted out there, movement.md §4).
+      if (raidLost) for (const p of [...reserves, ...loserSurvivors.map((id) => w.pieces.get(id)).filter((p): p is Piece => !!p)]) if (p.posted) { p.posted = undefined; w.touch(p); }
       if (emperor) {
         for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) convert(p); }
       } else {
-        for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) { p.state = 'routed'; w.touch(p); summary.routed.push(id); } }
+        for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) { p.state = 'routed'; p.posted = undefined; w.touch(p); summary.routed.push(id); } }
       }
       // Buildings the fallen king anchored go to the winner if no other loser king still holds them.
       if (winKing && !wildWin && !wildLose) {

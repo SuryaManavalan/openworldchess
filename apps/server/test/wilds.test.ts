@@ -199,6 +199,33 @@ describe('wilds', () => {
     expect(game.kingsOf(raider.id).map((k) => k.id).sort()).toEqual(kings.sort());
   });
 
+  it('a troop out on its own without a king can be attacked: a pawn defends as its commander (battle.md §9)', () => {
+    for (const r of game.battles.recs.values()) if (r.pub.phase !== 'over') { r.pub.phase = 'over'; for (const k of r.sealed) game.world.sealed.delete(k); }
+    for (const p of game.world.pieces.values()) if (p.state === 'battle') { p.state = 'idle'; game.world.dropPiece(p, p.x, p.y); }
+    const a = join('Hunter'), b = join('Rover');
+    // A's king goes far from everyone; B's posted troop (a knight and three pawns) stands beside it.
+    const ak = game.kingsOf(a.id).find((k) => !k.emperor)!;
+    const spot = game.world.nearestFree(ak.x + 120, ak.y + 120, 20)!;
+    game.world.movePiece(ak, spot[0], spot[1]);
+    const add = (kind: 'P' | 'N', dx: number, dy: number) => { const at = game.world.nearestFree(spot[0] + dx, spot[1] + dy, 6)!; const p = { id: game.world.id(), owner: b.id, kind, x: at[0], y: at[1], facing: 3 as const, state: 'idle' as const, posted: true }; game.addPiece(p); return p; };
+    const knight = add('N', 3, 0);
+    const pawns = [add('P', 4, 1), add('P', 4, -1), add('P', 5, 0)];
+    for (const k of game.kingsOf(b.id)) expect(cheb(k.x, k.y, knight.x, knight.y)).toBeGreaterThan(10);
+    // Aim at the knight: its nearest pawn takes command.
+    expect(game.defenderOf(knight)?.kind).toBe('P');
+    expect(game.orderAttack(a.id, [ak.id], knight.id)).toBeNull();
+    tick(10);
+    const rec = [...game.battles.recs.values()].find((r) => r.white.player === a.id && r.pub.phase === 'live')!;
+    expect(rec).toBeTruthy();
+    const commander = rec.black.kingId;
+    expect(pawns.map((p) => p.id)).toContain(commander);
+    expect(rec.pub.commanders).toEqual([commander]);
+    game.battles.resign(b.id, rec.pub.id);
+    // Beaten like any troop: the commander falls, and the survivors flee home.
+    expect(game.world.pieces.has(commander)).toBe(false);
+    for (const p of [knight, ...pawns].filter((q) => q.id !== commander && game.world.pieces.has(q.id))) expect(game.world.pieces.get(p.id)!.state).toBe('routed');
+  });
+
   it('an empire still needs a king to attack another empire', () => {
     const a = join('NoKingA'), b = join('NoKingB');
     const bk = game.kingsOf(b.id)[0];

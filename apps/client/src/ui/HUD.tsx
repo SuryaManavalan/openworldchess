@@ -450,6 +450,7 @@ function AttackConfirm() {
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && ui.set({ pendingAttack: null })}>
       <div className="sheet confirm">
         <h3>Attack {a.name}?</h3>
+        {a.kingless && <p>Their troop has no king: one of its pawns will command it, as its king for this battle.</p>}
         <p>{a.raid ? 'A raid: one of your pawns leads as the king for this battle only. If you lose, only that pawn falls; the rest walk home.' : `${a.siege ? 'A siege: they get 60 seconds to prepare.' : 'A field battle: 15 seconds until it starts.'} Both sides fight with at most one chess set. If your king falls, the pieces with it are lost.`}</p>
         <div className="versus"><div><b>You</b><span>{mine.length} pieces · material {val(mine)}</span></div><div className="vs">vs</div><div><b>{a.name}</b><span>~{theirs.length} pieces seen · material {val(theirs)}</span></div></div>
         <div className="row-actions">

@@ -30,6 +30,8 @@ export interface Piece {
   expiresAt?: number;
   /** Current idle routine, for the client's animation choice. */
   routine?: string;
+  /** Sent there by its player without a king (movement.md §4): it stays, instead of drifting home. */
+  posted?: boolean;
   /** Part of a starting kit: never changes hands (it perishes instead). */
   kit?: boolean;
   /** A creature of the wilds: its faction id (docs/specs/wilds.md). */

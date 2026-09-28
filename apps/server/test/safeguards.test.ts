@@ -172,4 +172,18 @@ describe('strays', () => {
     for (let i = 0; i < 200 && cheb(pawn.x, pawn.y, k.x, k.y) > 10; i++) game.worldTurn((t += 600));
     expect(cheb(pawn.x, pawn.y, k.x, k.y)).toBeLessThanOrEqual(10);
   });
+
+  it('pieces without a king can be sent anywhere, and stay where they were sent (movement.md §4)', () => {
+    const p = join('Scout');
+    const k = game.kingsOf(p.id).find((x) => !x.emperor)!;
+    const pawns = game.holdings(p.id).pieces.filter((x) => x.kind === 'P').slice(0, 2);
+    const to = game.world.nearestFree(k.x + 30, k.y, 6)!;
+    expect(game.orderMove(p.id, pawns.map((x) => x.id), to, undefined, undefined, undefined, true)).toBeNull();
+    let t = Date.now();
+    for (let i = 0; i < 200 && pawns.some((x) => cheb(x.x, x.y, to[0], to[1]) > 3); i++) game.worldTurn((t += 600));
+    for (const x of pawns) expect(cheb(x.x, x.y, to[0], to[1])).toBeLessThanOrEqual(3);
+    // Well outside every king's reach, and they don't drift home.
+    for (let i = 0; i < 30; i++) game.worldTurn((t += 600));
+    for (const x of pawns) { expect(cheb(x.x, x.y, to[0], to[1])).toBeLessThanOrEqual(3); expect(x.state).toBe('idle'); }
+  });
 });

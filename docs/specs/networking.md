@@ -21,7 +21,7 @@ All messages are defined as zod schemas in `packages/shared/protocol`. The forma
 | Type | Fields | Notes |
 |---|---|---|
 | `sub` | `chunks: [cx, cy][]` | Replaces the set of subscribed chunks. At most 64. |
-| `order.move` | `pieceIds[], to: [x, y], formation?` | Moves the group. If it includes a king, the group moves as a troop; otherwise the move is limited to within reach of the owner's kings. |
+| `order.move` | `pieceIds[], to: [x, y], formation?` | Moves the group. If it includes a king, the king leads the troop; otherwise the piece nearest the destination leads. Pieces moved without a king are posted where they arrive (movement.md §4). |
 | `order.attack` | `kingId, targetKingId` | Validated against [battle.md](battle.md) §2. |
 | `order.cancel` | `troopId` | Stops the troop, or cancels an attack countdown. |
 | `build` | `kingId, building, at: [x, y]` | The king must be within 10 squares of the footprint. |
