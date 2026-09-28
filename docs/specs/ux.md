@@ -30,8 +30,8 @@ The layout is chosen by viewport size and input type (`pointer: coarse` plus wid
 
 | Intent | Mobile (touch) | Desktop (mouse + keyboard) |
 |---|---|---|
-| Pan | One-finger drag on the ground | WASD / arrow keys, middle-drag, edge scroll |
-| Zoom | Pinch | Scroll wheel |
+| Pan | One-finger drag on the ground | WASD / arrow keys, middle- or right-drag, **Ctrl or Space + drag**, a **touchpad's two-finger swipe**, edge scroll |
+| Zoom | Pinch | Scroll wheel, or a touchpad pinch |
 | Rotate the camera 90° | **Two-finger twist**, snapping to 90° with a haptic tick | Q / E |
 | Select a piece | Tap it | Click |
 | Select a king's army | **Tap** the king (or its chip in the troop bar): its **best legal army**, the chess set it would fight with (a queen, 2 rooks, 2 bishops, 2 knights, 8 pawns), filled with its nearest ready pieces | Click the king, or its troop in the troop list |

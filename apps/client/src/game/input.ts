@@ -35,7 +35,7 @@ export class Input {
     window.addEventListener('pointermove', (e) => this.move(e));
     window.addEventListener('pointerup', (e) => this.up(e));
     window.addEventListener('pointercancel', (e) => this.up(e, true));
-    el.addEventListener('wheel', (e) => { e.preventDefault(); this.touched(); scene.zoomBy(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
+    el.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     // Any real gesture anywhere (buttons and sheets included) can start the sound.
     const unlockAudio = () => audio.unlock().then(() => audio.setVolumes(useUI.getState().settings));
@@ -44,6 +44,24 @@ export class Input {
     window.addEventListener('keydown', (e) => this.key(e, true));
     window.addEventListener('keyup', (e) => this.key(e, false));
     scene.app.ticker.add(() => this.tick());
+  }
+
+  /** Until when wheel events count as a touchpad's (one gesture keeps its reading). */
+  private padUntil = 0;
+  /**
+   * The wheel (ux.md §3). A touchpad's two-finger swipe pans and its pinch zooms (browsers send
+   * a pinch as a wheel with Ctrl held); a mouse wheel zooms. A touchpad scrolls in small,
+   * smooth steps, often sideways too; a mouse wheel in fixed notches, straight up and down.
+   */
+  private wheel(e: WheelEvent) {
+    e.preventDefault();
+    this.touched();
+    const now = performance.now();
+    if (e.ctrlKey) { this.scene.zoomBy(Math.exp(-e.deltaY * 0.01), e.offsetX, e.offsetY); return; }
+    const pad = e.deltaMode === 0 && (e.deltaX !== 0 || !Number.isInteger(e.deltaY) || Math.abs(e.deltaY) < 40);
+    if (pad) this.padUntil = now + 400;
+    if (pad || now < this.padUntil) { this.panScreen(-e.deltaX, -e.deltaY); this.padUntil = now + 400; return; }
+    this.scene.zoomBy(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY);
   }
 
   private touched() {
@@ -89,7 +107,8 @@ export class Input {
     const ui = useUI.getState();
     if (ui.buildType) { this.mode = 'ghost'; this.updateGhost(this.sq(p)); return; }
     if (e.pointerType === 'mouse') {
-      if (e.button === 1) this.mode = 'pan';
+      // Middle-drag, or Ctrl / Space held with any drag, pans (for touchpads: ux.md §3).
+      if (e.button === 1 || e.ctrlKey || this.keys.has(' ')) this.mode = 'pan';
       return;
     }
     // touch: long-press starts a lasso (ux.md §3)

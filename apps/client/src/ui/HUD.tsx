@@ -235,7 +235,7 @@ function SidePanel() {
         <BuildList />
       </section>
       <Minimap />
-      <p className="keys muted">Drag to select · right-click to move or attack · right-drag or WASD to pan · wheel to zoom · Q/E rotate · H home · S stop</p>
+      <p className="keys muted">Drag to select · right-click to move or attack · pan: right-drag, Ctrl/Space + drag, two-finger swipe or WASD · zoom: wheel or pinch · Q/E rotate · H home · S stop</p>
       {ui.sheet === 'details' && <Details />}
     </div>
   );
