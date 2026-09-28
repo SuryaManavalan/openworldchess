@@ -133,6 +133,7 @@ While you're online, **bubbles rise over your working buildings**. Tap one, or s
   - A pop that completes a piece raises it at once.
 - **The server grants every bubble.** Popping only spends a bubble it already gave you, so there's nothing to spam or script beyond what a diligent player gets.
 - **How it feels** (audio.md §7):
+  - **One bubble per building** (as of 2026-09-28), however many are waiting: gold if any is, with a count (×2, ×3) when there's more than one. Each tap pops one and it springs back smaller, until the last. They show only when zoomed in close enough to tap, so towns aren't covered in bubbles from afar.
   - Bubbles wobble, spring in, and hold the piece they're hurrying.
   - A pop bursts into droplets, squashes the building, and floats up the time saved ("−12s"; gold: "★ −48s").
   - Its sound is a quick falling blip that climbs the scale with each pop in a row.

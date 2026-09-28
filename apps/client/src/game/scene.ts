@@ -11,8 +11,8 @@ import { paintChunk, paintChunkFar, terrainCodes, biomeCodes, textureFrom, TPX, 
 import { Fx } from './fx.ts';
 import { Bubbles } from './bubbles.ts';
 import { FarIcons } from './farIcons.ts';
-import { computeSettlements, decorate, wallsFor, TIER_NAME, type Decor, type Settlement, type Wall } from './settlements.ts';
-import { decorTexture } from './textures.ts';
+import { civicResources, computeSettlements, decorate, wallsFor, TIER_NAME, type Decor, type Settlement, type Wall } from './settlements.ts';
+import { civicTexture, decorTexture } from './textures.ts';
 import { useUI } from '../store.ts';
 
 export const S = 64; // world pixels per square
@@ -301,7 +301,8 @@ export class Scene {
     };
     m.onBuildingRemoved = (id) => {
       this.settleDirty = true; this.buildings.get(id)?.sprite.destroy(); this.buildings.get(id)?.bar.destroy(); this.buildings.delete(id); };
-    m.onNodeChange = (n) => this.syncNode(n);
+    // A resource inside a settlement changed (felled, mined, regrown): its civilized form follows.
+    m.onNodeChange = (n) => { this.syncNode(n); if (this.groundMap.has(key(n.x, n.y))) this.settleDirty = true; };
     // Forgotten with its chunk: drop the sprite too (they used to pile up as you panned).
     m.onNodeDropped = (k) => { const s = this.nodes.get(k); if (s) { s.destroy(); this.nodes.delete(k); } };
     m.onPaved = (x, y) => this.markTraffic(x, y);
@@ -466,9 +467,9 @@ export class Scene {
     // move, so their transform only changes when the camera turns.
     const turned = th !== this.nodesTheta;
     this.nodesTheta = th;
-    for (const s of this.nodes.values()) {
+    for (const [nk, s] of this.nodes) {
       const n = s as Sprite & { wx: number; wy: number; kind: string; placed?: boolean };
-      const vis = !this.far && n.wx >= view.x0 && n.wx <= view.x1 && n.wy >= view.y0 && n.wy <= view.y1;
+      const vis = !this.far && !this.civicHidden.has(nk) && n.wx >= view.x0 && n.wx <= view.x1 && n.wy >= view.y0 && n.wy <= view.y1;
       if (!vis) { if (s.parent) this.objects.removeChild(s); continue; }
       if (!s.parent) this.objects.addChild(s);
       if (turned || !n.placed) {
@@ -715,8 +716,17 @@ export class Scene {
       if (wall) this.walls.push(wall);
       this.decor.push(...decor);
     }
+    // Resources inside settlements take a civilized form; their raw sprites step aside.
+    const owners = new Map<number, string>();
+    for (const st of this.settlements) for (const k of st.ground.keys()) owners.set(k, st.owner);
+    const civic = civicResources(m, (k) => this.groundMap.get(k) ?? 0, (o) => this.colorOf(o), (x, y) => owners.get(key(x, y)) ?? null);
+    this.decor.push(...civic.decor);
+    for (const k of new Set([...this.civicHidden, ...civic.hidden])) { const s = this.nodes.get(k) as (Sprite & { placed?: boolean }) | undefined; if (s) s.placed = false; }
+    this.civicHidden = civic.hidden;
     this.drawWalls();
   }
+  /** Node squares drawn as a civilized form instead (visuals.md §13). */
+  private civicHidden = new Set<number>();
 
   /** Wall lines along settlement edges: palisade, then stone (visuals.md §10). */
   private drawWalls() {
@@ -751,10 +761,10 @@ export class Scene {
       used.add(id);
       let s = this.decorSprites.get(id);
       if (!s) { s = new Sprite(); s.anchor.set(0.5, 0.86); this.objects.addChild(s); this.decorSprites.set(id, s); }
-      const tex = d.kind.startsWith('relic:') ? relicTexture(d.kind.slice(6)) : decorTexture(d.kind, d.color, d.variant);
+      const tex = d.kind === 'civic' ? civicTexture(d.variant!, d.color ?? '#d9534a') : d.kind.startsWith('relic:') ? relicTexture(d.kind.slice(6)) : decorTexture(d.kind, d.color, d.variant);
       if (tex) s.texture = tex;
-      const wx = (d.x + 0.5) * S, wy = (d.y + 0.5) * S;
-      const size = d.kind === 'fountain' ? S * 1.45 : d.kind === 'gate' || d.kind === 'belltower' ? S * 1.25 : d.kind === 'tower' ? S * 1.1 : d.kind === 'stall' || d.kind === 'well' || d.kind === 'planter' ? S * 0.95 : d.kind === 'shrub' ? S * 0.85 : S * 0.78;
+      const wx = ((d.fx ?? d.x) + 0.5) * S, wy = ((d.fy ?? d.y) + 0.5) * S;
+      const size = d.size ? S * d.size : d.kind === 'civic' ? S * 1.45 : d.kind === 'fountain' ? S * 1.45 : d.kind === 'gate' || d.kind === 'belltower' ? S * 1.25 : d.kind === 'tower' ? S * 1.1 : d.kind === 'stall' || d.kind === 'well' || d.kind === 'planter' ? S * 0.95 : d.kind === 'shrub' ? S * 0.85 : S * 0.78;
       s.width = size; s.height = size;
       s.position.set(wx + Math.sin(th) * S * 0.36, wy + Math.cos(th) * S * 0.36);
       // A ringing bell tower sways.

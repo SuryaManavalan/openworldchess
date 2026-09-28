@@ -188,6 +188,8 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
     { label: 'King only', ids: [k.id], title: 'Just the king' },
   ];
   const knights = sel.filter((p) => p.kind === 'N').length;
+  // A piece's own work shows only when the selection is all that kind (a troop marches; a crew works).
+  const only = (kind: PieceKind) => sel.every((p) => p.kind === kind);
   const hint = ui.orderMode === 'pave' ? `Tap where the road should go: ${knights} knight${knights > 1 ? 's' : ''} will pave it`
     : ui.orderMode === 'clear' ? 'Drag over the land to clear, or tap its middle'
     : ui.lassoMode ? (phone ? 'Tap pieces to add or remove them · long-press and draw to add many' : 'Click pieces to add or remove them')
@@ -227,9 +229,9 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
           <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
           <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} title="Add or remove pieces by tapping them (Shift-click on desktop)" onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>{ui.lassoMode ? 'Adding…' : '+ Add'}</button>
           {/* Works (movement.md §9): knights pave, elephants clear. */}
-          {knights > 0 && <button className={`btn ghost ${ui.orderMode === 'pave' ? 'on' : ''}`} title="Knights pave a road from here to where you tap" onClick={() => ui.set({ orderMode: ui.orderMode === 'pave' ? null : 'pave' })}>Pave</button>}
+          {only('N') && <button className={`btn ghost ${ui.orderMode === 'pave' ? 'on' : ''}`} title="Knights pave a road from here to where you tap" onClick={() => ui.set({ orderMode: ui.orderMode === 'pave' ? null : 'pave' })}>Pave</button>}
           {/* A bishop raises an altar beside itself (economy.md §8). */}
-          {sel.some((p) => p.kind === 'B') && mirror.self?.chronicle?.buildings.includes('temple') && <button className="btn ghost" title="Raise an altar beside this bishop" onClick={() => {
+          {only('B') && mirror.self?.chronicle?.buildings.includes('temple') && <button className="btn ghost" title="Raise an altar beside this bishop" onClick={() => {
             const b = sel.find((p) => p.kind === 'B')!;
             // The first good spot beside the bishop (an altar needs one within 2 squares).
             const spots: [number, number][] = [];
@@ -239,7 +241,7 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
             ui.set({ buildType: 'altar' });
             input?.updateGhost(at);
           }}>Raise altar</button>}
-          {sel.some((p) => p.kind === 'R') && <button className={`btn ghost ${ui.orderMode === 'clear' ? 'on' : ''}`} title="Elephants clear the trees (and, if you choose, rock and ore) in an area" onClick={() => ui.set({ orderMode: ui.orderMode === 'clear' ? null : 'clear' })}>Clear land</button>}
+          {only('R') && <button className={`btn ghost ${ui.orderMode === 'clear' ? 'on' : ''}`} title="Elephants clear the trees (and, if you choose, rock and ore) in an area" onClick={() => ui.set({ orderMode: ui.orderMode === 'clear' ? null : 'clear' })}>Clear land</button>}
           {mirror.self?.chronicle?.abilities.includes('muster') && sel.length === 1 && sel[0].kind === 'K' && <button className="btn ghost" title="Gather every piece within 20 squares to this king" onClick={() => commands.muster(sel[0].id).then((e) => e && ui.toast(e, 'error'))}><Icon name="horn" size={15} /> Muster</button>}
         </>}
       </div>

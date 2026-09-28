@@ -11,6 +11,7 @@ import * as campsArt from 'owc-art/camps';
 import * as ascendedArt from 'owc-art/ascended';
 import * as campaignArt from 'owc-art/campaign';
 import * as altarArt from 'owc-art/altars';
+import * as civicArt from 'owc-art/civic';
 import * as dravidianArt from 'owc-art/civ-dravidian';
 import * as romanArt from 'owc-art/civ-roman';
 import * as chineseArt from 'owc-art/civ-chinese';
@@ -172,6 +173,13 @@ export function buildingUrl(type: string, team: string, civ?: string): string {
     urlCache.set(k, u);
   }
   return u;
+}
+
+const civicDraw = civicArt.civic as unknown as (o: { kind: string; tier: number; clump: boolean; biome: string; team: string; variant: number }) => string;
+/** A civilized resource (visuals.md §13); variant is "kind:tier:clump:biome:v". */
+export function civicTexture(variant: string, team: string, onReady?: () => void) {
+  const [kind, tier, clump, biome, v] = variant.split(':');
+  return get(`c:${variant}:${team}`, () => civicDraw({ kind, tier: +tier, clump: clump === '1', biome, team, variant: +v }), 128, onReady);
 }
 
 export function decorTexture(kind: string, color = '#d9534a', variant?: string, onReady?: () => void) {

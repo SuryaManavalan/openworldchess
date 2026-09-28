@@ -106,7 +106,9 @@ let watchTarget: [number, number] | null = null;
 let watchUntil = 0;
 function watchMode(sc: Scene) {
   const ui = useUI.getState();
-  if (!ui.settings.watchMode || ui.settings.reduceMotion || ui.battleFocus || ui.buildType || ui.share || ui.sheet) return;
+  // Nothing drifts while you're doing something: a menu, a selection, a dialog, an order waiting.
+  const busy = ui.battleFocus || ui.buildType || ui.share || ui.sheet || ui.selection.length || ui.pendingAttack || ui.pendingClear || ui.inspect || ui.orderMode || ui.ceremony;
+  if (!ui.settings.watchMode || ui.settings.reduceMotion || busy) { if (ui.watching) ui.set({ watching: false }); return; }
   if (Date.now() - sc.lastInput < 60_000) return;
   if (!ui.watching) ui.set({ watching: true });
   if (!watchTarget || Date.now() > watchUntil) {

@@ -23,6 +23,7 @@
     "./civ-egyptian": "./assets/civ-egyptian.mjs",
     "./crowns": "./assets/crowns.mjs",
     "./campaign": "./assets/campaign.mjs",
-    "./altars": "./assets/altars.mjs"
+    "./altars": "./assets/altars.mjs",
+    "./civic": "./assets/civic.mjs"
   }
 }

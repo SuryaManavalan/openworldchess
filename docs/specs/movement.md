@@ -156,6 +156,7 @@ Knights and elephants have jobs outside battle. Both work as **crews**: select s
 
 ### Paving (knights)
 
+- **Only a crew:** **Pave**, **Clear land** and **Raise altar** show only when the whole selection is knights, elephants or bishops (as of 2026-09-28). A mixed troop marches; a crew of one kind works.
 - **The order:** select knights (up to 8), tap **Pave**, then tap where the road should go. The road runs from the crew along open ground to that square, up to 400 squares long, and costs only the knights' time.
 - **Splitting the work:**
   - The route is cut into one stretch per knight. A knight riding farther out gets a shorter stretch, since riding is about 4× as fast as paving (`PAVE_RIDE`), so the crew finishes together.

@@ -3,7 +3,7 @@
 // meant to feel like bubble wrap: each bubble wobbles, springs in, bursts into
 // droplets with a pitch that climbs while you keep a combo going, and now and then
 // one is gold.
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, Sprite, Text, Texture } from 'pixi.js';
 import { BUILDINGS, bubbleWorth, type Building, type BuildingType } from '@owc/shared';
 import type { Scene } from './scene.ts';
 import { pieceTexture } from './textures.ts';
@@ -15,7 +15,7 @@ const R = 22;
 /** Pops closer together than this keep the combo going. */
 const COMBO_MS = 1600;
 
-interface BubbleView { sprite: Sprite; icon: Sprite; gold: boolean; dull: boolean; born: number; phase: number; x: number; y: number; r: number }
+interface BubbleView { sprite: Sprite; icon: Sprite; label: Text; gold: boolean; dull: boolean; born: number; phase: number; x: number; y: number; r: number }
 
 const textures: Partial<Record<string, Texture>> = {};
 
@@ -92,7 +92,8 @@ export class Bubbles {
 
   update(now: number, counter: number, view: { x0: number; x1: number; y0: number; y1: number }) {
     const sc = this.scene, m = sc.mirror;
-    const show = !sc.far && sc.cam.zoom > 0.3;
+    // Only close enough to tap: from afar a town shouldn't be covered in bubbles.
+    const show = !sc.far && sc.cam.zoom > 0.5;
     this.layer.visible = show;
     const seen = new Set<number>();
     if (show) {
@@ -111,9 +112,13 @@ export class Bubbles {
     }
   }
 
-  /** Match the views to the building's bubbles: keep the common prefix, rebuild the rest. */
+  /**
+   * One bubble per building, however many are waiting: gold if any is gold, with a count
+   * when there's more than one (economy.md §7). Each tap pops one; it stays until the last.
+   */
   private sync(b: Building, now: number): BubbleView[] {
-    const want = b.bubbles ?? [], dull = b.blocked === 'pop-cap';
+    const all = b.bubbles ?? [], dull = b.blocked === 'pop-cap';
+    const want = all.length ? [all.includes(1) ? 1 : 0] : [];
     let vs = this.views.get(b.id);
     if (!vs) this.views.set(b.id, (vs = []));
     let i = 0;
@@ -133,9 +138,16 @@ export class Bubbles {
       icon.alpha = dull ? 0.6 : 0.92;
       icon.scale.set(0.5); // piece art is 128px, like the bubble: half its width
       sprite.addChild(icon);
+      // How many are waiting (×2, ×3), on the bubble's shoulder.
+      const label = new Text({ text: '', style: { fontFamily: 'Nunito, system-ui', fontWeight: '900', fontSize: 34, fill: 0xffffff, stroke: { color: 0x23211f, width: 7 } } });
+      label.anchor.set(0.5);
+      label.position.set(40, -40);
+      sprite.addChild(label);
       this.layer.addChild(sprite);
-      vs.push({ sprite, icon, gold, dull, born: now, phase: Math.random() * 6.28, x: 0, y: 0, r: R });
+      vs.push({ sprite, icon, label, gold, dull, born: now, phase: Math.random() * 6.28, x: 0, y: 0, r: R });
     }
+    const n = all.length;
+    for (const v of vs) { const t = n > 1 ? `×${n}` : ''; if (v.label.text !== t) v.label.text = t; }
     return vs;
   }
 
@@ -164,33 +176,38 @@ export class Bubbles {
   }
 
   /** The bubble under a point (squares), if any. Generous: a thumb is bigger than a bubble. */
+  /** The bubble under a point, as the building and the index of the one to pop (gold first). */
   pick(x: number, y: number): { building: number; i: number } | null {
     const wx = (x + 0.5) * S, wy = (y + 0.5) * S;
     let best: { building: number; i: number } | null = null, bd = Infinity;
-    for (const [id, vs] of this.views) vs.forEach((v, i) => {
+    for (const [id, vs] of this.views) for (const v of vs) {
       const d = Math.hypot(v.x - wx, v.y - wy);
-      if (d < v.r * 1.3 && d < bd) { bd = d; best = { building: id, i }; }
-    });
+      const bs = this.scene.mirror.buildings.get(id)?.bubbles ?? [];
+      const i = bs.indexOf(v.gold ? 1 : 0);
+      if (i >= 0 && d < v.r * 1.3 && d < bd) { bd = d; best = { building: id, i }; }
+    }
     return best;
   }
 
   /** Pop it here at once (the server confirms); returns whether it was gold, or null if it's gone. */
   pop(building: number, i: number): boolean | null {
     const sc = this.scene, b = sc.mirror.buildings.get(building), vs = this.views.get(building);
-    const v = vs?.[i];
-    if (!b?.bubbles || !v) return null;
+    const v = vs?.[0];
+    if (!b?.bubbles || !v || b.bubbles[i] == null) return null;
+    const gold = b.bubbles[i] === 1;
     b.bubbles.splice(i, 1);
-    vs!.splice(i, 1);
-    v.sprite.destroy({ children: true });
     const now = performance.now();
+    // More waiting: the same bubble springs back with one fewer; the last one bursts.
+    if (b.bubbles.length && (b.bubbles.includes(1) || !gold)) { v.born = now - 150; v.label.text = b.bubbles.length > 1 ? `×${b.bubbles.length}` : ''; }
+    else { vs!.splice(0, 1); v.sprite.destroy({ children: true }); }
     this.combo = now - this.comboAt < COMBO_MS ? this.combo + 1 : 1;
     this.comboAt = now;
     // Waiting for room: the pop still banks progress (up to one whole piece), but it sounds off-key.
-    const worth = b.cycleMs ? Math.min(bubbleWorth(b.cycleMs, v.gold), 1 - b.prod) : 0;
+    const worth = b.cycleMs ? Math.min(bubbleWorth(b.cycleMs, gold), 1 - b.prod) : 0;
     b.prod = Math.min(1, b.prod + worth); // the bar jumps now; the server's number follows
-    sc.fx.bubblePop(v.x, v.y, v.r, v.gold, this.combo, Math.round((worth * (b.cycleMs ?? 0)) / 1000), v.dull);
+    sc.fx.bubblePop(v.x, v.y, v.r, gold, this.combo, Math.round((worth * (b.cycleMs ?? 0)) / 1000), v.dull);
     sc.squash(building);
-    audio.bubble(this.combo, v.gold, v.dull);
-    return v.gold;
+    audio.bubble(this.combo, gold, v.dull);
+    return gold;
   }
 }

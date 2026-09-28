@@ -40,6 +40,8 @@ export class Input {
     // Any real gesture anywhere (buttons and sheets included) can start the sound.
     const unlockAudio = () => audio.unlock().then(() => audio.setVolumes(useUI.getState().settings));
     window.addEventListener('pointerdown', unlockAudio, true);
+    // Any touch anywhere (menus and bars too, not just the map) counts as being here: it ends watch mode.
+    window.addEventListener('pointerdown', () => this.touched(), true);
     window.addEventListener('keydown', unlockAudio, true);
     window.addEventListener('keydown', (e) => this.key(e, true));
     window.addEventListener('keyup', (e) => this.key(e, false));

@@ -195,6 +195,27 @@ Zoomed out, single trees, rocks and fields are too small to draw, so the far vie
 - **The icons are the land's own art:** a stand of three trees in the biome's kind of tree, a pile of stones, sheaves of wheat. **Ore glows gold**, so it isn't mistaken for rock at a glance. They sit where the resource is centered, and keep the same size on screen at any zoom.
 - **They show what's really there:** counts come from the world generator (in the terrain worker) and, where the area is loaded, from the live nodes, so felled woods and spent mines lose their icon.
 
+## 13. Civilized resources (as built 2026-09-28: trees and rocks; ore and wheat next)
+
+Inside a settlement, resources stay what they are (the same wood, stone, ore and wheat for production) but are drawn tended, and grander as the settlement grows (`civicResources` in `settlements.ts`, art in `art/assets/civic.mjs`). Hamlets stay wild.
+
+- **Two forms:** a **lone** node, or a **clump**: 3+ of one kind in the same 3×3 block, drawn as one larger piece at their middle, so a city doesn't crowd with separate rocks and trees.
+- **By tier:**
+
+  | | Village | Town | City |
+  |---|---|---|---|
+  | Tree | tended tree in a ring of stones | young tree in a stone tub | topiary clipped into a chess piece |
+  | Trees (clump) | orchard behind a low fence | a green with trees and a bench | walled garden: hedges, flower beds, a tree at the heart |
+  | Rock | cairn | carved standing stone with moss | a chess-piece statue on a plinth |
+  | Rocks (clump) | dry-stone wall | rock garden with raked gravel | an obelisk monument with banners |
+  | Ore *(next)* | timber-framed seam with a cart | ore-inlaid waymarker | gilded statue |
+  | Ore (clump) *(next)* | open mine with scaffolding | mosaic tiles in the ground | mosaic court with a fountain |
+  | Wheat *(next)* | fenced plot with a scarecrow | vegetable allotment | flower bed |
+  | Wheat (clump) *(next)* | fenced field | market garden rows | terraced garden |
+
+- **Each town looks its own:** foliage and stone take the biome's palette; banners, sashes and bands take the owner's color; statue and topiary shapes (pawn, knight, bishop, rook) are seeded by place.
+- **It follows the town:** when a resource is felled or mined, or the settlement changes tier, its form updates. Civilization cosmetics can later swap in their own set of these pieces.
+
 ## 8. Build order
 
 | Milestone | Life and visuals |

@@ -3,7 +3,7 @@
 // decorations that appear as they grow. Everything here is derived from real
 // state and seeded, so every viewer sees the same town. None of it affects play.
 import { cheb, distToRect, key, type Building } from '@owc/shared';
-import { hash01, terrainAt } from '@owc/worldgen';
+import { biomeAt, hash01, terrainAt } from '@owc/worldgen';
 import type { Mirror } from '@owc/client-core';
 
 export type Tier = 1 | 2 | 3 | 4;
@@ -23,7 +23,11 @@ export interface Settlement {
   sieges: number;
 }
 
-export interface Decor { x: number; y: number; kind: string; color?: string; light?: boolean; variant?: string; bell?: number }
+export interface Decor {
+  x: number; y: number; kind: string; color?: string; light?: boolean; variant?: string; bell?: number;
+  /** Size in squares (default: by kind), and a sub-square position (clumps sit at their middle). */
+  size?: number; fx?: number; fy?: number;
+}
 
 /** Walls rise with how often a settlement has been besieged (visuals.md §10). */
 export type WallTier = 0 | 1 | 2 | 3; // none, palisade, stone, stone with towers
@@ -223,4 +227,41 @@ export function wallsFor(m: Mirror, s: Settlement, color: string, traffic: (x: n
     else if (corner && tier === 1 && hash01(m.seed, x, y, 431) < 0.3) decor.push({ x, y, kind: 'tower', color, variant: 'wood' });
   }
   return { wall: { settlement: s.id, tier, edges }, decor };
+}
+
+/** Resources that take a civilized form in settlements (visuals.md §13); the rest stay wild for now. */
+export const CIVIC_KINDS = new Set(['tree', 'rock']);
+
+/**
+ * Civilized resources (visuals.md §13): inside a village, town or city, trees, rock, ore and
+ * wheat stay what they are but are drawn tended, grander with the settlement's tier. Nodes of
+ * one kind that share a 3×3 block (3 or more) are drawn as one piece at their middle: an
+ * orchard, a garden, a monument. Returns the pieces to draw and the node squares they replace.
+ */
+export function civicResources(m: Mirror, groundTier: (k: number) => number, colorOf: (owner: string | null) => string, ownerAt: (x: number, y: number) => string | null): { decor: Decor[]; hidden: Set<number> } {
+  const decor: Decor[] = [], hidden = new Set<number>();
+  const cells = new Map<string, { kind: string; xs: number[]; ys: number[]; tier: number }>();
+  for (const n of m.nodes.values()) {
+    if (n.remaining <= 0 || n.hoard || !CIVIC_KINDS.has(n.kind)) continue;
+    const k = key(n.x, n.y), tier = groundTier(k);
+    if (tier < 2) continue;
+    const ck = `${n.kind}:${Math.floor(n.x / 3)},${Math.floor(n.y / 3)}`;
+    let c = cells.get(ck);
+    if (!c) cells.set(ck, (c = { kind: n.kind, xs: [], ys: [], tier }));
+    c.xs.push(n.x); c.ys.push(n.y); c.tier = Math.max(c.tier, tier);
+  }
+  for (const c of cells.values()) {
+    const clump = c.xs.length >= 3;
+    const place = (x: number, y: number, fx: number, fy: number, size?: number) => {
+      const biome = biomeAt(m.seed, x, y);
+      const v = Math.floor(hash01(m.seed, x, y, 450) * 4);
+      decor.push({ x, y, fx, fy, size, kind: 'civic', color: colorOf(ownerAt(x, y)), variant: `${c.kind}:${c.tier}:${clump ? 1 : 0}:${biome}:${v}` });
+    };
+    c.xs.forEach((x, i) => hidden.add(key(x, c.ys[i])));
+    if (clump) {
+      const mx = c.xs.reduce((a, b) => a + b, 0) / c.xs.length, my = c.ys.reduce((a, b) => a + b, 0) / c.ys.length;
+      place(Math.round(mx), Math.round(my), mx, my, Math.min(3, 1.2 + 0.3 * c.xs.length));
+    } else c.xs.forEach((x, i) => place(x, c.ys[i], x, c.ys[i]));
+  }
+  return { decor, hidden };
 }
