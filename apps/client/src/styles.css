@@ -529,12 +529,19 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 /* Behind a sheet, a confirm or a battle, the quest banner and alerts step aside. */
 .layout-phone .top-stack.covered { display: none; }
 /* Selection: the pieces in one swipeable row, the actions in another; no hint unless it's needed. */
-.sel-actions { display: contents; }
-.layout-phone .action-row:not(.build-row) { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px; }
-.layout-phone .action-row .sel-summary { display: flex; gap: 6px; overflow-x: auto; flex-wrap: nowrap; padding-top: 6px; scrollbar-width: none; }
-.layout-phone .action-row .sel-actions { display: flex; gap: 6px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
-.layout-phone .action-row .sel-actions .btn { flex: none; min-height: 40px; padding: 8px 12px; white-space: nowrap; }
-.layout-phone .action-row .hint-text { font-size: 12.5px; }
+/* The selection bar (ux.md §3): what you have with a × that's always there; the king's scope;
+   actions that wrap (never scroll out of sight); one hint line. */
+.sel-bar { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.sel-bar .sel-top { display: flex; align-items: center; gap: 8px; }
+.sel-bar .sel-summary { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 6px 2px 2px; margin: 0; }
+.sel-bar .sel-count { font-size: 15px; min-width: 22px; text-align: center; color: var(--dim); }
+.sel-bar .sel-close { flex: none; width: 40px; height: 40px; border-radius: 12px; }
+.sel-bar .sel-scope { display: flex; gap: 4px; }
+.sel-bar .sel-scope button { color: var(--ink); cursor: pointer; }
+.sel-bar .sel-scope button { flex: 1 1 0; min-width: 0; min-height: 38px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 6px; }
+.sel-bar .sel-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sel-bar .sel-actions .btn { min-height: 40px; padding: 8px 12px; white-space: nowrap; }
+.sel-bar .hint-text { color: var(--dim); font-size: 12.5px; }
 /* Landscape phones: the board takes the height, everything else sits beside it; the quest
    column keeps to a readable width instead of spanning the screen. */
 @media (orientation: landscape) and (max-height: 520px) {

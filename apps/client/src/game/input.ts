@@ -280,10 +280,13 @@ export class Input {
       this.pendingMove = null;
       // Double-tap: everything under that king. Tap a king: its best army. Tap a piece: just it.
       if (dbl) { const g = this.groupOf(mine); this.selectWithSound(g); haptic(); return; }
-      const shift = this.keys.has('Shift');
       const sel = ui.selection;
-      if (shift || (type !== 'mouse' && sel.length && ui.lassoMode)) this.selectWithSound(sel.includes(mine.id) ? sel.filter((i) => i !== mine.id) : [...sel, mine.id]);
-      else this.selectWithSound(mine.kind === 'K' ? this.armyOf(mine) : [mine.id]);
+      // Adding (the Add button, or Shift): each tap puts a piece in or takes it out.
+      if (this.keys.has('Shift') || (sel.length && ui.lassoMode)) { this.selectWithSound(sel.includes(mine.id) ? sel.filter((i) => i !== mine.id) : [...sel, mine.id]); return; }
+      // Tapping the one piece you have selected lets it go.
+      if (sel.length === 1 && sel[0] === mine.id) { ui.select([]); haptic(6); return; }
+      // A king brings its army (the bar offers everything near it, or the king alone); a piece is just itself.
+      this.selectWithSound(mine.kind === 'K' ? this.armyOf(mine) : [mine.id]);
       return;
     }
     const arena = sc.pickArena(at[0], at[1]);
@@ -297,9 +300,12 @@ export class Input {
     if (b && b.owner !== mirror.me && (!ui.selection.length || type === 'mouse')) { ui.set({ inspect: { building: b.id } }); return; }
     if (ui.inspect) ui.set({ inspect: null });
     if (ui.selection.length) {
-      if (type === 'mouse') { ui.select([]); return; }
-      // Two-step command for touch: tap the ground to place, then confirm (ux.md §3).
-      this.pendingMove = [Math.round(at[0]), Math.round(at[1])];
+      if (type === 'mouse') { if (!ui.lassoMode) ui.select([]); return; }
+      // Two-step command for touch: tap the ground to place, then confirm (ux.md §3). Tapping the
+      // marker again confirms it, like the Move here button.
+      const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
+      if (this.pendingMove && Math.max(Math.abs(this.pendingMove[0] - to[0]), Math.abs(this.pendingMove[1] - to[1])) <= 1) { this.issue(this.pendingMove); ui.bump(); return; }
+      this.pendingMove = to;
       sc.pendingMarker = this.pendingMove;
       sc.pathPreview = null;
       ui.bump();
@@ -397,7 +403,9 @@ export class Input {
       }
       return c;
     };
-    const ids = mirror.myPieces().filter((p) => p.state !== 'battle' && inside(p.x, p.y)).map((p) => p.id);
+    const found = mirror.myPieces().filter((p) => p.state !== 'battle' && inside(p.x, p.y)).map((p) => p.id);
+    // While adding, a loop adds to what's selected.
+    const ids = useUI.getState().lassoMode ? [...new Set([...useUI.getState().selection, ...found])] : found;
     // Pop one after another along the loop (visuals.md §5).
     ids.forEach((id, i) => this.scene.fx.schedule(i * 45, () => { const v = this.scene.pieces.get(id); if (v) v.pop = performance.now(); }));
     this.selectWithSound(ids);
@@ -414,7 +422,7 @@ export class Input {
       return;
     }
     const ids = mirror.myPieces().filter((p) => p.state !== 'battle' && p.x >= x0 - 0.5 && p.x <= x1 + 0.5 && p.y >= y0 - 0.5 && p.y <= y1 + 0.5).map((p) => p.id);
-    const sel = this.keys.has('Shift') ? [...new Set([...useUI.getState().selection, ...ids])] : ids;
+    const sel = this.keys.has('Shift') || ui.lassoMode ? [...new Set([...ui.selection, ...ids])] : ids;
     this.selectWithSound(sel);
   }
 
@@ -452,7 +460,7 @@ export class Input {
     const ui = useUI.getState(), sc = this.scene;
     if (k === 'q') sc.rotate(-1);
     else if (k === 'e') sc.rotate(1);
-    else if (k === 'Escape') { if (ui.orderMode) ui.set({ orderMode: null }); else if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else ui.select([]); }
+    else if (k === 'Escape') { if (ui.orderMode) ui.set({ orderMode: null }); else if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else { ui.select([]); this.pendingMove = null; sc.pendingMarker = null; } }
     else if (k === 's' && !e.ctrlKey) { if (ui.selection.length) commands.stop(ui.selection); }
     else if (k === 'b') ui.set({ sheet: ui.sheet === 'build' ? null : 'build' });
     else if (k === 'f' && this.scene.hover) { ui.addFlag(this.scene.hover[0], this.scene.hover[1]); this.scene.fx.ripple(this.scene.hover[0], this.scene.hover[1], 0xe3b23c); }

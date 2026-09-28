@@ -167,6 +167,87 @@ function KingChip({ k, compact }: { k: Piece; compact?: boolean }) {
   );
 }
 
+/**
+ * The selection bar (ux.md §3, reworked 2026-09-28). Top: what you have, kind by kind (tap a
+ * kind to leave one behind), and a × that's always there. With a king: how much of its
+ * troop, as buttons (its army, everything near it, or the king alone). Then what you can
+ * do, wrapping rather than scrolling so nothing hides. A one-line hint says how to order.
+ */
+function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number] | null | undefined }) {
+  const ui = useUI();
+  const phone = ui.layout === 'phone';
+  const clear = () => { ui.select([]); ui.set({ lassoMode: false, orderMode: null }); if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; };
+  const kings = sel.filter((p) => p.kind === 'K');
+  const k = kings.length === 1 ? kings[0] : undefined;
+  const same = (ids: number[]) => ids.length === sel.length && ids.every((id) => ui.selection.includes(id));
+  const army = k && input ? input.armyOf(k) : [], all = k && input ? input.groupOf(k) : [];
+  // When its army is everything near it, one button says so.
+  const scopes = !k ? [] : [
+    ...(all.length > army.length ? [{ label: 'Army', ids: army, title: 'Its best legal army: the chess set it would fight with' }] : []),
+    { label: all.length > army.length ? 'All' : 'Army', ids: all, title: 'Every piece within its reach' },
+    { label: 'King only', ids: [k.id], title: 'Just the king' },
+  ];
+  const knights = sel.filter((p) => p.kind === 'N').length;
+  const hint = ui.orderMode === 'pave' ? `Tap where the road should go: ${knights} knight${knights > 1 ? 's' : ''} will pave it`
+    : ui.orderMode === 'clear' ? 'Drag over the land to clear, or tap its middle'
+    : ui.lassoMode ? (phone ? 'Tap pieces to add or remove them · long-press and draw to add many' : 'Click pieces to add or remove them')
+    : pending ? null
+    : phone ? 'Tap the ground to move · tap an enemy to attack' : 'Right-click to move · right-click an enemy to attack';
+  return (
+    <div className="action-row sel-bar">
+      <div className="sel-top">
+        <span className="sel-summary">
+          <b className="sel-count">{sel.length}</b>
+          {KIND_ORDER.map((kind) => {
+            const n = sel.filter((p) => p.kind === kind).length;
+            if (!n) return null;
+            // Tap a kind to leave one behind (the one farthest from the king): easy to drop the queen from a raid.
+            const drop = () => {
+              const lead = sel.find((p) => p.kind === 'K') ?? sel[0];
+              const of = sel.filter((p) => p.kind === kind).sort((a, b) => cheb(b.x, b.y, lead.x, lead.y) - cheb(a.x, a.y, lead.x, lead.y));
+              ui.select(ui.selection.filter((id) => id !== of[0].id));
+            };
+            const img = <img src={pieceUrl(kind, 'light', mirror.self?.color ?? '#888', kind === 'K' && sel.some((p) => p.emperor), mirror.self?.civ)} alt="" />;
+            if (kind === 'K' || sel.length === 1) return <span key={kind} className="kc king">{img}{n > 1 && n}</span>;
+            return <button key={kind} className="kc" title={`Leave a ${PIECE_NAME[kind].toLowerCase()} behind`} onClick={drop}>{img}{n > 1 && n}<span className="minus">−</span></button>;
+          })}
+        </span>
+        <button className="icon-btn sel-close" aria-label="Deselect" title="Deselect (Esc)" onClick={clear}><Icon name="close" size={18} stroke={2.6} /></button>
+      </div>
+      {scopes.length > 0 && !pending && (
+        <div className="seg sel-scope">
+          {scopes.map((sc) => <button key={sc.label} className={same(sc.ids) ? 'on' : ''} title={sc.title} onClick={() => ui.select(sc.ids)}>{sc.label}{sc.ids.length > 1 ? ` ${sc.ids.length}` : ''}</button>)}
+        </div>
+      )}
+      <div className="sel-actions">
+        {pending ? <>
+          <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>Move here</button>
+          <button className="btn ghost" onClick={() => { if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; ui.bump(); }}>Cancel</button>
+        </> : <>
+          <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
+          <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} title="Add or remove pieces by tapping them (Shift-click on desktop)" onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>{ui.lassoMode ? 'Adding…' : '+ Add'}</button>
+          {/* Works (movement.md §9): knights pave, elephants clear. */}
+          {knights > 0 && <button className={`btn ghost ${ui.orderMode === 'pave' ? 'on' : ''}`} title="Knights pave a road from here to where you tap" onClick={() => ui.set({ orderMode: ui.orderMode === 'pave' ? null : 'pave' })}>Pave</button>}
+          {/* A bishop raises an altar beside itself (economy.md §8). */}
+          {sel.some((p) => p.kind === 'B') && mirror.self?.chronicle?.buildings.includes('temple') && <button className="btn ghost" title="Raise an altar beside this bishop" onClick={() => {
+            const b = sel.find((p) => p.kind === 'B')!;
+            // The first good spot beside the bishop (an altar needs one within 2 squares).
+            const spots: [number, number][] = [];
+            for (let r = 1; r <= 2; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) spots.push([b.x + dx, b.y + dy]);
+            const at = spots.find(([x, y]) => checkPlacement('altar', x, y).ok) ?? spots[0];
+            clear();
+            ui.set({ buildType: 'altar' });
+            input?.updateGhost(at);
+          }}>Raise altar</button>}
+          {sel.some((p) => p.kind === 'R') && <button className={`btn ghost ${ui.orderMode === 'clear' ? 'on' : ''}`} title="Elephants clear the trees (and, if you choose, rock and ore) in an area" onClick={() => ui.set({ orderMode: ui.orderMode === 'clear' ? null : 'clear' })}>Clear land</button>}
+          {mirror.self?.chronicle?.abilities.includes('muster') && sel.length === 1 && sel[0].kind === 'K' && <button className="btn ghost" title="Gather every piece within 20 squares to this king" onClick={() => commands.muster(sel[0].id).then((e) => e && ui.toast(e, 'error'))}><Icon name="horn" size={15} /> Muster</button>}
+        </>}
+      </div>
+      {hint && <span className="hint-text">{hint}</span>}
+    </div>
+  );
+}
+
 function BottomDock() {
   const ui = useUI();
   const kings = useKings();
@@ -181,53 +262,7 @@ function BottomDock() {
           <button className="btn ghost" onClick={() => ui.set({ buildType: null, ghost: null })}>Cancel</button>
         </div>
       )}
-      {!ui.buildType && sel.length > 0 && (
-        <div className="action-row">
-          <span className="sel-summary">
-            {KIND_ORDER.map((k) => {
-              const n = sel.filter((p) => p.kind === k).length;
-              if (!n) return null;
-              // Tap a kind to leave one behind (the one farthest from the king): easy to drop the queen from a raid.
-              const drop = () => {
-                const lead = sel.find((p) => p.kind === 'K') ?? sel[0];
-                const of = sel.filter((p) => p.kind === k).sort((a, b) => cheb(b.x, b.y, lead.x, lead.y) - cheb(a.x, a.y, lead.x, lead.y));
-                ui.select(ui.selection.filter((id) => id !== of[0].id));
-              };
-              const img = <img src={pieceUrl(k, 'light', mirror.self?.color ?? '#888', k === 'K' && sel.some((p) => p.emperor), mirror.self?.civ)} alt="" />;
-              // The king leads: it isn't dropped from its own army.
-              if (k === 'K') return <span key={k} className="kc king">{img}{n > 1 && n}</span>;
-              return <button key={k} className="kc" title={`Leave a ${PIECE_NAME[k].toLowerCase()} behind`} onClick={drop}>{img}{n > 1 && n}<span className="minus">−</span></button>;
-            })}
-          </span>
-          <span className="sel-actions">
-          {pending ? <>
-            <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>Move here</button>
-            <button className="btn ghost" onClick={() => { if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; ui.bump(); }} aria-label="Cancel"><Icon name="close" size={16} /></button>
-          </> : <>
-            {(() => { const k = sel.find((p) => p.kind === 'K'); const all = k && input ? input.groupOf(k) : []; return k && all.length > sel.length ? <button className="btn ghost" title="Everything under this king, not just its best army" onClick={() => ui.select(all)}>All {all.length}</button> : null; })()}
-            <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
-            {/* Works (movement.md §9): knights pave, elephants clear. */}
-            {sel.some((p) => p.kind === 'N') && <button className={`btn ghost ${ui.orderMode === 'pave' ? 'on' : ''}`} title="Knights pave a road from here to where you tap" onClick={() => ui.set({ orderMode: ui.orderMode === 'pave' ? null : 'pave' })}>Pave</button>}
-            {/* A bishop raises an altar beside itself (economy.md §8). */}
-            {sel.some((p) => p.kind === 'B') && mirror.self?.chronicle?.buildings.includes('temple') && <button className="btn ghost" title="Raise an altar beside this bishop" onClick={() => {
-              const b = sel.find((p) => p.kind === 'B')!;
-              // The first good spot beside the bishop (an altar needs one within 2 squares).
-              const spots: [number, number][] = [];
-              for (let r = 1; r <= 2; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) spots.push([b.x + dx, b.y + dy]);
-              const at = spots.find(([x, y]) => checkPlacement('altar', x, y).ok) ?? spots[0];
-              ui.select([]);
-              ui.set({ buildType: 'altar' });
-              input?.updateGhost(at);
-            }}>Raise altar</button>}
-            {sel.some((p) => p.kind === 'R') && <button className={`btn ghost ${ui.orderMode === 'clear' ? 'on' : ''}`} title="Elephants clear the trees (and, if you choose, rock and ore) in an area" onClick={() => ui.set({ orderMode: ui.orderMode === 'clear' ? null : 'clear' })}>Clear land</button>}
-            {mirror.self?.chronicle?.abilities.includes('muster') && sel.length === 1 && sel[0].kind === 'K' && <button className="btn ghost" title="Gather every piece within 20 squares to this king" onClick={() => commands.muster(sel[0].id).then((e) => e && ui.toast(e, 'error'))}><Icon name="horn" size={15} /> Muster</button>}
-            {ui.layout === 'phone' && <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>+ Add</button>}
-            <button className="btn ghost" onClick={() => ui.select([])}>Deselect</button>
-          </>}
-          </span>
-          {!pending && (ui.layout !== 'phone' || ui.orderMode) && <span className="hint-text">{ui.orderMode === 'pave' ? `Tap where the road should go: ${sel.filter((p) => p.kind === 'N').length} knight${sel.filter((p) => p.kind === 'N').length > 1 ? 's' : ''} will pave it` : ui.orderMode === 'clear' ? 'Drag over the land to clear, or tap its middle' : ui.layout === 'phone' ? 'Drag from your pieces to a square, or onto an enemy' : 'Right-click a square to move · on an enemy to attack'}</span>}
-        </div>
-      )}
+      {!ui.buildType && sel.length > 0 && <SelectionBar sel={sel} pending={pending} />}
       {ui.layout === 'phone' && (
         <div className="troop-bar">
           <div className="chips">{kings.map((k) => <KingChip key={k.id} k={k} compact />)}</div>

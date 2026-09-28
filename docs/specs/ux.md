@@ -34,17 +34,17 @@ The layout is chosen by viewport size and input type (`pointer: coarse` plus wid
 | Zoom | Pinch | Scroll wheel, or a touchpad pinch |
 | Rotate the camera 90° | **Two-finger twist**, snapping to 90° with a haptic tick | Q / E |
 | Select a piece | Tap it | Click |
-| Select a king's army | **Tap** the king (or its chip in the troop bar): its **best legal army**, the chess set it would fight with (a queen, 2 rooks, 2 bishops, 2 knights, 8 pawns), filled with its nearest ready pieces | Click the king, or its troop in the troop list |
-| Select everything under a king | **Double-tap** the king (or any of its pieces), or **All** in the action row | Double-click, or **All** |
+| Select a king's army | **Tap** the king (or its chip in the troop bar): its **best legal army**, the chess set it would fight with, filled with its nearest ready pieces. The bar then offers **Army · All · King only** (one button when the army is everything near it) | Click the king, or its troop in the troop list; the same buttons |
+| Select everything under a king | **All** on the selection bar, or double-tap the king (or any of its pieces) | **All**, or double-click |
 | Leave pieces behind | Tap a piece type in the action row's selection chips: each tap drops one (the one farthest from the king) | Same (click) |
 | Select a custom group | **Long-press, then draw a loop** around pieces (lasso) | Left-drag a box on empty ground |
-| Add to the selection | Tap more pieces while the selection chip shows "+" | Shift + click / Shift + drag |
-| **Move** | **Drag from any selected piece to the destination** (see below) | Right-click the destination |
+| Add to the selection | Tap **+ Add** on the bar, then tap pieces to put them in or take them out; a loop adds too. It turns off when the selection is cleared | Shift + click / Shift + drag, or **+ Add** |
+| **Move** | Tap the ground: a marker and **Move here**; tap the marker again (or the button) to go. Or drag from a selected piece to the spot | Right-click the destination |
 | Set facing on a move | While dragging, twist a second finger | Right-drag: release direction = facing |
 | **Attack** | Drag the selection **onto an enemy piece, king or building**, then confirm | Right-click the enemy, then confirm |
 | Build | Drag a building card from the Build sheet onto the map | Click a card, then click the map |
 | Context menu | Long-press on something without dragging: a radial menu | Right-click on your own thing, or a hover tooltip |
-| Deselect | Tap empty ground | Esc, or click empty ground |
+| Deselect | The **×** on the selection bar (always there), or tap the one selected piece again | Esc, the **×**, or click empty ground |
 | Jump to something | Tap an alert banner, troop chip or minimap | Same, or keys 1–9 for control groups |
 | Undo the last order | Shake is **not** used; tap Stop on the action row | S (stop), or Ctrl+Z within 3 seconds |
 
@@ -192,7 +192,7 @@ Audited at 360×740, 390×844 and 844×390 (landscape), screen by screen:
 - **The top bar** has a solid background, so it reads over any terrain. On small phones it drops the shield badge; the battles button only shows while a battle is on.
 - **One column under the top bar:** the quest banner (foldable to one line), then alerts (at most two on a phone), then toasts. They stack, so they never overlap. News alerts fade after 9 s; attacks and battles stay up for 20 s.
 - **The column steps aside** while a sheet, a confirmation, an inspect card or a battle is open.
-- **Selection:** the chosen pieces in one row and the actions in another, each swiping sideways. The hint line only shows when a tap is waiting for its place (paving, clearing).
+- **Selection bar** (reworked 2026-09-28): what's selected, kind by kind (tap a kind to leave one behind), with a **×** pinned at the end, never scrolled out of sight. With a king, the scope buttons (Army · All · King only). Then the actions, wrapping onto a second line rather than scrolling. One hint line says how to give an order, or what a waiting mode (adding, paving, clearing) expects.
 - **Sheets and confirmations** all have the full-width handle: tap or swipe down to close.
 - **Landscape:** in a battle, the board takes the screen's height with the players, clocks and buttons beside it; the quest column keeps to 460px.
 - **Edge markers** stay within the visible map (not under the desktop side panel).

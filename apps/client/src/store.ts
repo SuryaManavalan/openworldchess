@@ -119,7 +119,8 @@ export const useUI = create<UIState>((set, get) => ({
   },
   bump: () => set({ version: get().version + 1 }),
   set: (p) => set(p),
-  select: (ids) => set({ selection: ids }),
+  // Nothing selected: nothing to add to, and no order waiting for its place.
+  select: (ids) => set(ids.length ? { selection: ids } : { selection: [], lassoMode: false, orderMode: null }),
   toast: (text, tone = 'info', icon) => {
     const id = nextId++;
     set({ toasts: [...get().toasts, { id, text, tone, icon }].slice(-3) });
