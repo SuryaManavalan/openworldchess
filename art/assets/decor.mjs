@@ -146,4 +146,20 @@ export function planter() {
     part(circ(43, 31, 5), '#86c262', null, { stroke: false });
 }
 
-export const DECOR = { well, lamp, stall, haystack, dummy, flowers, crates, bench, banner, cargo, gate, tower, belltower, fountain, shrub, planter };
+// A shrine of the old game (campaign.md §5.3): a weathered pedestal with a small board on
+// top and a king of pale gold standing on it, glowing faintly.
+export function shrine() {
+  const sq = (x, y, dark) => part(rr(x, y, 7, 5, 0.5), dark ? '#8d7a5c' : '#e8dcc0', null, { stroke: false });
+  let board = '';
+  for (let r = 0; r < 3; r++) for (let f = 0; f < 4; f++) board += sq(36 + f * 7, 48 + r * 5, (r + f) % 2 === 1);
+  return groundShadow(26, 88) +
+    part(ell(50, 44, 30, 16), 'rgba(255,222,140,0.28)', null, { stroke: false }) +
+    part('M34 86 L38 62 H62 L66 86 Z', MAT.stone, MAT.stoneShade, { shadeX: 56 }) +
+    part(rr(30, 58, 40, 6, 2), MAT.stone, MAT.stoneShade, { shadeX: 56 }) +
+    part(rr(33, 46, 34, 16, 2), '#6d5b43', null) + board +
+    part('M46 46 L47 34 C44 32 44 27 50 26 C56 27 56 32 53 34 L54 46 Z', '#f3d27a', '#d9b04f', { shadeX: 52 }) +
+    line('M50 26 V20 M47 22 H53', 2.2, '#8a6a2a') +
+    line('M40 70 q5 3 10 0 M52 76 q4 2 8 0', 1.6, MAT.stoneShade) + part('M34 86 q6 -8 12 -2 q4 -6 8 2 Z', '#7fa65a', null, { stroke: false });
+}
+
+export const DECOR = { shrine, well, lamp, stall, haystack, dummy, flowers, crates, bench, banner, cargo, gate, tower, belltower, fountain, shrub, planter };

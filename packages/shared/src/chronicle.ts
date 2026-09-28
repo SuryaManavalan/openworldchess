@@ -166,7 +166,7 @@ export const CHAPTERS: Chapter[] = [
 ];
 
 /** Side quests (campaign.md §5.3): short errands written from the world around you. */
-export type SideKind = 'bounty' | 'rescue' | 'scout' | 'grow' | 'skirmish' | 'pilgrimage';
+export type SideKind = 'bounty' | 'rescue' | 'scout' | 'grow' | 'skirmish' | 'pilgrimage' | 'shrine' | 'opening' | 'feat';
 export interface SideQuest {
   id: number;
   kind: SideKind;
@@ -193,6 +193,10 @@ export interface SideQuest {
   /** Pilgrimage: the grove to clear, [x0, y0, x1, y1], and how many trees stood in it. */
   area?: [number, number, number, number];
   trees?: number;
+  /** Shrine (campaign.md §5.3): the riddle, once one of your pieces reaches the shrine. `fen` is where it stands now. */
+  puzzle?: { fen: string; n: number; left: number };
+  /** Opening or feat: which one (OPENINGS / FEATS). */
+  challenge?: string;
 }
 
 /** The client's view of a player's Chronicle. */
@@ -234,3 +238,25 @@ export const RAIDERS = new Set(['bandits', 'orcs', 'goblins', 'gnolls', 'sahuagi
 export const tierOfCount = (n: number) => (n >= 10 ? 4 : n >= 6 ? 3 : n >= 3 ? 2 : 1);
 /** How long a settlement keeps producing with no king in reach, by tier (campaign.md §4.3). */
 export const HOLD_MS: Record<number, number> = { 1: 10 * 60_000, 2: 60 * 60_000, 3: 4 * 60 * 60_000, 4: 12 * 60 * 60_000 };
+
+/**
+ * Opening challenges (campaign.md §5.3): win a battle having opened with these moves (as White,
+ * among your first `within` moves, in any order). Only openings a normal army can play.
+ */
+export const OPENINGS: Record<string, { name: string; moves: string[]; within: number; who: string }> = {
+  italian: { name: 'the Italian Game', moves: ['e4', 'Nf3', 'Bc4'], within: 3, who: 'The old masters of the south' },
+  'queens-gambit': { name: "the Queen's Gambit", moves: ['d4', 'c4'], within: 2, who: 'The monks of the east' },
+  london: { name: 'the London System', moves: ['d4', 'Bf4'], within: 3, who: 'A stubborn old general' },
+  'kings-gambit': { name: "the King's Gambit", moves: ['e4', 'f4'], within: 2, who: 'The bards of the hill courts' },
+  english: { name: 'the English Opening', moves: ['c4'], within: 1, who: 'Merchants from across the sea' },
+  ruy: { name: 'the Ruy Lopez', moves: ['e4', 'Nf3', 'Bb5'], within: 3, who: 'A bishop of the western church' },
+  bongcloud: { name: 'the Bongcloud', moves: ['e4', 'Ke2'], within: 2, who: 'A very confident jester' },
+};
+
+/** Feats (campaign.md §5.3): a win with a handicap, checked from the battle's moves. */
+export const FEATS: Record<string, string> = {
+  queenless: 'Win a battle without losing your queen',
+  swift: 'Win a battle in 20 moves or fewer',
+  promote: 'Win a battle after promoting a pawn',
+  flawless: 'Win a battle losing no more than two pieces',
+};

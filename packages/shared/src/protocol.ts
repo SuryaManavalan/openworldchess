@@ -37,6 +37,7 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('capital.set'), rid: z.number().optional(), buildingId: z.number().int() }),
   z.object({ t: z.literal('empire.reset'), rid: z.number().optional(), name: z.string().max(40) }),
   z.object({ t: z.literal('quest.decline'), id: z.number().int() }),
+  z.object({ t: z.literal('quest.solve'), rid: z.number().optional(), id: z.number().int(), uci: z.string().min(4).max(5) }),
   z.object({ t: z.literal('quest.accept'), rid: z.number().optional(), id: z.number().int() }),
   z.object({ t: z.literal('muster'), rid: z.number().optional(), kingId: z.number().int() }),
   z.object({ t: z.literal('profile'), name: z.string().min(2).max(20) }),

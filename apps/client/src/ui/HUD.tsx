@@ -19,6 +19,7 @@ import { PerfOverlay, perfOn } from './PerfOverlay.tsx';
 import { Markers } from './Markers.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { SheetGrab } from './SheetGrab.tsx';
+import { Riddle } from './Riddle.tsx';
 import { checkPlacement } from '../game/placement.ts';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
@@ -50,6 +51,7 @@ export function HUD() {
       {ui.layout === 'desktop' && <HoverTag />}
       {ui.pendingAttack && <AttackConfirm />}
       {ui.pendingClear && <ClearConfirm />}
+      {ui.riddle != null && <Riddle />}
       {battle && <BattleView battle={battle} />}
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
       <AwayReport />

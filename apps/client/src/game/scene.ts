@@ -363,7 +363,8 @@ export class Scene {
     c.rotShown += (c.rot - c.rotShown) * Math.min(1, this.app.ticker.deltaMS / 140);
     if (Math.abs(c.rot - c.rotShown) < 0.001) c.rotShown = c.rot;
     this.applyCamera();
-    if ((this.settleDirty && now - this.lastSettle > 800) || now - this.lastSettle > 15_000) this.refreshSettlements(now);
+    const shrines = (m0: Mirror) => (m0.self?.chronicle?.sides ?? []).filter((q) => q.kind === 'shrine' && q.at).map((q) => q.at!.join(',')).join(';');
+    if ((this.settleDirty && now - this.lastSettle > 800) || now - this.lastSettle > 15_000 || shrines(this.mirror) !== this.shrineSig) this.refreshSettlements(now);
     this.updateChunks();
     const view = this.viewBounds(2);
     const th = this.theta, sin = Math.sin(th), cos = Math.cos(th);
@@ -721,10 +722,15 @@ export class Scene {
     for (const st of this.settlements) for (const k of st.ground.keys()) owners.set(k, st.owner);
     const civic = civicResources(m, (k) => this.groundMap.get(k) ?? 0, (o) => this.colorOf(o), (x, y) => owners.get(key(x, y)) ?? null);
     this.decor.push(...civic.decor);
+    // Your shrine quests' shrines stand where they are (campaign.md §5.3); only you see them.
+    this.shrineSig = (m.self?.chronicle?.sides ?? []).filter((q) => q.kind === 'shrine' && q.at).map((q) => q.at!.join(',')).join(';');
+    for (const q of m.self?.chronicle?.sides ?? []) if (q.kind === 'shrine' && q.at) this.decor.push({ x: q.at[0], y: q.at[1], kind: 'shrine', size: 1.35 });
     for (const k of new Set([...this.civicHidden, ...civic.hidden])) { const s = this.nodes.get(k) as (Sprite & { placed?: boolean }) | undefined; if (s) s.placed = false; }
     this.civicHidden = civic.hidden;
     this.drawWalls();
   }
+  /** Where your shrines are, to redraw when a shrine quest comes or goes. */
+  private shrineSig = '';
   /** Node squares drawn as a civilized form instead (visuals.md §13). */
   private civicHidden = new Set<number>();
 

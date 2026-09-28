@@ -2,9 +2,11 @@
 // their quests, titles, Renown, relics and unlocks. Quests are data
 // (packages/shared/src/chronicle.ts); this module keeps score from events the
 // game already produces and hands out rewards.
+import { Chess } from 'chess.js';
+import { readFileSync } from 'node:fs';
 import {
-  CHAPTERS, FACTIONS, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
-  type Ability, type BuildingType, type ChronicleView, type PieceKind, type SettlementInfo, type SideQuest, type Step,
+  CHAPTERS, FACTIONS, FEATS, OPENINGS, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
+  type Ability, type BuildingType, type ChronicleView, type Piece, type PieceKind, type SettlementInfo, type SideQuest, type Step,
 } from '@owc/shared';
 import { biomeAt, RARE_BIOMES, resourcesInRect } from '@owc/worldgen';
 import type { Game, PlayerRec } from './game.ts';
@@ -46,12 +48,32 @@ const SINCE_STEP = (k: string) => k === 'hunt' || k.startsWith('raise:');
 /** A new side quest is offered every so often while you play (campaign.md §5.3). */
 const SIDE_FIRST_MS = 10 * 60_000;
 const SIDE_EVERY_MS = 12 * 60_000;
-/** Quests you can hold at once, and offers waiting for an answer. */
-const MAX_SIDES = 4;
-const MAX_OFFERS = 2;
+/** Side quests at once, offers included (so nobody's overloaded), and offers waiting for an answer. */
+const MAX_SIDES = 3;
+const MAX_OFFERS = 1;
 /** A declined quest comes back as an offer after this much play. */
 const SHELF_MS = 20 * 60_000;
 const active = (q: SideQuest) => q.state !== 'offered';
+
+/** Shrine riddles, generated and proved by tools/puzzles/gen.mjs. */
+const PUZZLES: { fen: string; n: number; move: string; rating: number }[] = (() => {
+  try { return JSON.parse(readFileSync(new URL('../../../packages/shared/src/puzzles.json', import.meta.url), 'utf8')); } catch { return []; }
+})();
+
+/** Can the side to move force mate within n of its moves (n = 1 or 2)? Brute force. */
+function mateIn(c: Chess, n: number): boolean {
+  for (const m of c.moves({ verbose: true })) {
+    c.move(m);
+    let ok = c.isCheckmate();
+    if (!ok && n > 1 && !c.isGameOver()) {
+      const replies = c.moves({ verbose: true });
+      ok = replies.every((r) => { c.move(r); const k = mateIn(c, n - 1); c.undo(); return k; });
+    }
+    c.undo();
+    if (ok) return true;
+  }
+  return false;
+}
 const PILGRIM_ALTAR = 'A pilgrimage, 2 of 3: build an Altar in the clearing. Bring a bishop there, then choose Altar from the build menu (or select the bishop and tap Raise altar).';
 
 const keyOf = (s: Step): string | null => {
@@ -534,8 +556,9 @@ export class Chronicle {
         if (q.kind === 'scout' && q.at && kings.some((k) => cheb(k.x, k.y, q.at![0], q.at![1]) <= 8)) this.finishSide(p, q);
         if (q.kind === 'grow' && q.tier && this.settlementsOf(p.id).some((s) => s.tier >= q.tier!)) this.finishSide(p, q);
         if (q.kind === 'pilgrimage' && this.pilgrimageStep(p, q)) this.finishSide(p, q);
+        if (q.kind === 'shrine') this.shrineStep(p, q);
       }
-      if (p.online && st.played >= st.nextSideAt && st.sides.filter(active).length < MAX_SIDES && st.sides.filter((q) => !active(q)).length < MAX_OFFERS && st.ch >= 2) {
+      if (p.online && st.played >= st.nextSideAt && st.sides.length < MAX_SIDES && st.sides.filter((q) => !active(q)).length < MAX_OFFERS && st.ch >= 2) {
         st.nextSideAt = st.played + SIDE_EVERY_MS;
         this.offerSide(p);
       }
@@ -584,19 +607,45 @@ export class Chronicle {
     const camps = g.wilds.camps().map((c) => ({ c, f: FACTIONS[c.wild!.faction], size: c.wild!.awake === false ? c.wild!.roster?.length ?? 2 : g.wilds.piecesOf(c).length }))
       .filter(({ c }) => !st.sides.some((q) => q.camp === c.id) && cheb(c.wild!.x, c.wild!.y, from.x, from.y) <= 200)
       .sort((a, b) => cheb(a.c.wild!.x, a.c.wild!.y, from.x, from.y) - cheb(b.c.wild!.x, b.c.wild!.y, from.x, from.y));
-    const makers: (() => SideQuest | null)[] = [
-      () => { const t = camps.find(({ f, size }) => RAIDERS.has(f.id) && size <= army + 2); return t ? { id, kind: 'rescue', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `The ${t.f.name} hold prisoners. Free them.`, renown: 40, pieces: ['P'] } : null; },
-      () => { const t = camps.find(({ size }) => size <= army + 2); return t ? { id, kind: 'bounty', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `A bounty on the ${t.f.name} (${t.f.camp}).`, renown: Math.round(RENOWN[t.f.rarity] * 1.5) } : null; },
-      () => { const at = this.searchRing(from.x, from.y, 500, 30, (x, y) => RARE_BIOMES.includes(biomeAt(w.seed, x, y))); return at && !st.discovered ? { id, kind: 'scout', at, line: 'Travelers speak of a strange land nearby. See it for yourself.', renown: 50 } : null; },
-      () => { const s = this.settlementsOf(p.id).find((x) => x.tier < 4 && [3, 6, 10].includes(x.buildings.length + 1)); return s ? { id, kind: 'grow', at: [s.cx, s.cy], tier: s.tier + 1, line: 'One more building and this settlement rises a tier.', renown: 30, pieces: ['N'] } : null; },
-      () => this.pilgrimage(p, id),
-      () => { const rival = [...w.pieces.values()].find((k) => k.kind === 'K' && k.owner && k.owner !== p.id && !k.emperor && !g.players.get(k.owner)?.wild && cheb(k.x, k.y, from.x, from.y) <= 200 && (g.players.get(k.owner)?.shieldUntil ?? 0) < g.now); return rival ? { id, kind: 'skirmish', at: [rival.x, rival.y], line: `${g.players.get(rival.owner!)?.name ?? 'A rival'} has troops nearby. Win a battle against an empire.`, renown: RENOWN.empireWin * 2 } : null; },
+    // Each kind opens at a chapter (campaign.md §5.3), and some need what you've built.
+    const setts = this.settlementsOf(p.id);
+    const makers: { kind: SideQuest['kind']; ch: number; make: () => SideQuest | null }[] = [
+      { kind: 'bounty', ch: 2, make: () => { const t = camps.find(({ size }) => size <= army + 2); return t ? { id, kind: 'bounty', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `A bounty on the ${t.f.name} (${t.f.camp}).`, renown: Math.round(RENOWN[t.f.rarity] * 1.5) } : null; } },
+      { kind: 'grow', ch: 3, make: () => { const s = setts.find((x) => x.tier < 4 && [3, 6, 10].includes(x.buildings.length + 1)); return s ? { id, kind: 'grow', at: [s.cx, s.cy], tier: s.tier + 1, line: 'One more building and this settlement rises a tier.', renown: 30, pieces: ['N'] } : null; } },
+      { kind: 'shrine', ch: 3, make: () => this.shrine(p, id, from) },
+      { kind: 'feat', ch: 4, make: () => {
+        const ids = Object.keys(FEATS).filter((f) => !st.sides.some((q) => q.challenge === f));
+        const f = ids[Math.floor(Math.random() * ids.length)];
+        return f ? { id, kind: 'feat', challenge: f, line: `${FEATS[f]}.`, renown: 60, pieces: ['N'] } : null;
+      } },
+      { kind: 'rescue', ch: 5, make: () => { const t = camps.find(({ f, size }) => RAIDERS.has(f.id) && size <= army + 2); return t ? { id, kind: 'rescue', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `The ${t.f.name} hold prisoners. Free them.`, renown: 40, pieces: ['P'] } : null; } },
+      { kind: 'opening', ch: 5, make: () => {
+        const done = new Set(st.sides.filter((q) => q.kind === 'opening').map((q) => q.challenge));
+        const ids = Object.keys(OPENINGS).filter((o) => !done.has(o));
+        const o = ids[Math.floor(Math.random() * ids.length)];
+        return o ? { id, kind: 'opening', challenge: o, line: `${OPENINGS[o].who} honor only ${OPENINGS[o].name}. Win a battle opening with it (${OPENINGS[o].moves.join(', ')}).`, renown: 70 } : null;
+      } },
+      { kind: 'pilgrimage', ch: 5, make: () => (setts.some((x) => x.tier >= 2) ? this.pilgrimage(p, id) : null) },
+      { kind: 'scout', ch: 7, make: () => { const at = this.searchRing(from.x, from.y, 500, 30, (x, y) => RARE_BIOMES.includes(biomeAt(w.seed, x, y))); return at && !st.discovered ? { id, kind: 'scout', at, line: 'Travelers speak of a strange land nearby. See it for yourself.', renown: 50 } : null; } },
+      { kind: 'skirmish', ch: 10, make: () => { const rival = [...w.pieces.values()].find((k) => k.kind === 'K' && k.owner && k.owner !== p.id && !k.emperor && !g.players.get(k.owner)?.wild && cheb(k.x, k.y, from.x, from.y) <= 200 && (g.players.get(k.owner)?.shieldUntil ?? 0) < g.now); return rival ? { id, kind: 'skirmish', at: [rival.x, rival.y], line: `${g.players.get(rival.owner!)?.name ?? 'A rival'} has troops nearby. Win a battle against an empire.`, renown: RENOWN.empireWin * 2 } : null; } },
     ];
-    // Rotate: don't repeat the last kind.
-    const order = makers.map((m, i) => ({ m, i })).sort((a, b) => ((a.i + id) % makers.length) - ((b.i + id) % makers.length));
+    // The story comes first: kinds that suit what the current chapter is asking for.
+    const verb = CHAPTERS[st.ch - 1]?.steps[st.step]?.verb;
+    const SUITS: Record<string, SideQuest['kind'][]> = {
+      hunt: ['bounty', 'rescue', 'feat'], free: ['rescue', 'bounty', 'feat'], promote: ['feat', 'bounty'],
+      grow: ['grow', 'pilgrimage', 'shrine'], build: ['grow', 'shrine'], raise: ['shrine', 'grow', 'opening'], crown: ['shrine', 'grow'], link: ['pilgrimage', 'grow'],
+      settle: ['scout', 'pilgrimage', 'shrine'], march: ['scout', 'shrine', 'pilgrimage'], discover: ['scout', 'shrine'],
+      win: ['skirmish', 'opening', 'feat'],
+    };
+    const suits = SUITS[verb ?? ''] ?? [];
+    const open = makers.filter((m) => st.ch >= m.ch && !st.sides.some((q) => q.kind === m.kind));
+    // Suited kinds first; within each group, rotate so the same kind doesn't lead every time.
+    const rank = (m: (typeof open)[number], i: number) => (suits.includes(m.kind) ? 0 : 100) + ((i + id) % open.length);
+    const order = open.map((m, i) => ({ m, r: rank(m, i) })).sort((a, b) => a.r - b.r);
     for (const { m } of order) {
-      const q = m();
-      if (q && q.kind !== last) { q.state = 'offered'; st.sides.push(q); this.game.onAlert(p.id, { kind: 'info', text: `A quest is offered: ${q.line}`, at: q.at }); return; }
+      if (m.kind === last) continue;
+      const q = m.make();
+      if (q) { q.state = 'offered'; st.sides.push(q); this.game.onAlert(p.id, { kind: 'info', text: `A quest is offered: ${q.line}`, at: q.at }); return; }
     }
   }
 
@@ -624,6 +673,86 @@ export class Chronicle {
       id, kind: 'pilgrimage', stage: 0, stages: 3, area: [best.x, best.y, best.x + 9, best.y + 9], trees: best.n, progress: [0, best.n],
       at: [best.x + 5, best.y + 5], line: 'A pilgrimage, 1 of 3: an old grove hides a holy place. Clear its trees with elephants.', renown: 150, pieces: ['B'],
     };
+  }
+
+  /**
+   * A shrine (campaign.md §5.3): somewhere 20–45 squares out, in open land. Bring any piece to
+   * it and it poses a riddle: a mate in 1 or 2, chosen near your rating.
+   */
+  private shrine(p: PlayerRec, id: number, from: Piece): SideQuest | null {
+    if (!PUZZLES.length || this.of(p).sides.some((q) => q.kind === 'shrine')) return null;
+    const w = this.w;
+    const at = this.searchRing(from.x, from.y, 45, 20, (x, y) => w.walkable(x, y) && !w.buildingsNear(x, y, 6).length);
+    if (!at) return null;
+    return { id, kind: 'shrine', at, line: 'An old shrine of the game stands in the wild. Bring any piece to it and answer its riddle.', renown: 60, pieces: ['B'] };
+  }
+
+  /** Reveal a shrine's riddle when one of the player's pieces reaches it. */
+  private shrineStep(p: PlayerRec, q: SideQuest) {
+    if (q.puzzle || !q.at) return;
+    if (!this.w.piecesNear(q.at[0], q.at[1], 1).some((x) => x.owner === p.id)) return;
+    // A riddle near the player's strength (mate in 1 below 1100, mostly mate in 2 above).
+    const pref = PUZZLES.filter((z) => (p.rating < 1100 ? z.n === 1 : z.n === 2));
+    const pool = pref.length >= 5 ? pref : PUZZLES;
+    const z = pool[Math.floor(Math.random() * pool.length)];
+    q.puzzle = { fen: z.fen, n: z.n, left: z.n };
+    (q as SideQuest & { start?: string }).start = z.fen;
+    const side = z.fen.split(' ')[1] === 'w' ? 'White' : 'Black';
+    q.line = `The shrine asks: ${side} to play and mate in ${z.n}.`;
+    this.game.onAlert(p.id, { kind: 'info', text: `The shrine speaks: ${side} to play, mate in ${z.n}`, at: q.at });
+  }
+
+  /**
+   * A move toward a shrine's riddle. Checked by brute force: it must still force mate in the
+   * moves left. A right move gets the defense's reply; a wrong one resets the riddle.
+   */
+  solve(p: PlayerRec, id: number, uciMove: string): string | null {
+    const q = this.of(p).sides.find((x) => x.id === id);
+    if (!q?.puzzle) return 'No riddle to answer';
+    const c = new Chess(q.puzzle.fen);
+    let played;
+    try { played = c.move({ from: uciMove.slice(0, 2), to: uciMove.slice(2, 4), promotion: uciMove[4] }); } catch { played = null; }
+    const reset = () => { q.puzzle!.fen = (q as SideQuest & { start?: string }).start ?? q.puzzle!.fen; q.puzzle!.left = q.puzzle!.n; };
+    if (!played) return 'That move isn\'t legal here';
+    if (c.isCheckmate()) { this.finishSide(p, q); return null; }
+    const left = q.puzzle.left - 1;
+    // Every reply must still allow a mate in what's left.
+    const replies = c.moves({ verbose: true });
+    const holds = left >= 1 && replies.length > 0 && replies.every((r) => { c.move(r); const ok = mateIn(c, left); c.undo(); return ok; });
+    if (!holds) { reset(); return 'Not the move. The shrine resets its riddle'; }
+    // The defense: the reply that leaves the fewest mating answers.
+    let best = replies[0], fewest = Infinity;
+    for (const r of replies) { c.move(r); const n = c.moves({ verbose: true }).filter((m) => { c.move(m); const k = c.isCheckmate(); c.undo(); return k; }).length; c.undo(); if (n < fewest) { fewest = n; best = r; } }
+    c.move(best);
+    q.puzzle.fen = c.fen();
+    q.puzzle.left = left;
+    return null;
+  }
+
+  /**
+   * A battle won (campaign.md §5.3): does it complete an opening challenge or a feat?
+   * `side` is the winner's color; moves are the game's, in SAN, from startFen.
+   */
+  battleWon(playerId: string, g: { side: 'white' | 'black'; startFen: string; moves: string[]; promoted: number }) {
+    const p = this.game.players.get(playerId);
+    if (!p || p.wild) return;
+    const st = this.of(p);
+    const c = new Chess(g.startFen), mine: string[] = [];
+    const me = g.side === 'white' ? 'w' : 'b';
+    const count = (fen: string) => fen.split(' ')[0].split('').filter((x) => (me === 'w' ? /[KQRBNP]/ : /[kqrbnp]/).test(x)).length;
+    const queens = (fen: string) => fen.split(' ')[0].split('').filter((x) => x === (me === 'w' ? 'Q' : 'q')).length;
+    const start = { n: count(g.startFen), q: queens(g.startFen) };
+    for (const san of g.moves) { try { const m = c.move(san); if (m.color === me) mine.push(m.san.replace(/[+#]/g, '')); } catch { break; } }
+    const end = { n: count(c.fen()), q: queens(c.fen()) };
+    for (const q of st.sides.filter((x) => x.state !== 'offered' && (x.kind === 'opening' || x.kind === 'feat'))) {
+      let done = false;
+      if (q.kind === 'opening') { const o = OPENINGS[q.challenge!]; done = !!o && me === 'w' && o.moves.every((m) => mine.slice(0, o.within).includes(m)); }
+      else if (q.challenge === 'queenless') done = start.q > 0 && end.q >= start.q;
+      else if (q.challenge === 'swift') done = mine.length <= 20;
+      else if (q.challenge === 'promote') done = g.promoted > 0;
+      else if (q.challenge === 'flawless') done = start.n - end.n <= 2;
+      if (done) this.finishSide(p, q);
+    }
   }
 
   /** Move a pilgrimage along its stages; true when it's done. */

@@ -446,6 +446,8 @@ export class Battles {
       for (const id of win.ids) { const p = w.pieces.get(id); if (p) { p.cooldownUntil = now + summary.cooldownMs; w.touch(p); } }
       if (winKing) winKing.protectedUntil = now + summary.cooldownMs;
       if (wildLose) scattered = { camp: wildLose, by: win.player, size: lose.ids.length };
+      // Opening challenges and feats judge the game itself (campaign.md §5.3).
+      if (!wildWin) g.chronicle.battleWon(win.player, { side: win === r.white ? 'white' : 'black', startFen: r.pub.startFen ?? '', moves: gm.moves, promoted: gm.promoted.filter((pr) => win.ids.includes(pr.id)).length });
       // Quests: battles won against other empires (campaign.md §5.2).
       if (!wildWin && !wildLose) {
         g.chronicle.note(win.player, 'win:empire');

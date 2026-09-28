@@ -550,3 +550,8 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
   .battle > *:not(.board-wrap) { grid-column: 2; }
   .layout-phone .top-stack { right: auto; width: min(460px, calc(100% - 16px)); }
 }
+/* A shrine's riddle (campaign.md §5.3). */
+.riddle .riddle-board { width: min(100%, 420px); aspect-ratio: 1; margin: 6px auto 10px; height: auto; }
+.riddle .riddle-board .sq { cursor: pointer; }
+.good-text { color: #cfe6a4; font-weight: 800; }
+.tracker .riddle-go { margin-top: 6px; align-self: flex-start; }

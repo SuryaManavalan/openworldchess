@@ -42,6 +42,8 @@ interface UIState {
   questFocus: number | null;
   /** The quest banner folded down to one line (remembered). */
   trackerMin: boolean;
+  /** A shrine's riddle open on screen (the side quest's id). */
+  riddle: number | null;
   /** A work order waiting for its place (movement.md §9): where to pave to, or what to clear. */
   orderMode: 'pave' | 'clear' | null;
   /** An area chosen for elephants to clear, waiting for confirmation. */
@@ -94,6 +96,7 @@ export const useUI = create<UIState>((set, get) => ({
   hint: null,
   trackerMin: (() => { try { return localStorage.getItem('owc.trackerMin') === '1'; } catch { return false; } })(),
   orderMode: null,
+  riddle: null,
   pendingClear: null,
   questFocus: (() => { try { const v = Number(localStorage.getItem('owc.questFocus')); return v > 0 ? v : null; } catch { return null; } })(),
   lassoMode: false,

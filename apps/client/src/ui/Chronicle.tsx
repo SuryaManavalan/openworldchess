@@ -83,6 +83,8 @@ export function ChronicleTracker() {
           {need > 1 && <span className="prog"><span style={{ width: `${(100 * have) / need}%` }} /><em>{have}/{need}</em></span>}
           {t && <span className="tip">{t}</span>}
           {focused?.kind === 'pilgrimage' && <span className="tip keep">{PILGRIM_TIPS[focused.stage ?? 0]}</span>}
+          {focused?.kind === 'shrine' && !focused.puzzle && <span className="tip keep">Walk any of your pieces onto the shrine (Show finds it).</span>}
+          {focused?.puzzle && <button className="btn small gold riddle-go" onClick={() => ui.set({ riddle: focused.id })}>Answer the riddle</button>}
           {focused && (
             <span className="focus-actions">
               {ch && <button className="chip" onClick={() => setFocus(null)}><Icon name="book" size={12} /> Chapter {ch.n}</button>}
@@ -131,6 +133,7 @@ function SideQuests() {
           <span className="sq-actions">
             {q.at && <button className="link" onClick={() => fly(q.at)}>Where?</button>}
             <button className={`btn small ghost ${confirm === q.id ? 'warn' : ''}`} onClick={() => decline(q.id)}>{confirm === q.id ? 'Drop it? It comes back' : 'Drop'}</button>
+            {q.puzzle && <button className="btn small gold" onClick={() => ui.set({ riddle: q.id, sheet: null })}>Answer</button>}
             <button className={`btn small ${q.id === ui.questFocus ? 'gold' : 'ghost'}`} onClick={() => { setFocus(q.id === ui.questFocus ? null : q.id); setMin(false); }}>{q.id === ui.questFocus ? 'Following' : 'Follow'}</button>
           </span>
         </div>

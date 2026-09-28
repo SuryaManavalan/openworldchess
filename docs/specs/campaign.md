@@ -133,7 +133,7 @@ The Chronicle is *what* happens over 15 hours; quests are *how* a player is led 
   - Each chapter is 2–3 steps, shown one at a time.
   - Each step has a line from the Chronicle, the scribe-narrator whose book is the quest icon, and a concrete target: *"The deer of Mossglade grow bold. Hunt the Stag Herd east of your village."*
   - Finishing the last step completes the chapter: the unlock ceremony plays and the next chapter's first step appears.
-- **Side quests,** up to four at once: short, optional errands **generated from the world around you** (§5.3).
+- **Side quests,** up to **three** at once, offers included (as of 2026-09-28; one offer waits at a time): short, optional errands **generated from the world around you** (§5.3).
   - They pay Renown and small, useful rewards.
   - They fill the gaps between chapters and send you toward things you'd enjoy anyway.
   - Each arrives as an **offer** you accept or decline (§5.5). Nothing is lost by declining: a declined or dropped quest is offered again about 20 minutes of play later, if it still makes sense.
@@ -163,7 +163,20 @@ Steps carry a **target and a map marker** whenever there's a place: a camp, a si
 
 ### 5.3 Side quests from the world around you
 
-From chapter 2, 10 minutes into play and then every 12 minutes, while you hold fewer than four quests and have fewer than two offers waiting, the server offers one side quest (as of 2026-09-28; it was every 30 minutes). A declined quest that's due comes back first; otherwise it writes a new one from the player's surroundings. It picks the first template that fits, rotating so the same kind never comes twice in a row:
+From chapter 2, 10 minutes into play and then every 12 minutes, while you hold fewer than three quests (offers included) and none is waiting for an answer, the server offers one side quest (as of 2026-09-28; it was every 30 minutes).
+
+**Pacing (as of 2026-09-28).** Each kind opens at a chapter, and some need what you've built. Among the open kinds, the ones that suit the chapter's current step come first, so side quests follow the story: a hunting step brings bounties, rescues and feats; building and growing bring growth quests and the pilgrimage; marching and settling bring scouting, shrines and the pilgrimage; the Rivals and Siegecraft chapters bring skirmishes, openings and feats. You never hold two of the same kind.
+
+| Kind | Opens at chapter | Also needs |
+|---|---|---|
+| Bounty | 2, First Hunt | a camp you can beat nearby |
+| Grow | 3, Village | a settlement one building short of its next tier |
+| Shrine | 3 | open land nearby |
+| Feat | 4 | |
+| Rescue, Opening | 5 | a rescue needs a raider camp you can beat |
+| Pilgrimage | 5 | temples open, and a village or bigger |
+| Scout | 7, Roads Beyond | an unseen rare land |
+| Skirmish | 10, Rivals | a rival empire nearby | A declined quest that's due comes back first; otherwise it writes a new one from the player's surroundings. It picks the first template that fits, rotating so the same kind never comes twice in a row:
 
 | Template | When it fits | Reward |
 |---|---|---|
@@ -174,7 +187,17 @@ From chapter 2, 10 minutes into play and then every 12 minutes, while you hold f
 | **Grow** | A settlement one building short of the next tier | One free piece from its best building |
 | **Skirmish** | A rival empire (bot or person) within 200 squares, not shielded, of similar strength | Renown ×2 for the win |
 | **Defend** | A horde whose roaming passes near your town | Renown, and the camp's full hoard |
+| **Shrine** | Open land 20–45 squares from a king | 60 Renown and a bishop |
+| **Opening** | Always | 70 Renown |
+| **Feat** | Always | 60 Renown and a knight |
 | **Pilgrimage** (a chain of 3) | Temples are open, and a grove of 10+ trees lies 30–45 squares from your capital (or biggest town), away from other empires | 150 Renown and a bishop |
+
+Three chess quests (as built on 2026-09-28):
+- **Shrine:** an old shrine of the game stands in the wild (only its quest-holder sees it). Walk any piece onto it and it poses a **riddle**: a mate in 1 (players under 1100) or a mate in 2, with exactly one first move. Answer it on a small board. The server checks every move by brute force: a right move gets the defense's toughest reply, and a wrong one resets the riddle (try again as often as you like).
+  - The riddles come from `tools/puzzles/gen.mjs`: Stockfish plays weak games to find candidates, one per game, and each is proved by chess.js brute force (exactly one first move forces mate in n, none mates faster). They're stored in `packages/shared/src/puzzles.json`.
+- **Opening:** "The monks of the east honor only the Queen's Gambit": win a battle as White having played the opening's moves among your first few (the Italian, the Queen's Gambit, the London, the King's Gambit, the English, the Ruy Lopez, and the Bongcloud).
+- **Feat:** win a battle with a handicap: without losing your queen, in 20 moves or fewer, after promoting a pawn, or losing no more than two pieces.
+- Openings and feats are judged from the battle's own moves when it ends (`Chronicle.battleWon`); wins against empires and camps both count.
 
 The **pilgrimage** (as built on 2026-09-28) teaches what pieces do outside battle, in three stages:
 1. **Clear the grove** with elephants: 80% of its trees down (movement.md §9). Progress shows as trees cleared.

@@ -3,6 +3,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { CHAPTERS, TITLES, cheb, setWorth, type Building, type SideQuest } from '@owc/shared';
 import { findPath } from '@owc/rules';
+import { Chess } from 'chess.js';
 import { Game, type PlayerRec } from '../src/game.ts';
 
 let rs = 777;
@@ -165,7 +166,7 @@ describe('the Chronicle', () => {
   it('side quests appear after half an hour of play, and pay out', () => {
     const p = join('Errand');
     const st = game.chronicle.of(p);
-    st.ch = 2;
+    st.ch = 3;
     // A settlement one building short of its next tier, so a quest is always on offer (wherever the player spawned).
     const k = game.kingsOf(p.id)[0];
     for (const [dx, dy] of [[2, -3], [4, -3]]) { const at = game.world.nearestFree(k.x + dx, k.y + dy, 6)!; place(p.id, 'house', at[0], at[1]); }
@@ -187,7 +188,7 @@ describe('the Chronicle', () => {
   it('a declined quest is shelved and offered again later, never lost', () => {
     const p = join('Picky');
     const st = game.chronicle.of(p);
-    st.ch = 2;
+    st.ch = 3;
     const k = game.kingsOf(p.id)[0];
     for (const [dx, dy] of [[2, -3], [4, -3]]) { const at = game.world.nearestFree(k.x + dx, k.y + dy, 6)!; place(p.id, 'house', at[0], at[1]); }
     game.chronicle.refreshSettlements(now, true);
@@ -196,7 +197,8 @@ describe('the Chronicle', () => {
     expect(q).toBeTruthy();
     game.chronicle.decline(p, q.id);
     expect(st.sides.some((x) => x.id === q.id)).toBe(false);
-    for (let i = 0; i < 12 && !st.sides.some((x) => x.id === q.id); i++) tick(5 * 60_000);
+    // (Only one offer waits at a time: turn the others down so the declined one can come back.)
+    for (let i = 0; i < 16 && !st.sides.some((x) => x.id === q.id); i++) { tick(5 * 60_000); for (const o of st.sides) if (o.id !== q.id && o.state === 'offered') game.chronicle.decline(p, o.id); }
     const again = st.sides.find((x) => x.id === q.id);
     expect(again?.state).toBe('offered');
     expect(again?.line).toBe(q.line);
@@ -233,6 +235,68 @@ describe('the Chronicle', () => {
     tick();
     expect(st.sides.some((x) => x.id === q.id)).toBe(false);
     expect(st.renown).toBe(renown + 150);
+  });
+
+  it('a shrine poses its riddle when a piece arrives, and checks every move (campaign.md §5.3)', () => {
+    const p = join('Riddler');
+    const st = game.chronicle.of(p);
+    const k = game.kingsOf(p.id)[0];
+    const at = game.world.nearestFree(k.x + 6, k.y, 4)!;
+    const q: SideQuest = { id: 950, kind: 'shrine', at, line: 'A shrine', renown: 60, state: 'active' };
+    st.sides.push(q);
+    tick();
+    expect(q.puzzle).toBeUndefined();
+    // A piece reaches the shrine: the riddle appears.
+    game.addPiece({ id: game.world.id(), owner: p.id, kind: 'P', x: at[0], y: at[1] + 1, facing: 2, state: 'idle' });
+    tick();
+    expect(q.puzzle).toBeTruthy();
+    // A mate in 2 (proved by the generator): a wrong move resets, the right line solves it.
+    const fen = 'r7/1p1k4/4pQ2/p2pB1P1/4p3/PP6/4BP1P/3RR2K w - - 3 39';
+    q.puzzle = { fen, n: 2, left: 2 };
+    (q as SideQuest & { start?: string }).start = fen;
+    expect(game.chronicle.solve(p, 950, 'f6f7')).toMatch(/resets/);
+    expect(q.puzzle.fen).toBe(fen);
+    expect(game.chronicle.solve(p, 950, 'e2b5')).toBeNull();
+    expect(q.puzzle.left).toBe(1);
+    // Whatever the defense played, one move mates now.
+    const c = new Chess(q.puzzle.fen);
+    const mate = c.moves({ verbose: true }).find((m) => { c.move(m); const k = c.isCheckmate(); c.undo(); return k; })!;
+    const renown = st.renown;
+    expect(game.chronicle.solve(p, 950, mate.from + mate.to)).toBeNull();
+    expect(st.sides.some((x) => x.id === 950)).toBe(false);
+    expect(st.renown).toBe(renown + 60);
+  });
+
+  it('opening challenges and feats are judged from the game (campaign.md §5.3)', () => {
+    const p = join('Openings');
+    const st = game.chronicle.of(p);
+    st.sides.push({ id: 960, kind: 'opening', challenge: 'italian', line: 'Italian', renown: 70, state: 'active' });
+    st.sides.push({ id: 961, kind: 'feat', challenge: 'swift', line: 'Swift', renown: 60, state: 'active' });
+    st.sides.push({ id: 962, kind: 'opening', challenge: 'queens-gambit', line: 'QG', renown: 70, state: 'active' });
+    const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    // Scholar's mate, opened as the Italian: e4, Nf3... then Bc4.
+    game.chronicle.battleWon(p.id, { side: 'white', startFen: start, moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Nf6', 'Ng5', 'd5', 'Nxf7'], promoted: 0 });
+    expect(st.sides.some((x) => x.id === 960)).toBe(false); // the Italian: done
+    expect(st.sides.some((x) => x.id === 961)).toBe(false); // five moves: swift
+    expect(st.sides.some((x) => x.id === 962)).toBe(true);  // not a Queen's Gambit
+  });
+
+  it('side quests: at most three at once, and only kinds the chapter has opened (campaign.md §5.3)', () => {
+    const p = join('Paced');
+    const st = game.chronicle.of(p);
+    st.ch = 3;
+    const k = game.kingsOf(p.id)[0];
+    for (const [dx, dy] of [[2, -3], [4, -3]]) { const at = game.world.nearestFree(k.x + dx, k.y + dy, 6)!; place(p.id, 'house', at[0], at[1]); }
+    game.chronicle.refreshSettlements(now, true);
+    for (let i = 0; i < 40; i++) {
+      tick(5 * 60_000);
+      // Take up whatever's offered, so offers keep coming.
+      for (const q of st.sides) if (q.state === 'offered') game.chronicle.accept(p, q.id);
+      expect(st.sides.length).toBeLessThanOrEqual(3);
+    }
+    // Chapter 3 opens bounties, growth and shrines, nothing later (no openings, feats or skirmishes).
+    for (const q of st.sides) expect(['bounty', 'grow', 'shrine']).toContain(q.kind);
+    expect(st.sides.length).toBeGreaterThan(0);
   });
 
   it("a player's king cap follows their title", () => {

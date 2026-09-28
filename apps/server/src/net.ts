@@ -190,6 +190,7 @@ export class Net {
       }
       case 'capital.set': reply(msg.rid, g.chronicle.setCapital(p, msg.buildingId)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'quest.accept': reply(msg.rid, g.chronicle.accept(p, msg.id)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
+      case 'quest.solve': reply(msg.rid, g.chronicle.solve(p, msg.id, msg.uci)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'quest.decline': g.chronicle.decline(p, msg.id); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'muster': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.muster(p.id, msg.kingId)); break;
       case 'civ.equip': {

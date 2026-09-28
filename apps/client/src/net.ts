@@ -72,6 +72,9 @@ export const commands = {
   setCapital(buildingId: number) { return conn.request({ t: 'capital.set', buildingId }); },
   resetEmpire(name: string) { return conn.request({ t: 'empire.reset', name }); },
   declineQuest(id: number) { conn.send({ t: 'quest.decline', id }); },
+  async solveQuest(id: number, uci: string) {
+    return conn.request({ t: 'quest.solve', id, uci });
+  },
   async acceptQuest(id: number) {
     const err = await conn.request({ t: 'quest.accept', id });
     if (err) useUI.getState().toast(err, 'error');
