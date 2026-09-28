@@ -17,6 +17,7 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('order.cancelAttack'), battleId: z.number().int() }),
   z.object({ t: z.literal('build'), rid: z.number().optional(), building: z.enum(['palace', 'house', 'stable', 'temple', 'barracks', 'wonder']), at: xy }),
   z.object({ t: z.literal('building.pause'), buildingId: z.number().int(), paused: z.boolean() }),
+  z.object({ t: z.literal('bubble.pop'), buildingId: z.number().int(), i: z.number().int().min(0).max(7) }),
   z.object({ t: z.literal('palace.mode'), buildingId: z.number().int(), mode: z.enum(['alt', 'K', 'Q']) }),
   z.object({ t: z.literal('battle.move'), battleId: z.number().int(), uci: z.string().min(4).max(5) }),
   z.object({ t: z.literal('battle.resign'), battleId: z.number().int() }),
@@ -48,6 +49,8 @@ export type ServerMsg =
   | { t: 'turn'; n: number; at: number; moves: TurnMove[]; pieces: Piece[]; removed: number[]; buildings: Building[]; removedBuildings: number[]; nodes: NodeState[] }
   | { t: 'mine'; pieces: Piece[]; buildings: Building[] }
   | { t: 'players'; players: PlayerPublic[] }
+  /** The land's live ratings (elo.md §3) in a box of cells [cx0, cy0, cx1, cy1]: replace that box with these [cx, cy, rating, ...]. */
+  | { t: 'land'; box: [number, number, number, number]; cells: number[] }
   | { t: 'self'; self: PlayerSelf }
   | { t: 'battle'; battle: BattlePublic }
   | { t: 'battles'; battles: BattlePublic[] }

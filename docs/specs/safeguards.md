@@ -7,8 +7,21 @@ The principle ([PRINCIPLES.md](../PRINCIPLES.md)): prefer **general limits that 
 ## 1. Piece spam (population)
 
 - **Loop:** houses raised the cap by 6 each *and* produced pawns, with no limit on houses, so the cap could grow without end.
-- **Fix:** each king supports **16 pieces plus 6 per house within its reach, counting at most 3 houses**. That's at most 34 per king, about two chess sets. There's also a **hard cap of 400 per player**.
-- Army size now scales with kings, the scarce resource. The HUD shows `pieces/cap`.
+- **Fix (by piece, as of 2026-09-28):** each kind of piece has its own room, set by the buildings in each king's city (within its reach):
+
+  | Piece | Room per king |
+  |---|---|
+  | Pawns | 8, +6 per house (counting at most 4), + the title's bonus |
+  | Knights | 2 per stable |
+  | Bishops | 2 per temple |
+  | Elephants | 2 per barracks |
+  | Queens | 1 per palace |
+  | Kings | set by your title (§2) |
+
+  There's also a **hard cap of 400 per player**.
+- A realm full of pawns can still raise knights: a building pauses only when *its* piece is at its room (`pop-cap`), and its details say which building makes more room.
+- Army size scales with kings, the scarce resource, and its shape with the city you build. The HUD shows `pieces/cap`; its tooltip lists each piece's count and room.
+- The piece the current chapter asks for is still raised when its room is full, once.
 
 ## 2. Kings breeding kings
 

@@ -69,6 +69,24 @@ A troop has a **heading**: the direction of its path, snapped to N, E, S or W. P
 - No piece may move more than **4 squares ahead** of its slot's position relative to the anchor. Fast pieces make one big move, then **wait** while the pawns catch up. Queens and elephants leap ahead and hold; knights hop in L's around the formation.
 - If the king falls behind the command radius, everyone ahead holds until it catches up.
 
+### Keeping the troop together (as built, 2026-09-28)
+
+- **The leash:** the troop's lead point keeps advancing while every piece is within 3.5 squares of its slot. (It used to wait for every piece to stand exactly in place, so every pawn turn and every obstacle cost the whole troop a few turns.)
+- **Routes for stragglers:** a piece more than 5 squares from its slot, or stuck for 2 turns, plans its own route over the terrain. Pawns and elephants plan with no diagonal steps, since they can't make them.
+  - It then chases a point 2–3 squares ahead on that route with its normal gait.
+  - That point can be behind it, so a pawn can back out of a dead end or go around a lake.
+  - Progress means getting further along the route, not straight-line distance, so going around doesn't count as stuck.
+  - Route plans share a budget of 24 a turn while someone is watching.
+- **Left behind only when hopeless:** the troop moves on without a piece only after 14 turns in which it made no progress, even on its route. It used to be 3 turns. Pieces left outside every king's reach drift home as before.
+
+### War elephants clear the woods (as built, 2026-09-28)
+
+- A troop with at least one elephant (rook) plans its road **through** trees, at an extra cost of 8 steps a tree (short cuts through tree lines and thin woods, not lanes through deep forest). Its elephants will clear them.
+- The elephant nearest the next standing tree within 12 squares ahead goes to the side of the tree facing it, and knocks it down (a turn's work).
+- The lead never steps onto a standing tree. It waits there for the elephants. If they can't reach the tree in 30 turns, the troop re-plans around the woods.
+- On its own route, an elephant also knocks down a tree standing in its way.
+- A felled tree becomes a stump and regrows later, like trees cleared near towns.
+
 ## 5. Pathfinding (as built)
 
 - **Troop path:**

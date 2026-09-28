@@ -3,11 +3,12 @@
 // (packages/shared/src/chronicle.ts); this module keeps score from events the
 // game already produces and hands out rewards.
 import {
-  CHAPTERS, FACTIONS, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
+  CHAPTERS, FACTIONS, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
   type Ability, type BuildingType, type ChronicleView, type PieceKind, type SettlementInfo, type SideQuest, type Step,
 } from '@owc/shared';
-import { biomeAt, RARE_BIOMES } from '@owc/worldgen';
+import { biomeAt, RARE_BIOMES, resourcesInRect } from '@owc/worldgen';
 import type { Game, PlayerRec } from './game.ts';
+import { perf } from './perf.ts';
 
 export interface ChronState {
   /** Current chapter (1–15); 16 is the Epilogue. */
@@ -117,11 +118,15 @@ export class Chronicle {
     const st = this.of(p);
     const ch = CHAPTERS[st.ch - 1];
     const step = ch?.steps[st.step];
+    const progress = step ? perf.time('view.progress', () => this.progress(p, step)) : [0, 0] as [number, number];
+    // Only read the marker here (views go out on every reconnect and every 2.5s): a missing
+    // or stale one is worked out in the tick, within a time budget (performance.md).
+    const target = step ? this.peekTarget(p, step) : undefined;
+    const cap = perf.time('view.capital', () => this.capitalOf(p));
     return {
-      chapter: st.ch, step: st.step, progress: step ? this.progress(p, step) : [0, 0],
-      target: step ? this.targetOf(p, step) : undefined,
+      chapter: st.ch, step: st.step, progress, target,
       title: st.title, renown: Math.round(st.renown), abilities: st.abilities, buildings: st.buildings,
-      sides: st.sides, relics: st.relics, capital: this.capitalOf(p)?.buildings.length ? [this.capitalOf(p)!.cx, this.capitalOf(p)!.cy] : undefined,
+      sides: st.sides, relics: st.relics, capital: cap?.buildings.length ? [cap.cx, cap.cy] : undefined,
       done: st.ch - 1,
     };
   }
@@ -329,17 +334,53 @@ export class Chronicle {
 
   // ---------- targets (map markers) ----------
 
+  /** Players whose quest marker needs working out (done in the tick, within a budget). */
+  private wantTarget = new Set<string>();
+  /** The cached marker for this step (even if due for a refresh), queuing a refresh if needed. */
+  private peekTarget(p: PlayerRec, s: Step): [number, number] | undefined {
+    // Tests and simulations (no live viewers) work it out now, deterministically.
+    if (!this.game.viewed) return this.targetOf(p, s);
+    const c = this.targets.get(p.id), key = JSON.stringify(s);
+    if (!c || c.key !== key || c.until <= this.game.now) this.wantTarget.add(p.id);
+    return c && c.key === key ? c.at : undefined;
+  }
+  /** Work out queued markers, up to `ms` of time. */
+  private refreshTargets(ms: number) {
+    const end = performance.now() + ms;
+    for (const id of [...this.wantTarget]) {
+      if (performance.now() > end) break;
+      this.wantTarget.delete(id);
+      const p = this.game.players.get(id);
+      const st = p?.chron, step = st ? CHAPTERS[st.ch - 1]?.steps[st.step] : undefined;
+      if (p && step) perf.time(`chronicle.target.${step.verb}${step.verb === 'build' ? '.' + step.type : ''}`, () => this.targetOf(p, step));
+    }
+  }
+
   private targetOf(p: PlayerRec, s: Step): [number, number] | undefined {
     const key = JSON.stringify(s);
     const c = this.targets.get(p.id);
     if (c && c.key === key && c.until > this.game.now) return c.at;
-    const at = this.findTarget(p, s);
     // Searches over the map (rare lands, rich lands, palace sites) are costly and their
     // answers don't move: keep them for 10 minutes. Camps and rivals move: 30 seconds.
     const slow = s.verb === 'discover' || s.verb === 'settle' || s.verb === 'build';
+    // At most two map-wide searches a second (after a restart everyone needs one at once):
+    // the rest keep their last marker, or get one a moment later (views are re-sent every 2.5s).
+    if (slow) {
+      const sec = Math.floor(this.game.now / 1000);
+      if (sec !== this.searchSec) { this.searchSec = sec; this.searches = 0; }
+      if (this.searches >= 2) return c?.key === key ? c.at : undefined;
+      this.searches++;
+    }
+    this.ringPending = false;
+    const at = this.findTarget(p, s);
+    // A ring search that ran out of time: no answer yet, keep working on it next tick.
+    if (this.ringPending) { this.wantTarget.add(p.id); return c?.key === key ? c.at : undefined; }
     this.targets.set(p.id, { key, at, until: this.game.now + (slow ? 600_000 : 30_000) });
     return at;
   }
+
+  private searchSec = 0;
+  private searches = 0;
 
   private findTarget(p: PlayerRec, s: Step): [number, number] | undefined {
     const g = this.game, w = this.w;
@@ -378,19 +419,11 @@ export class Chronicle {
       const weak = all.filter((x) => Math.min(...kings.map((k) => cheb(k.x, k.y, x.x, x.y))) <= 600).sort((a, b) => a.might - b.might)[0];
       return weak ? [weak.x + 1, weak.y + 1] : undefined;
     }
-    if (s.verb === 'build' && s.type === 'palace') {
-      // The nearest spot with ore and rock close together.
-      for (let r = 20; r <= 200; r += 30) {
-        const ores = w.nodesNear(from.x, from.y, 1, r).filter((n) => n.kind === 'ore' && n.remaining > 0);
-        const site = ores.find((o) => w.nodesNear(o.x, o.y, 1, 5).some((n) => n.kind === 'rock' && n.remaining > 0));
-        if (site) return [site.x, site.y];
-      }
-      return undefined;
-    }
-    if (s.verb === 'discover') return this.searchRing(from.x, from.y, 1600, 24, (x, y) => RARE_BIOMES.includes(biomeAt(w.seed, x, y)));
+    if (s.verb === 'build' && s.type === 'palace') return this.palaceSite(p, from.x, from.y);
+    if (s.verb === 'discover') return this.searchRing(from.x, from.y, 1600, 24, (x, y) => RARE_BIOMES.includes(biomeAt(w.seed, x, y)), `discover:${p.id}`);
     if (s.verb === 'settle' && s.eloAbove != null) {
       const need = w.elo(p.home[0], p.home[1]) + s.eloAbove;
-      return this.searchRing(from.x, from.y, 4000, 60, (x, y) => w.elo(x, y) >= need && w.buildable(x, y));
+      return this.searchRing(from.x, from.y, 4000, 60, (x, y) => w.elo(x, y) >= need && w.buildable(x, y), `settle:${p.id}:${need}`);
     }
     if (s.verb === 'win') {
       const rivals = [...w.pieces.values()].filter((k) => k.kind === 'K' && k.owner && k.owner !== p.id && !k.emperor && !g.players.get(k.owner)?.wild && (g.players.get(k.owner)?.shieldUntil ?? 0) < g.now);
@@ -404,15 +437,59 @@ export class Chronicle {
     return undefined;
   }
 
-  /** Nearest square (in widening rings) where `ok` holds. */
-  private searchRing(x0: number, y0: number, maxR: number, step: number, ok: (x: number, y: number) => boolean): [number, number] | undefined {
-    for (let r = step; r <= maxR; r += step) {
-      const n = Math.max(8, Math.round((2 * Math.PI * r) / step));
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2, x = Math.round(x0 + Math.cos(a) * r), y = Math.round(y0 + Math.sin(a) * r);
-        if (ok(x, y)) return [x, y];
+  /** 40-square tiles within 200 squares, nearest first (the palace-site search walks them in order). */
+  private static TILES = (() => {
+    const t: [number, number][] = [];
+    for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) t.push([dx, dy]);
+    return t.sort((a, b) => Math.max(Math.abs(a[0]), Math.abs(a[1])) - Math.max(Math.abs(b[0]), Math.abs(b[1])) || Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]));
+  })();
+  private palaceTiles = new Map<string, number>();
+
+  /**
+   * The nearest spot with ore and rock close together (a palace site), searched
+   * tile by tile in the generated map, without loading those chunks into the
+   * world. On the live server it works 12ms a call and resumes where it left off.
+   */
+  private palaceSite(p: PlayerRec, x0: number, y0: number): [number, number] | undefined {
+    const w = this.w, live = !!this.game.viewed, end = live ? performance.now() + 12 : Infinity;
+    const slot = `${p.id}:${x0},${y0}`, T = 40;
+    for (let i = live ? this.palaceTiles.get(slot) ?? 0 : 0; i < Chronicle.TILES.length; i++) {
+      if (performance.now() > end) { this.palaceTiles.set(slot, i); this.ringPending = true; return undefined; }
+      const [dx, dy] = Chronicle.TILES[i], tx = x0 + dx * T - T / 2, ty = y0 + dy * T - T / 2;
+      for (const o of resourcesInRect(w.seed, tx, ty, tx + T, ty + T, ['ore'])) {
+        // Mined out? (The overlay holds changed nodes; reading it loads no chunks.)
+        const mined = w.nodeOverlay.get(key(o.x, o.y));
+        if (mined && (mined.remaining <= 0 || mined.gone)) continue;
+        if (resourcesInRect(w.seed, o.x - 5, o.y - 5, o.x + 6, o.y + 6, ['rock']).length) { this.palaceTiles.delete(slot); return [o.x, o.y]; }
       }
     }
+    this.palaceTiles.delete(slot);
+    return undefined;
+  }
+
+  /** Resumable ring searches, keyed by what's being searched (performance.md). */
+  private rings = new Map<string, { r: number; i: number }>();
+  /** Set when a ring search ran out of time this call: the answer isn't known yet. */
+  private ringPending = false;
+
+  /**
+   * Nearest square (in widening rings) where `ok` holds. On the live server a
+   * search works for at most 12ms a call and picks up where it left off next
+   * time (a map-wide search can sample thousands of squares).
+   */
+  private searchRing(x0: number, y0: number, maxR: number, step: number, ok: (x: number, y: number) => boolean, key?: string): [number, number] | undefined {
+    const live = !!this.game.viewed && key != null;
+    const end = live ? performance.now() + 12 : Infinity;
+    const k = `${key}:${x0},${y0}`, st = live ? this.rings.get(k) ?? { r: step, i: 0 } : { r: step, i: 0 };
+    for (; st.r <= maxR; st.r += step, st.i = 0) {
+      const n = Math.max(8, Math.round((2 * Math.PI * st.r) / step));
+      for (; st.i < n; st.i++) {
+        if ((st.i & 31) === 31 && performance.now() > end) { this.rings.set(k, st); this.ringPending = true; return undefined; }
+        const a = (st.i / n) * Math.PI * 2, x = Math.round(x0 + Math.cos(a) * st.r), y = Math.round(y0 + Math.sin(a) * st.r);
+        if (ok(x, y)) { this.rings.delete(k); return [x, y]; }
+      }
+    }
+    this.rings.delete(k);
     return undefined;
   }
 
@@ -421,6 +498,7 @@ export class Chronicle {
   /** Every few seconds: time played, state-based goals, side quests. */
   tick(now: number, dt: number) {
     this.refreshSettlements(now);
+    this.refreshTargets(25);
     for (const p of this.game.players.values()) {
       if (p.wild) continue;
       const st = this.of(p);

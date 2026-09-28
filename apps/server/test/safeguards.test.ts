@@ -1,6 +1,6 @@
 // Runaway loops are capped (docs/specs/safeguards.md).
 import { afterAll, describe, expect, it } from 'vitest';
-import { cheb, BUILDINGS_PER_KING, HOUSE_POP, HOUSES_PER_KING, KING_POP, PLAYER_PIECE_CAP, RUIN_LIFETIME_MS, type Building } from '@owc/shared';
+import { cheb, BUILDINGS_PER_KING, PLAYER_PIECE_CAP, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, RUIN_LIFETIME_MS, type Building } from '@owc/shared';
 import { Game, type PlayerRec } from '../src/game.ts';
 import { findPath } from '@owc/rules';
 
@@ -14,14 +14,24 @@ let nextB = 1_000_000;
 const house = (owner: string, x: number, y: number): Building => ({ id: nextB++, owner, type: 'house', x, y, size: 1, hp: 100, built: 1, prod: 0 });
 
 describe('safeguards', () => {
-  it('population: 16 per king plus 6 per house, at most 3 houses per king', () => {
+  it('population is by piece: pawns from houses, capped per king; knights from stables', () => {
     const p = join('Capper');
     const k = game.kingsOf(p.id)[0];
-    expect(game.popCap(p.id)).toBe(2 * KING_POP);
+    const kings = game.kingsOf(p.id).length;
+    const base = game.popCaps(p.id);
+    expect(base.P).toBe(kings * POP_PAWNS_PER_KING + kings * game.chronicle.popPerKing(p));
     for (let i = 0; i < 8; i++) game.world.addBuilding(house(p.id, k.x - 9 + i * 2, k.y - 9));
-    // Two kings near each other: each counts at most 3 houses.
-    expect(game.popCap(p.id)).toBeLessThanOrEqual(2 * (KING_POP + HOUSE_POP * HOUSES_PER_KING));
+    // Each king counts at most POP_HOUSES_COUNTED houses.
+    expect(game.popCaps(p.id).P - base.P).toBeLessThanOrEqual(kings * POP_PAWNS_PER_HOUSE * POP_HOUSES_COUNTED);
+    expect(game.popCaps(p.id).P).toBeGreaterThan(base.P);
+    // A stable makes room for knights, and only knights.
+    const n0 = game.popCaps(p.id).N;
+    game.world.addBuilding({ ...house(p.id, k.x + 5, k.y + 5), type: 'stable', size: 2 });
+    const after = game.popCaps(p.id);
+    expect(after.N).toBeGreaterThanOrEqual(n0 + POP_PER_BUILDING.N!.n);
+    expect(after.B).toBe(base.B);
     expect(game.popCap(p.id)).toBeLessThanOrEqual(PLAYER_PIECE_CAP);
+    expect(game.selfPlayer(p).pop?.N?.[1]).toBe(after.N);
   });
 
   it('a king can hold a limited number of buildings', () => {

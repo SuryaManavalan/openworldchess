@@ -127,14 +127,26 @@ Pieces captured during the battle are **gone for good** (they die).
 
 **What the attacked side sees:** cooldowns show as a shield icon with a timer over the settlement or troop.
 
-## 9. Spectating (Wizard101 style)
+## 9. Raids on the wilds: a pawn commands
+
+As built on 2026-09-28. Code: `Game.orderAttack`, `Game.orderMove` (`commander`), `Battles.start` and `Battles.finish`.
+
+Nobody should have to march a king out of its city to clear a camp. **Any troop with at least one pawn can attack a wild camp**, without a king:
+- **The commander:** the troop's pawn nearest the camp (and not recovering from a battle) is named its **commander** and fights as the king, for this battle only. It is shown as a gold, ethereal king around the pawn, titled "Commander" (the same ghost-king art as a promoted pawn, in gold).
+- **Beyond reach:** a raid may march past your kings' reach, since it's going to fight, not to settle.
+- **The set** is picked around the commander exactly as around a king (§4).
+- **Losing:** checkmating the commander wins the battle as usual. If the raid loses, the commander (a pawn) falls, and that's the only extra loss: the troop's reserves aren't converted, as they would be if a king fell, and they walk home.
+- **Winning** pays like any camp victory (rating, renown, loot).
+- **Rules that stay:** attacking another **empire** still needs a king in the troop, and a troop with a king is always led by its king.
+
+## 10. Spectating (Wizard101 style)
 
 - From the world, anyone sees the arena dome with the live game playing out: pieces move, with the capture animations.
 - Clicking the dome opens a **spectator view**: the full board, both clocks, the move list and both players' names and ratings. Spectators can send emotes.
 - Spectators can't enter the arena squares, can't join, and can't attack either side while the battle is running (both sides are "in battle" and not valid targets).
 - Nearby pieces idle and gather slightly toward the dome, so a battle draws a crowd on its own.
 
-## 10. Data
+## 11. Data
 
 A battle record is stored at the end, transactionally:
 

@@ -143,6 +143,9 @@ importers:
       '@owc/shared':
         specifier: workspace:*
         version: link:../shared
+      '@owc/worldgen':
+        specifier: workspace:*
+        version: link:../worldgen
 
   packages/engine:
     dependencies:

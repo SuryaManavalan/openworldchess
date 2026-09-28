@@ -4,11 +4,14 @@ import {
   AI_TAKEOVER_MS, CANCEL_COOLDOWN_MS, CANCEL_PROTECT_MS, FRESH_ACCOUNT_MS, COUNTDOWN_FIELD_MS, COUNTDOWN_SIEGE_MS, MIN_BATTLE_COOLDOWN_MS, REACH, FACING_DELTA,
   RENOWN, cheb, distToRect, key, type BattlePublic, type BattleSummary, type BuildingType, type Facing, type Piece, type PieceKind,
 } from '@owc/shared';
-import { assemble, BattleGame, glicko2, headingOf, pickSet, regenMs, type Color } from '@owc/rules';
+import { assemble, BattleGame, glicko1, headingOf, pickSet, rdAfter, regenMs, type Color } from '@owc/rules';
 import type { Game } from './game.ts';
 import { ChessAI } from '@owc/engine';
 
 interface Side { player: string; kingId: number; ids: number[] }
+
+/** A wild camp's rating deviation as an opponent: settled, like a calibrated bot. */
+const CAMP_RD = 80;
 
 export interface BattleRec {
   pub: BattlePublic;
@@ -188,7 +191,11 @@ export class Battles {
     const dReach = walled ? 14 : REACH;
     const wc = w.piecesNear(wk.x, wk.y, REACH).filter((p) => eligible(p, r.white.player, wk) && (p.kind !== 'K' || p.id === wk.id));
     const bc = w.piecesNear(bk.x, bk.y, dReach).filter((p) => eligible(p, r.black.player, bk, dReach) && (p.kind !== 'K' || p.id === bk.id));
-    const ws = pickSet(wk.id, wc, r.pub.cx, r.pub.cy).set, bs = pickSet(bk.id, bc, r.pub.cx, r.pub.cy).set;
+    // A raid's commander (battle.md §9) is a pawn that fights as the king, for this battle only.
+    const asKing = (k: Piece) => (p: Piece) => (p.id === k.id && p.kind !== 'K' ? { ...p, kind: 'K' as const } : p);
+    const ws = pickSet(wk.id, wc.map(asKing(wk)), r.pub.cx, r.pub.cy).set, bs = pickSet(bk.id, bc.map(asKing(bk)), r.pub.cx, r.pub.cy).set;
+    const commanders = [wk, bk].filter((k) => k.kind !== 'K').map((k) => k.id);
+    if (commanders.length) r.pub.commanders = commanders;
     const { fen, pieceMap } = assemble(ws, bs);
     r.white.ids = ws.map((p) => p.id);
     r.black.ids = bs.map((p) => p.id);
@@ -371,8 +378,11 @@ export class Battles {
       if (loserKing && !spared) { summary.killed.push(loserKing.id); g.removePiece(loserKing.id); }
       if (loserKing && spared) {
         loserKing.cooldownUntil = now + 10 * 60_000; loserKing.protectedUntil = now + 10 * 60_000; w.touch(loserKing);
-        g.onAlert(lose.player, { kind: 'info', text: 'Your king retreats, wounded. Rest your army and try again', at: kingAt });
+        g.onAlert(lose.player, { kind: 'info', text: `Your ${loserKing.kind === 'K' ? 'king' : 'commander'} retreats, wounded. Rest your army and try again`, at: kingAt });
       }
+      // A raid's commander was only a pawn (battle.md §9): losing it costs nothing more. Nobody
+      // near it changes hands, and the raiders walk home.
+      const commanderLost = !!loserKing && loserKing.kind !== 'K';
       const loserSurvivors = lose.ids.filter((id) => survivors.has(id) && id !== lose.kingId);
       // Reserves: the loser's other pieces that were within the fallen king's reach.
       const reserves = w.piecesNear(kingAt[0], kingAt[1], REACH).filter((p) => p.owner === lose.player && p.state !== 'battle' && !loserSurvivors.includes(p.id));
@@ -385,7 +395,7 @@ export class Battles {
         if (p.kit || fresh) { summary.killed.push(p.id); g.removePiece(p.id); return; }
         g.setOwner(p, win.player); summary.converted.push(p.id);
       };
-      if (!spared) for (const p of reserves) convert(p);
+      if (!spared && !commanderLost) for (const p of reserves) convert(p);
       if (emperor) {
         for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) convert(p); }
       } else {
@@ -444,19 +454,28 @@ export class Battles {
         summary.cooldownMs = Math.max(summary.cooldownMs, cd);
       }
     }
-    // Rating: only when humans (or bots, who are players) made most of the moves.
+    // Ratings (elo.md §1): Glicko-1, as chess.com rates games. Every battle a person or a bot
+    // mostly played themselves counts, against players, bots and the wilds alike. A camp is
+    // an opponent at its rating (set by its land); the camp itself doesn't change.
     const wm = r.moveBy.white, bm = r.moveBy.black;
     const humanShare = (m: { human: number; ai: number }) => (m.human + m.ai ? m.human / (m.human + m.ai) : 1);
-    summary.rated = gm.moves.length >= 2 && humanShare(wm) >= 0.75 && humanShare(bm) >= 0.75;
-    if (summary.rated) {
-      const a = g.players.get(r.white.player), b = g.players.get(r.black.player);
-      if (a && b) {
-        const sa = result === 'white' ? 1 : result === 'black' ? 0 : 0.5;
-        const na = glicko2(a, b, sa as 0 | 0.5 | 1), nb = glicko2(b, a, (1 - sa) as 0 | 0.5 | 1);
-        summary.ratingChange = { [a.id]: Math.round(na.rating - a.rating), [b.id]: Math.round(nb.rating - b.rating) };
-        Object.assign(a, na); Object.assign(b, nb);
-        g.onPlayers();
+    const a = g.players.get(r.white.player), b = g.players.get(r.black.player);
+    const counts = (pl: typeof a, m: { human: number; ai: number }) => !!pl && (!!pl.wild || humanShare(m) >= 0.75);
+    summary.rated = gm.moves.length >= 2 && !!a && !!b && counts(a, wm) && counts(b, bm) && !(a.wild && b.wild);
+    if (summary.rated && a && b) {
+      const sa = (result === 'white' ? 1 : result === 'black' ? 0 : 0.5) as 0 | 0.5 | 1;
+      const days = (pl: NonNullable<typeof a>) => (pl.ratedAt ? (now - pl.ratedAt) / 86_400_000 : 0);
+      // Before the game, the deviation grows back for the time away (a return after months moves fast again).
+      const before = (pl: NonNullable<typeof a>) => ({ rating: pl.rating, rd: pl.wild ? CAMP_RD : rdAfter(pl.rd, days(pl)) });
+      const ra = before(a), rb = before(b);
+      summary.ratingChange = {};
+      for (const [pl, me, opp, s] of [[a, ra, rb, sa], [b, rb, ra, (1 - sa) as 0 | 0.5 | 1]] as const) {
+        if (pl.wild) continue;
+        const n = glicko1(me, opp, s);
+        summary.ratingChange[pl.id] = Math.round(n.rating - pl.rating);
+        pl.rating = n.rating; pl.rd = n.rd; pl.ratedAt = now;
       }
+      g.onPlayers();
     }
     if (process.env.LOG_BATTLES) console.log(`battle ${r.pub.id} over: ${result} by ${gm.termination} after ${gm.moves.length} plies; converted ${summary.converted.length}`);
     this.sync(r);

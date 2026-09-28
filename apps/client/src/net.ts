@@ -50,6 +50,7 @@ export const commands = {
     if (err) useUI.getState().toast(err, 'error');
     return err;
   },
+  popBubble(buildingId: number, i: number) { conn.send({ t: 'bubble.pop', buildingId, i }); },
   pause(buildingId: number, paused: boolean) { conn.send({ t: 'building.pause', buildingId, paused }); },
   palaceMode(buildingId: number, mode: 'alt' | 'K' | 'Q') { conn.send({ t: 'palace.mode', buildingId, mode }); },
   battleMove(battleId: number, uci: string) { conn.send({ t: 'battle.move', battleId, uci }); },

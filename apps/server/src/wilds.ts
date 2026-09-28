@@ -23,6 +23,9 @@ import { randomBytes } from 'node:crypto';
 import type { Game, PlayerRec } from './game.ts';
 
 /** One potential camp per cell of this many squares. */
+/** How much stronger than their land rarer factions play (elo.md §4). */
+const RARITY_ELO: Record<string, number> = { common: -100, uncommon: 0, rare: 150, legendary: 300 };
+
 export const CAMP_CELL = 56;
 /** Share of cells with a camp when players first arrive, rising to the most after CELL_FILL_MS. */
 const CELL_CHANCE = 0.6;
@@ -70,7 +73,7 @@ export interface CampInfo {
   quarryFor?: string;
 }
 
-export interface Site { faction: Faction; x: number; y: number; cell: string; biome: string; roll: number }
+export interface Site { faction: Faction; x: number; y: number; cell: string; biome: string; roll: number; /** The land's rating when the faction was chosen. */ elo?: number }
 
 /** Where a camp's creatures wander from home (squares). */
 const ROAM: Record<Faction['temper'], number> = { herd: 14, lair: 7, horde: 16 };
@@ -108,7 +111,12 @@ export class Wilds {
   /** Which faction would live at a grid cell's site, and where its camp stands. */
   site(i: number, j: number): Site | null {
     const cell = `${i},${j}`;
-    if (this.sites.has(cell)) return this.sites.get(cell)!;
+    if (this.sites.has(cell)) {
+      const s = this.sites.get(cell)!;
+      // The land's rating follows the players on it (elo.md §3): when it has moved a lot,
+      // choose again, so strong regions grow rarer, tougher factions and gentle ones calm down.
+      if (!s || s.elo == null || Math.abs(this.w.elo(s.x, s.y) - s.elo) <= 100) return s;
+    }
     const s = this.computeSite(i, j);
     if (this.sites.size > 50_000) this.sites.clear();
     this.sites.set(cell, s);
@@ -165,7 +173,7 @@ export class Wilds {
       for (let k = 0; k < 12; k++) {
         const a = (k / 12 + hash01(seed, i, j, 701)) * Math.PI * 2;
         const x = Math.round(anchor[0] + Math.cos(a) * d), y = Math.round(anchor[1] + Math.sin(a) * d);
-        if (ok(x, y)) return { faction, x, y, cell: `${i},${j}`, biome, roll };
+        if (ok(x, y)) return { faction, x, y, cell: `${i},${j}`, biome, roll, elo };
       }
     return null;
   }
@@ -285,7 +293,7 @@ export class Wilds {
     const roster = rosterOf(size ?? 3 + Math.floor(s.roll * 5) % 3 + this.strengthBonus(strength));
     const rec: PlayerRec = {
       id, token: randomBytes(16).toString('hex'), name: f.name, color: f.art.accent, emblem: 0,
-      rating: this.ratingFor(areaElo, roster.length), rd: 80, vol: 0.06, emperorId: null, shieldUntil: 0, home: [s.x, s.y],
+      rating: this.ratingFor(areaElo, roster.length, f.id), rd: 80, vol: 0.06, emperorId: null, shieldUntil: 0, home: [s.x, s.y],
       isBot: true, createdAt: now, lastSeen: now, online: false,
       wild: { faction: f.id, cell: s.cell, x: s.x, y: s.y, buildingId: 0, bornAt: now, grewAt: now, lastNear: now, areaElo, awake: false, roster, lastViewed: viewed ? now : 0 },
     };
@@ -326,6 +334,7 @@ export class Wilds {
   /** Someone is looking: put the camp's building and pieces into the world. */
   private wake(c: PlayerRec): boolean {
     const w = this.w, info = c.wild!, f = FACTIONS[info.faction];
+    this.rerate(c, info.roster?.length);
     // The spot may have been built on while it slept: look a little way around, or give up.
     if (!this.spotFree(info.x, info.y)) {
       let moved = false;
@@ -390,8 +399,21 @@ export class Wilds {
   }
 
   /** A camp starts below the area's rating and reaches it as it fills out. */
-  ratingFor(areaElo: number, size: number) {
-    return Math.max(400, Math.round(areaElo - 320 * (1 - Math.min(16, size) / 16)));
+  /** Bring a camp's rating in line with its land now (the land follows the players around it). */
+  rerate(c: PlayerRec, size?: number) {
+    const info = c.wild!;
+    info.areaElo = Math.round(this.w.elo(info.x, info.y));
+    const n = size ?? (info.awake ? this.piecesOf(c).length : info.roster?.length ?? 2);
+    c.rating = this.ratingFor(info.areaElo, n, info.faction);
+  }
+
+  /**
+   * A camp's rating (elo.md §4): the land's rating where it stands (which follows the
+   * players around it), a step up for rarer factions, less while the band is small.
+   */
+  ratingFor(areaElo: number, size: number, faction?: string) {
+    const rare = faction ? RARITY_ELO[FACTIONS[faction]?.rarity ?? 'common'] : 0;
+    return Math.max(400, Math.round(areaElo + rare - 320 * (1 - Math.min(16, size) / 16)));
   }
 
   /** How big a camp may grow: players building nearby feed it, and strong players draw bigger bands (docs/specs/wilds.md §3). */
@@ -423,7 +445,7 @@ export class Wilds {
     if (!next) return;
     info.grewAt = now;
     if (info.awake ? this.addPiece(c, next) : (info.roster = [...kinds, next])) {
-      c.rating = this.ratingFor(info.areaElo, kinds.length + 1);
+      this.rerate(c, kinds.length + 1);
       if (info.awake) this.dirty = true;
     }
   }

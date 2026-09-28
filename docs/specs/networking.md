@@ -99,7 +99,7 @@ pieces(id, owner_id, type, x, y, facing, troop_id, city_id, state, promoted_from
 troops(id, owner_id, king_id, formation, path, cooldown_until, state)
 buildings(id, owner_id, type, x, y, hp, progress, state, palace_mode, cooldown_until)   -- no cities table: settlements are derived
 chunk_changes(cx, cy, data jsonb, updated_at)
-battles(id, kind, …, pgn, result, …)            -- see battle.md §10
+battles(id, kind, …, pgn, result, …)            -- see battle.md §11
 events(id, player_id, kind, data jsonb, at)     -- feeds "While you were away"
 ```
 

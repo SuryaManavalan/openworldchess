@@ -1,6 +1,6 @@
 // Life and juice (visuals.md): wind, particles, ripples, birds that react to
 // troops, water glints, day and night with lit windows, and the conversion wave.
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Text } from 'pixi.js';
 import type { PieceKind } from '@owc/shared';
 import type { MoveEvent } from '@owc/client-core';
 import type { Scene } from './scene.ts';
@@ -16,6 +16,8 @@ interface Ring { x: number; y: number; t0: number; dur: number; color: number; r
 /** A bird circles its roost slowly; startled, it flies straight off and fades away. */
 interface Bird { x: number; y: number; rx: number; ry: number; ang: number; rad: number; speed: number; flap: number; born: number; leave?: { vx: number; vy: number; t: number } }
 interface Scheduled { at: number; run: () => void }
+/** Words that float up and fade (a popped bubble's time saved). */
+interface Floater { t: Text; x: number; y: number; t0: number; dur: number; rise: number; big: number }
 
 /** Day length: 40 real minutes, the same for everyone (visuals.md §4). */
 const DAY_MS = 40 * 60_000;
@@ -28,6 +30,9 @@ export class Fx {
   private lights = new Graphics();
   private particles: Particle[] = [];
   private rings: Ring[] = [];
+  /** Above the night and the bubbles: floating words. */
+  top = new Container();
+  private floaters: Floater[] = [];
   private birds: Bird[] = [];
   private queue: Scheduled[] = [];
   private scene: Scene;
@@ -64,6 +69,36 @@ export class Fx {
       const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 2.5;
       this.particles.push({ x: (x + 0.5) * S, y: (y + 0.5) * S, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1, life: 0, max: 600 + Math.random() * 500, color, size: 2 + Math.random() * 3, add: true });
     }
+  }
+
+  /** One tiny glint at a world point (pixels), for gold bubbles. */
+  glint(wx: number, wy: number) {
+    this.particles.push({ x: wx, y: wy, vx: (Math.random() - 0.5) * 0.4, vy: -0.4 - Math.random() * 0.4, life: 0, max: 500 + Math.random() * 300, color: 0xfff2b0, size: 1.5 + Math.random() * 2, add: true });
+  }
+
+  /**
+   * A popped hurry bubble (economy.md §7): a flash ring, droplets flung out, and the
+   * time it saved floating up. Keep popping and the combo grows, with the words.
+   */
+  bubblePop(wx: number, wy: number, r: number, gold: boolean, combo: number, secs: number, full = false) {
+    const reduce = useUI.getState().settings.reduceMotion;
+    const n = (gold ? 28 : 12) + Math.min(12, combo);
+    const colors = full ? (gold ? [0xd8ccaa, 0xb9a57a, 0xe8e2d0] : [0xd6d6dc, 0xaeb5bd, 0xc9c3cf]) : gold ? [0xffd76a, 0xfff2b0, 0xffb830, 0xffffff] : [0xffffff, 0xbfe8ff, 0xffc6f0, 0xfff3a6, 0xc7b4ff];
+    for (let i = 0; i < (reduce ? Math.ceil(n / 3) : n); i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4, sp = (gold ? 2.6 : 1.8) + Math.random() * 2.2;
+      this.particles.push({ x: wx + Math.cos(a) * r * 0.8, y: wy + Math.sin(a) * r * 0.8, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 0.8, life: 0, max: 380 + Math.random() * 320, color: colors[i % colors.length], size: 2 + Math.random() * (gold ? 3.5 : 2.5), add: true });
+    }
+    this.rings.push({ x: wx, y: wy, t0: performance.now(), dur: gold ? 700 : 360, color: gold ? 0xffd76a : 0xe8f6ff, r: (r / S) * (gold ? 2.6 : 1.5) });
+    if (gold) this.rings.push({ x: wx, y: wy, t0: performance.now() + 90, dur: 800, color: 0xfff2b0, r: (r / S) * 4 });
+    // Every fifth pop in a row, a flourish.
+    if (combo >= 5 && combo % 5 === 0) this.rings.push({ x: wx, y: wy, t0: performance.now(), dur: 900, color: 0xc7b4ff, r: (r / S) * 5 });
+    // Waiting for room (full): the time still banks, and the words say why nothing appears.
+    const words = full ? (secs > 0 ? `−${secs}s · no room` : 'No room') : `${gold ? '★ ' : ''}${secs > 0 ? `−${secs}s` : 'Hurry!'}${combo >= 3 ? `  ×${combo}` : ''}`;
+    const t = new Text({ text: words, style: { fontFamily: 'Nunito, system-ui', fontWeight: '900', fontSize: gold && !full ? 30 : 24, fill: full ? 0xc9c6c0 : gold ? 0xffd76a : combo >= 10 ? 0xffc6f0 : combo >= 5 ? 0xbfe8ff : 0xffffff, stroke: { color: 0x23211f, width: 6 } } });
+    t.anchor.set(0.5, 1);
+    this.top.addChild(t);
+    this.floaters.push({ t, x: wx, y: wy - r, t0: performance.now(), dur: gold ? 1400 : 950, rise: gold ? 70 : 46, big: 1 + Math.min(0.6, combo * 0.04) });
+    if (this.floaters.length > 24) this.floaters.shift()!.t.destroy();
   }
 
   ripple(x: number, y: number, color = 0xffffff, r = 1) { this.rings.push({ x: (x + 0.5) * S, y: (y + 0.5) * S, t0: performance.now(), dur: 650, color, r }); }
@@ -138,6 +173,17 @@ export class Fx {
       if (k >= 1) { this.rings.splice(i, 1); continue; }
       if (k < 0) continue;
       g.circle(r.x, r.y, S * r.r * (0.3 + 0.9 * k)).stroke({ width: (r.r > 4 ? 14 : 6) * (1 - k) + 1, color: r.color, alpha: (1 - k) * 0.9 });
+    }
+    // floating words: pop in, rise, fade; always upright and readable at any zoom
+    const z = this.scene.cam.zoom, th = this.scene.theta;
+    for (let i = this.floaters.length - 1; i >= 0; i--) {
+      const f = this.floaters[i], k = (now - f.t0) / f.dur;
+      if (k >= 1) { f.t.destroy(); this.floaters.splice(i, 1); continue; }
+      const rise = f.rise * (1 - (1 - k) ** 3) / Math.max(0.5, z);
+      f.t.position.set(f.x - Math.sin(th) * rise, f.y - Math.cos(th) * rise);
+      f.t.rotation = -th;
+      f.t.scale.set((0.8 / Math.max(0.5, z)) * f.big * (k < 0.15 ? 0.6 + (k / 0.15) * 0.5 : 1.1 - Math.min(0.1, (k - 0.15))));
+      f.t.alpha = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
     }
     this.updateSmoke(now);
     this.updateBirds(now, dt);

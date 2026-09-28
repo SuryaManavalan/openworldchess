@@ -2,6 +2,11 @@
   "name": "@owc/client-core",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@owc/shared": "workspace:*" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@owc/shared": "workspace:*",
+    "@owc/worldgen": "workspace:*"
+  }
 }

@@ -39,36 +39,48 @@ const K = 1 << 20;
 const pk = (x: number, y: number) => (x + K / 2) * K + (y + K / 2);
 const upk = (k: number): [number, number] => [Math.floor(k / K) - K / 2, (k % K) - K / 2];
 
+export interface PathOptions {
+  /** Only orthogonal steps (pawns and elephants can't step diagonally). */
+  orth?: boolean;
+  /** Extra cost of entering (x, y), e.g. a tree an elephant must knock down first. */
+  cost?: (x: number, y: number) => number;
+  /** Stop at this time (Date.now()) and return the best partial path: one big search mustn't blow a turn's budget. */
+  deadline?: number;
+}
+
 /**
  * Shortest king-walk path from (sx, sy) to (tx, ty), or to the reachable
  * square closest to it. Returns the squares after the start, in order.
  * `free` should ignore pieces (they move); it's about terrain and buildings.
  */
-export function findPath(sx: number, sy: number, tx: number, ty: number, free: FreeFn, maxExpand = 6000): [number, number][] {
+export function findPath(sx: number, sy: number, tx: number, ty: number, free: FreeFn, maxExpand = 6000, opts: PathOptions = {}): [number, number][] {
+  const dirs = opts.orth ? DIRS.slice(0, 4) : DIRS;
+  const heur = opts.orth ? (ax: number, ay: number, bx: number, by: number) => Math.abs(ax - bx) + Math.abs(ay - by) : octile;
   if (sx === tx && sy === ty) return [];
   const start = pk(sx, sy);
   const g = new Map<number, number>([[start, 0]]);
   const from = new Map<number, number>();
   const heap = new Heap();
-  heap.push(start, octile(sx, sy, tx, ty));
-  let bestK = start, bestH = octile(sx, sy, tx, ty);
+  heap.push(start, heur(sx, sy, tx, ty));
+  let bestK = start, bestH = heur(sx, sy, tx, ty);
   const goal = pk(tx, ty);
   for (let n = 0; heap.size && n < maxExpand; n++) {
+    if (opts.deadline && (n & 1023) === 1023 && Date.now() > opts.deadline) break;
     const k = heap.pop();
     if (k === goal) { bestK = k; break; }
     const [x, y] = upk(k);
-    const h = octile(x, y, tx, ty);
+    const h = heur(x, y, tx, ty);
     if (h < bestH) { bestH = h; bestK = k; }
     const gk = g.get(k)!;
-    for (const [dx, dy, c] of DIRS) {
+    for (const [dx, dy, c] of dirs) {
       const nx = x + dx, ny = y + dy;
       if (!free(nx, ny)) continue;
       // no cutting corners diagonally between two blocked squares
       if (dx && dy && !free(x + dx, y) && !free(x, y + dy)) continue;
-      const nk = pk(nx, ny), ng = gk + c;
+      const nk = pk(nx, ny), ng = gk + c + (opts.cost ? opts.cost(nx, ny) : 0);
       if (ng < (g.get(nk) ?? Infinity)) {
         g.set(nk, ng); from.set(nk, k);
-        heap.push(nk, ng + octile(nx, ny, tx, ty) * 1.05);
+        heap.push(nk, ng + heur(nx, ny, tx, ty) * 1.05);
       }
     }
   }
@@ -84,9 +96,10 @@ const CELL = 8;
  * which can see around lakes and mountain ranges far beyond a fine search, then
  * stitch fine paths between the coarse waypoints.
  */
-export function findPathLong(sx: number, sy: number, tx: number, ty: number, free: FreeFn, maxCoarse = 40000, budgetMs = 250): [number, number][] {
+export function findPathLong(sx: number, sy: number, tx: number, ty: number, free: FreeFn, maxCoarse = 40000, budgetMs = 250, opts: PathOptions = {}): [number, number][] {
   const deadline = Date.now() + budgetMs;
-  if (Math.max(Math.abs(tx - sx), Math.abs(ty - sy)) <= 48) return findPath(sx, sy, tx, ty, free, 20000);
+  opts = { ...opts, deadline };
+  if (Math.max(Math.abs(tx - sx), Math.abs(ty - sy)) <= 48) return findPath(sx, sy, tx, ty, free, 20000, opts);
   // A cell is passable if a few of its squares can be walked.
   // Permissive on purpose: narrow fords and passes must still show up at this scale.
   const cellOk = (cx: number, cy: number) => {
@@ -102,7 +115,7 @@ export function findPathLong(sx: number, sy: number, tx: number, ty: number, fre
   // Past the time budget we return what we have; the caller plans the next leg later.
   for (let attempt = 0; attempt < 30 && Date.now() < deadline; attempt++) {
     const csx = Math.floor(px / CELL), csy = Math.floor(py / CELL);
-    const coarse = findPath(csx, csy, ctx, cty, (x, y) => (x === csx && y === csy) || (x === ctx && y === cty) || (!blocked.has(`${x},${y}`) && cellOk(x, y)), maxCoarse);
+    const coarse = findPath(csx, csy, ctx, cty, (x, y) => (x === csx && y === csy) || (x === ctx && y === cty) || (!blocked.has(`${x},${y}`) && cellOk(x, y)), maxCoarse, { deadline });
     const way: [number, number, number, number][] = [];
     for (let i = 2; i < coarse.length; i += 2) {
       const [cx, cy] = coarse[i];
@@ -115,7 +128,7 @@ export function findPathLong(sx: number, sy: number, tx: number, ty: number, fre
     way.push([tx, ty, ctx, cty]);
     let failed = false;
     for (const [wx, wy, cx, cy] of way) {
-      const leg = findPath(px, py, wx, wy, free, 12000);
+      const leg = findPath(px, py, wx, wy, free, 12000, opts);
       const end = leg.at(-1);
       if (!end || Math.max(Math.abs(end[0] - wx), Math.abs(end[1] - wy)) > 2) {
         if (leg.length) { out.push(...leg); [px, py] = leg[leg.length - 1]; }

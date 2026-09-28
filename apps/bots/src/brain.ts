@@ -6,7 +6,7 @@ import { Chess } from 'chess.js';
 import { Connection } from '@owc/client-core';
 import { BUILDINGS, CHAPTERS, REACH, setWorth, WORK_AREA, cheb, distToRect, key, type BattlePublic, type BuildingType, type NodeKind, type Piece } from '@owc/shared';
 import { expected } from '@owc/rules';
-import { buildable, eloAt, terrainAt } from '@owc/worldgen';
+import { buildable, terrainAt } from '@owc/worldgen';
 import type { ChessAI } from '@owc/engine';
 
 export type Style = 'builder' | 'raider' | 'expander' | 'turtle' | 'opportunist';
@@ -290,7 +290,7 @@ export class Bot {
       const a = Math.random() * Math.PI * 2, d = 14 + Math.random() * 12;
       const x = Math.round(mover.x + Math.cos(a) * d), y = Math.round(mover.y + Math.sin(a) * d);
       if (!buildable(terrainAt(m.seed, x, y))) continue;
-      const score = eloAt(m.seed, x, y) / 100 - d / 30 + Math.random();
+      const score = m.land.at(x, y) / 100 - d / 30 + Math.random();
       if (score > bestScore) { bestScore = score; best = [x, y]; }
     }
     if (!best) return null;

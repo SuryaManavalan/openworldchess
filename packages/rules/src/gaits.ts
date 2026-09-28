@@ -87,7 +87,7 @@ const FULL_STEP: Record<PieceKind, number> = { K: 1, P: 1, N: 2, B: 2, R: 3, Q: 
  * step of progress (an obstacle, a pawn that must turn) do we search, with a
  * binary heap and numeric keys.
  */
-export function bestGaitMove(p: GaitState, tx: number, ty: number, free: FreeFn, budget = 240, window = 14): GaitMove | null {
+export function bestGaitMove(p: GaitState, tx: number, ty: number, free: FreeFn, budget = 240, window = 14, accept = 0): GaitMove | null {
   const h0 = dist(p.x, p.y, tx, ty);
   if (h0 === 0) return null;
   const inWindow: FreeFn = (x, y) => Math.abs(x - p.x) <= window && Math.abs(y - p.y) <= window && free(x, y);
@@ -100,6 +100,8 @@ export function bestGaitMove(p: GaitState, tx: number, ty: number, free: FreeFn,
     if (h < gh) { gh = h; greedy = m; }
   }
   if (greedy && h0 - gh >= Math.min(h0, FULL_STEP[p.kind]) - 1e-9) return greedy;
+  // Close enough (a troop marching in column needn't land exactly): take the best single move.
+  if (greedy && gh <= accept && gh < h0) return greedy;
   if (budget <= 0) return greedy && gh < h0 ? greedy : null;
   // Right next to the target and boxed in: waiting beats searching (pawns may still need to turn).
   if (h0 <= 1.5 && p.kind !== 'P') return greedy && gh < h0 ? greedy : null;

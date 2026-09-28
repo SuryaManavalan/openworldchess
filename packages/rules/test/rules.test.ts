@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assemble, BattleGame, bestGaitMove, findPath, gaitMoves, glicko2, newGroup, pickSet, stepGroup, type GroupPiece } from '../src/index.ts';
+import { assemble, BattleGame, bestGaitMove, findPath, gaitMoves, glicko1, glicko2, rdAfter, newGroup, pickSet, stepGroup, type GroupPiece } from '../src/index.ts';
 
 const open = () => true;
 
@@ -43,6 +43,23 @@ describe('pathfinding', () => {
   });
 });
 
+describe('ratings (Glicko-1, as chess.com rates)', () => {
+  const settled = { rating: 1200, rd: 60 };
+  it('a new player moves fast, a settled one slowly', () => {
+    expect(Math.round(glicko1({ rating: 1200, rd: 350 }, settled, 1).rating - 1200)).toBe(175);
+    expect(Math.round(glicko1({ rating: 1200, rd: 60 }, settled, 1).rating - 1200)).toBe(10);
+    expect(Math.round(glicko1({ rating: 1200, rd: 60 }, settled, 0).rating - 1200)).toBe(-10);
+  });
+  it('the deviation shrinks with games and grows back with time away', () => {
+    let me = { rating: 1200, rd: 350 };
+    for (let i = 0; i < 10; i++) me = glicko1(me, settled, 0.5);
+    expect(me.rd).toBeGreaterThan(95); expect(me.rd).toBeLessThan(120);
+    expect(rdAfter(60, 0)).toBe(60);
+    expect(rdAfter(60, 365)).toBeCloseTo(350, 0);
+    expect(rdAfter(60, 30)).toBeGreaterThan(100);
+  });
+});
+
 describe('group movement', () => {
   function simulate(pieces: GroupPiece[], to: [number, number], blocked = (_x: number, _y: number) => false, turns = 200) {
     const occ = new Map(pieces.map((p) => [`${p.x},${p.y}`, p.id]));
@@ -68,6 +85,53 @@ describe('group movement', () => {
     // pawns lead the line, facing the heading (east)
     for (const p of pieces.filter((p) => p.kind === 'P')) { expect(p.x).toBeGreaterThan(king.x - 1); expect(p.facing).toBe(1); }
     expect(t).toBeGreaterThan(25); // no faster than the pawns allow
+  });
+
+  it('a pawn trapped in a pocket backs out and rejoins the troop', () => {
+    // A U-shaped wall around the pawn, open only to the west (away from where the troop is going).
+    const wall = new Set<string>();
+    for (let y = -3; y <= 3; y++) wall.add(`6,${y}`);
+    for (let x = 2; x <= 6; x++) { wall.add(`${x},-3`); wall.add(`${x},3`); }
+    const blocked = (x: number, y: number) => wall.has(`${x},${y}`);
+    const pieces: GroupPiece[] = [
+      { id: 1, kind: 'K', x: 0, y: 5, facing: 1 }, { id: 2, kind: 'P', x: 1, y: 5, facing: 1 },
+      { id: 3, kind: 'P', x: 4, y: 0, facing: 1 }, // inside the pocket, facing the closed end
+    ];
+    const occ = new Map(pieces.map((p) => [`${p.x},${p.y}`, p.id]));
+    const g = newGroup(1, pieces, findPath(0, 5, 24, 5, (x, y) => !blocked(x, y)), [0, 5]);
+    for (let t = 0; t < 300 && !g.done; t++)
+      stepGroup(g, pieces, {
+        free: (p, x, y) => !blocked(x, y) && (!occ.has(`${x},${y}`) || occ.get(`${x},${y}`) === p.id),
+        walkable: (x, y) => !blocked(x, y),
+        route: (p, tx, ty) => findPath(p.x, p.y, tx, ty, (x, y) => !blocked(x, y), 4000, { orth: p.kind === 'P' }),
+      }, (p, m) => { occ.delete(`${p.x},${p.y}`); p.x = m.x; p.y = m.y; p.facing = m.facing; occ.set(`${p.x},${p.y}`, p.id); });
+    expect(g.done).toBe(true);
+    const [king, , trapped] = pieces;
+    expect(king.x).toBeGreaterThan(20);
+    expect(Math.max(Math.abs(trapped.x - king.x), Math.abs(trapped.y - king.y))).toBeLessThanOrEqual(3);
+  });
+
+  it('war elephants knock down trees so the troop can march through a wood', () => {
+    // A solid band of trees across the way: no path around it at all.
+    const trees = new Set<string>();
+    for (let x = 8; x <= 10; x++) for (let y = -30; y <= 30; y++) trees.add(`${x},${y}`);
+    const blocked = (x: number, y: number) => trees.has(`${x},${y}`);
+    const pieces: GroupPiece[] = [{ id: 1, kind: 'K', x: 0, y: 0, facing: 1 }, { id: 2, kind: 'R', x: 1, y: 1, facing: 1 }, { id: 3, kind: 'P', x: 1, y: 0, facing: 1 }];
+    const occ = new Map(pieces.map((p) => [`${p.x},${p.y}`, p.id]));
+    // The troop's road goes through the wood (the elephant will clear it), at a cost per tree.
+    const g = newGroup(1, pieces, findPath(0, 0, 18, 0, () => true, 6000, { cost: (x, y) => (blocked(x, y) ? 8 : 0) }), [0, 0]);
+    let felled = 0;
+    for (let t = 0; t < 400 && !g.done; t++)
+      stepGroup(g, pieces, {
+        free: (p, x, y) => !blocked(x, y) && (!occ.has(`${x},${y}`) || occ.get(`${x},${y}`) === p.id),
+        walkable: (x, y) => !blocked(x, y),
+        tree: (x, y) => trees.has(`${x},${y}`),
+        fell: (p, x, y) => { if (p.kind !== 'R' || !trees.delete(`${x},${y}`)) return false; felled++; return true; },
+      }, (p, m) => { occ.delete(`${p.x},${p.y}`); p.x = m.x; p.y = m.y; p.facing = m.facing; occ.set(`${p.x},${p.y}`, p.id); });
+    expect(g.done).toBe(true);
+    expect(pieces[0].x).toBeGreaterThanOrEqual(16);
+    expect(felled).toBeGreaterThanOrEqual(3);
+    expect(pieces.every((p) => Math.abs(p.x - pieces[0].x) <= 3)).toBe(true);
   });
 
   it('a troop crosses a river at a ford', () => {

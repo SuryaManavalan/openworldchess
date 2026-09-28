@@ -1,8 +1,8 @@
 // The HUD (ux.md §4–5). Phone: information on top, actions in the thumb zone,
 // detail in bottom sheets. Desktop: side panels and hotkeys. Same features.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BUILDINGS, CHAPTERS, PIECE_NAME, REACH, TITLES, cheb, setWorth, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
-import { eloAt, terrainAt } from '@owc/worldgen';
+import { BUILDINGS, CHAPTERS, PIECE_NAME, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, TITLES, cheb, setWorth, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
+import { terrainAt } from '@owc/worldgen';
 import { commands, conn, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
 import { scene, input } from './GameView.tsx';
@@ -68,12 +68,12 @@ function TopBar() {
         <span className="chip" style={{ background: self?.color ?? '#888' }} />
         <b>{self?.name ?? '…'}</b>
         {self?.chronicle && ui.layout !== 'phone' && <span className="badge title" title="Your title in the Chronicle">{TITLES[self.chronicle.title].name}</span>}
-        <span className="muted">{self?.rating ?? ''}</span>
+        <span className="muted" title={self?.provisional ? 'Your rating is still settling: it moves a lot in your first games' : undefined}>{self?.rating ?? ''}{self?.provisional ? '?' : ''}</span>
         {self?.guest && <button className="badge guest" onClick={() => window.dispatchEvent(new Event('owc:signin'))}>{ui.layout === 'phone' ? 'Sign in' : 'Guest · sign in'}</button>}
         {shielded && <span className="badge shield" title="New players can't be attacked for a while"><Icon name="shield" size={13} />{ui.layout === 'phone' ? '' : ' shielded'}</span>}
       </div>
       <div className="stats">
-        <span className="stat" title="Pieces / population cap"><img src={pieceUrl('P', 'light', self?.color ?? '#888', false, self?.civ)} alt="" />{pieces.length}{self?.popCap ? <span className="muted">/{self.popCap}</span> : null}</span>
+        <span className="stat" title={popTitle(self)} onClick={() => ui.layout === 'phone' && ui.toast(popTitle(self), 'info')}><img src={pieceUrl('P', 'light', self?.color ?? '#888', false, self?.civ)} alt="" />{pieces.length}{self?.popCap ? <span className="muted">/{self.popCap}</span> : null}</span>
         <span className="stat kstat" title="Kings"><img src={pieceUrl('K', 'light', self?.color ?? '#888', false, self?.civ)} alt="" />{pieces.filter((p) => p.kind === 'K').length}</span>
         <span className="stat bstat" title="Buildings"><Icon name="house" size={16} />{mirror.myBuildings().filter((b) => b.type !== 'ruin').length}</span>
         <DayClock />
@@ -275,13 +275,29 @@ function BuildList() {
   );
 }
 
+/** Why a building is paused for room, and what makes more (safeguards.md §1). */
+function popFull(type: BuildingType): string {
+  const kind = BUILDINGS[type].produces[0];
+  if (type === 'palace') return 'No room: kings follow your title, and each palace makes room for 1 queen';
+  if (type === 'house') return `No room for more pawns: each king has room for ${POP_PAWNS_PER_KING}, +${POP_PAWNS_PER_HOUSE} per house near it (up to ${POP_HOUSES_COUNTED})`;
+  return `No room for more ${PIECE_NAME[kind].toLowerCase()}s: each ${type} near a king makes room for ${POP_PER_BUILDING[kind]?.n ?? 2}. Build another to raise more`;
+}
+
+/** Pieces and room by kind (safeguards.md §1), for the population readout. */
+const POP_FROM: Record<string, string> = { P: 'houses', N: 'stables', B: 'temples', R: 'barracks', Q: 'palaces' };
+function popTitle(self: typeof mirror.self): string {
+  if (!self?.pop) return 'Pieces / population';
+  return 'Room by piece (each comes from the buildings near your kings)\n' + (['P', 'N', 'B', 'R', 'Q'] as const)
+    .map((k) => { const [have, room] = self.pop![k] ?? [0, 0]; return `${PIECE_NAME[k]}s ${have}/${room} (from ${POP_FROM[k]})`; }).join('\n');
+}
+
 function Details() {
   const ui = useUI();
   const id = ui.hint?.startsWith('building:') ? Number(ui.hint.split(':')[1]) : null;
   const b = id != null ? mirror.buildings.get(id) : undefined;
   if (!b || b.type === 'ruin') return <p className="muted">Tap one of your buildings to see it here.</p>;
   const spec = BUILDINGS[b.type as BuildingType];
-  const why: Record<string, string> = { unanchored: 'No king nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': 'At your population cap. Each king supports 16 pieces, +6 per nearby house (up to 3). More kings raise it', building: 'Under construction', paused: 'Paused by you' };
+  const why: Record<string, string> = { unanchored: 'No king nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': popFull(b.type as BuildingType), building: 'Under construction', paused: 'Paused by you' };
   return (
     <div className="details">
       <h3>{b.type[0].toUpperCase() + b.type.slice(1)}</h3>
@@ -434,7 +450,7 @@ function AttackConfirm() {
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && ui.set({ pendingAttack: null })}>
       <div className="sheet confirm">
         <h3>Attack {a.name}?</h3>
-        <p>{a.siege ? 'A siege: they get 60 seconds to prepare.' : 'A field battle: 15 seconds until it starts.'} Both sides fight with at most one chess set. If your king falls, the pieces with it are lost.</p>
+        <p>{a.raid ? 'A raid: one of your pawns leads as the king for this battle only. If you lose, only that pawn falls; the rest walk home.' : `${a.siege ? 'A siege: they get 60 seconds to prepare.' : 'A field battle: 15 seconds until it starts.'} Both sides fight with at most one chess set. If your king falls, the pieces with it are lost.`}</p>
         <div className="versus"><div><b>You</b><span>{mine.length} pieces · material {val(mine)}</span></div><div className="vs">vs</div><div><b>{a.name}</b><span>~{theirs.length} pieces seen · material {val(theirs)}</span></div></div>
         <div className="row-actions">
           <button className="btn danger" onClick={() => { commands.attack(a.pieceIds, a.targetKingId); if (scene && target) scene.moveTargets.set('attack:' + a.targetKingId, { to: [target.x, target.y], ids: a.pieceIds, attack: true, t0: performance.now() }); ui.set({ pendingAttack: null }); }}><Icon name="swords" size={17} /> Attack</button>
@@ -461,7 +477,7 @@ function Minimap() {
     for (let y = 0; y < size; y += 2) for (let x = 0; x < size; x += 2) {
       const wx = center[0] + (x / size - 0.5) * span, wy = center[1] + (y / size - 0.5) * span;
       if (elo) {
-        const e = eloAt(mirror.seed, wx, wy);
+        const e = mirror.land.at(wx, wy);
         const t = Math.max(0, Math.min(1, (e - 600) / 1800));
         g.fillStyle = `hsl(${210 - t * 200}, 55%, ${45 + t * 5}%)`;
       } else g.fillStyle = col[terrainAt(mirror.seed, Math.round(wx), Math.round(wy))];
@@ -505,7 +521,7 @@ function Minimap() {
         scene?.centerOn(x, y);
       }} />
       <button className={`btn ghost small ${elo ? 'on' : ''}`} onClick={() => setElo(!elo)}>{elo ? 'Terrain' : 'Elo map'}</button>
-      <span className="muted small">Area elo here: {mirror.seed && scene?.ready ? Math.round(eloAt(mirror.seed, scene.cam.x, scene.cam.y)) : '—'}</span>
+      <span className="muted small">Area elo here: {mirror.seed && scene?.ready ? Math.round(mirror.land.at(scene.cam.x, scene.cam.y)) : '—'}</span>
     </div>
   );
 }

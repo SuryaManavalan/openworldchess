@@ -24,6 +24,7 @@
 | [specs/cosmetics.md](specs/cosmetics.md) | Cosmetic civilizations (Dravidian, Roman, Chinese, Egyptian), Crowns, the Stripe purchase flow and its setup. |
 | [specs/tiktok.md](specs/tiktok.md) | Sign in with TikTok, battle clips, posting to TikTok (direct and drafts), webhooks. |
 | [specs/stats.md](specs/stats.md) | The private usage analytics page (/stats.html): what it counts, privacy, storage, access. |
+| [specs/elo.md](specs/elo.md) | Ratings (Glicko-1 like chess.com: what a game is worth by experience), rated wild fights, the emergent land rating and everything that follows it, camp strength. |
 | [specs/campaign.md](specs/campaign.md) | The Chronicle: a 15-hour campaign of chapters, titles, coronations and quests, with a new unlock every 30–60 minutes. (Proposed) |
 | [specs/safeguards.md](specs/safeguards.md) | Runaway loops (piece spam, king breeding, alt farming, server load) and the caps that stop them. |
 | [specs/client.md](specs/client.md) | Screens, rendering layers, HUD, input, performance. |

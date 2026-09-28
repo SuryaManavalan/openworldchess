@@ -2,7 +2,7 @@
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize } from 'node:path';
-import { TICK_HZ, TURN_MS } from '@owc/shared';
+import { CHUNK, TICK_HZ, TURN_MS } from '@owc/shared';
 import { Game } from './game.ts';
 import { Net } from './net.ts';
 import { load, save } from './persist.ts';
@@ -31,6 +31,8 @@ if (process.env.SHIELD_MS) game.shieldMs = Number(process.env.SHIELD_MS);
 if (process.env.GUEST_GRACE_MS) game.guestGraceMs = Number(process.env.GUEST_GRACE_MS);
 if (load(game, DATA)) console.log(`loaded ${game.world.pieces.size} pieces, ${game.players.size} players from ${DATA}`);
 stats.load(join(dirname(DATA), 'stats.json'), game);
+// Shape the land from the empires already living on it (elo.md §3), settled before anyone connects.
+for (let i = 0; i < 8; i++) game.reshapeLand();
 
 // Serve the built client too, so one process can run the whole game.
 const MIME: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
@@ -90,7 +92,6 @@ const runTurn = () => {
   perf.time('net.flushTurn', () => net.flushTurn(game.turnMoves));
   setTimeout(runTurn, Math.max(0, nextTurnAt - Date.now()));
 };
-setTimeout(runTurn, Math.max(0, nextTurnAt - Date.now()));
 
 setInterval(() => {
   const now = Date.now();
@@ -98,7 +99,7 @@ setInterval(() => {
   perf.time('battles.tick', () => game.battles.tick(now));
   if (now - lastEconomy >= 1000) { lastEconomy = now; perf.time('economy', () => game.economy(now)); }
   if (now - lastMine >= MINE_EVERY_MS) { lastMine = now; perf.time('net.sendAllMine', () => net.sendAllMine()); }
-  if (now - lastSelf >= 2500) { lastSelf = now; perf.time('net.sendAllSelf', () => net.sendAllSelf()); }
+  if (now - lastSelf >= 2500) { lastSelf = now; perf.time('net.sendAllSelf', () => net.sendAllSelf()); net.sendAllLand(); }
   if (now - lastFall >= Math.min(30_000, game.guestGraceMs / 2)) { lastFall = now; game.fallOfGuests(now); }
   if (now - lastRoll >= 60_000) { lastRoll = now; perf.roll(now); stats.sample(net.liveCounts().humans); }
   if (now - lastMaintain >= 60_000) {
@@ -114,4 +115,27 @@ const shutdown = () => { save(game, DATA); stats.save(); game.battles.ai.stop();
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
+// Warm up before opening the doors (performance.md): build the terrain, resources and
+// walkability of every area with pieces or buildings, and run the first economy and wilds
+// ticks, so the first seconds after a restart don't hitch with one-off world generation.
+{
+  const t0 = Date.now(), seen = new Set<string>();
+  const warm = (x: number, y: number) => {
+    const cx = Math.floor(x / CHUNK), cy = Math.floor(y / CHUNK);
+    const k = `${cx},${cy}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    game.world.walkable(cx * CHUNK, cy * CHUNK);
+  };
+  for (const p of game.world.pieces.values()) warm(p.x, p.y);
+  for (const b of game.world.buildings.values()) warm(b.x, b.y);
+  game.economy(Date.now());
+  game.wilds.tick(Date.now());
+  // Every player's own view once (quest markers, camps nearby): the first one after a start fills shared caches.
+  for (const p of game.players.values()) if (!p.wild) game.selfPlayer(p);
+  console.log(`warmed ${seen.size} chunks in ${Date.now() - t0}ms`);
+  // The turn clock starts now, not before the warm-up (or the first turn counts as seconds late).
+  nextTurnAt = Date.now() + TURN;
+  setTimeout(runTurn, TURN);
+}
 server.listen(PORT, () => console.log(`openworldchess server on :${PORT} (seed ${SEED}, speed ×${SPEED})`));

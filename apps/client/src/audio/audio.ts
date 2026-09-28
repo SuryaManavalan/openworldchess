@@ -29,6 +29,9 @@ class Audio {
   private drone!: Tone.PolySynth;
   private orn!: Tone.PluckSynth;
   private chirp!: Tone.Synth;
+  private popS!: Tone.Synth;
+  private rubS!: Tone.Synth;
+  private lastPop = 0;
   private townBellS!: Tone.PolySynth;
   private townBellPan!: Tone.Panner;
   private wind!: Tone.Noise;
@@ -132,6 +135,9 @@ class Audio {
     // Town bell: a big, low, long-ringing bell (dawn and dusk).
     this.townBellPan = new Tone.Panner(0).connect(this.fxVol);
     this.townBellS = new Tone.PolySynth(Tone.FMSynth, { harmonicity: 2.01, modulationIndex: 14, oscillator: { type: 'sine' }, envelope: { attack: 0.002, decay: 4, sustain: 0, release: 3 }, modulationEnvelope: { attack: 0.002, decay: 1.2, sustain: 0.2, release: 2 }, volume: -12 }).connect(this.townBellPan);
+    // The off-key layer for a full building's bubbles: a softer square a semitone above the pop.
+    this.rubS = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.001, decay: 0.09, sustain: 0, release: 0.04 }, volume: -17 }).connect(this.uiVol);
+    this.popS = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.07, sustain: 0, release: 0.03 }, volume: -3 }).connect(this.uiVol);
     this.chirp = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.05 }, volume: -22 }).connect(this.ambVol);
     setInterval(() => { if (Math.random() < 0.35) this.birds(); }, 3500);
   }
@@ -222,6 +228,33 @@ class Audio {
     const chord = win ? ['D4', 'F#4', 'A4', 'D5'] : ['D3', 'F3', 'A3'];
     this.choir.triggerAttackRelease(chord, '1m', now + 0.1);
   }
+  /**
+   * A hurry bubble pops (economy.md §7): a quick falling blip and a snap, a step higher
+   * up the scale with each pop in a combo. Gold ones ring a run of bells; every fifth
+   * pop in a row lands a chord. When the building is waiting for room (full), the same
+   * pop rubs against a semitone and gold rings a diminished run: still a treat, but off-key.
+   */
+  bubble(combo: number, gold: boolean, full = false) {
+    if (!this.ready) return;
+    const t = Math.max(Tone.now(), this.lastPop + 0.02);
+    this.lastPop = t;
+    const f = Tone.Frequency(note(Math.min(combo - 1, 21), 4)).toFrequency();
+    this.popS.triggerAttackRelease(f * 1.9, 0.05, t);
+    this.popS.frequency.exponentialRampToValueAtTime(f, t + 0.035);
+    this.clickS.triggerAttackRelease('128n', t);
+    if (full) {
+      const rub = f * 2 ** (1 / 12);
+      this.rubS.triggerAttackRelease(rub * 1.9, 0.06, t + 0.004);
+      this.rubS.frequency.exponentialRampToValueAtTime(rub * 0.97, t + 0.05);
+      if (gold) [0, 3, 6, 9].forEach((s, i) => this.bell.triggerAttackRelease(f * 2 * 2 ** (s / 12), '16n', t + 0.05 + i * 0.07, 0.4));
+      return;
+    }
+    if (gold) [0, 2, 4, 7, 9].forEach((d, i) => this.bell.triggerAttackRelease(note(d + Math.min(combo, 7), 5), '16n', t + 0.05 + i * 0.055, 0.55));
+    if (combo >= 5 && combo % 5 === 0) {
+      const chord = CHORDS[Math.floor(this.bar / 2) % CHORDS.length];
+      this.pluck.triggerAttackRelease(chord.map((d) => note(d + 7, 4)), '8n', t + 0.04, 0.6);
+    }
+  }
   lowClock() { if (this.ready) this.clickS.triggerAttackRelease('64n', Tone.now()); }
   /** One strike of a town bell; alternates between two pitches, lower at dusk. */
   townBell(i: number, pan: number, dusk: boolean) {
@@ -245,7 +278,7 @@ class Audio {
 }
 
 // Sound must never break the game: swallow scheduling errors from any cue.
-for (const name of ['select', 'commit', 'error', 'attack', 'build', 'birth', 'cascade', 'clack', 'mate', 'lowClock', 'birds', 'townBell'] as const) {
+for (const name of ['select', 'commit', 'error', 'attack', 'build', 'birth', 'cascade', 'clack', 'mate', 'lowClock', 'birds', 'townBell', 'bubble'] as const) {
   const proto = Audio.prototype as unknown as Record<string, (...a: unknown[]) => unknown>;
   const fn = proto[name];
   proto[name] = function (this: unknown, ...args: unknown[]) { try { return fn.apply(this, args); } catch { return undefined; } };

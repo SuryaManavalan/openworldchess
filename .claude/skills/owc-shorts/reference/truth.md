@@ -19,6 +19,8 @@ on phone and desktop, no download.
 | Your army in a battle is the pieces you brought: at most one legal set (8 pawns, 2 knights, 2 bishops, 2 rooks, 1 queen) | `setWorth`, `pickSet` |
 | Pieces walk the world in character: knights hop in L-shapes, pawns trudge | `movement.md` |
 | **The rook is a war elephant** (our art) | `art.md` |
+| **War elephants knock down trees** to clear a road through woods for the troop they march with | `movement.md` §4 (as built 2026-09-28) |
+| Troops march as a column along their road and fan out into a chess line when they arrive | `movement.md` §4 |
 | Kings hold land: buildings only work near a king | `economy.md` |
 | Buildings make pieces: houses → pawns, stables → knights, temples → bishops, barracks → elephants (rooks), palace → kings and queens | `constants.ts` |
 | Resources: wood, stone, crops, ore | `resources.md` |

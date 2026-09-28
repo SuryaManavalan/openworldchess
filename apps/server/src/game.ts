@@ -1,11 +1,12 @@
 // The authoritative game: players, orders, world turns and the economy.
 import {
-  BUILDINGS, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, HOLD_MS, ENGAGE_RANGE, HOUSE_POP, KING_POP, HOUSES_PER_KING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
+  BUILDINGS, BUBBLE_GOLD_CHANCE, BUBBLE_MAX, bubbleEveryMs, bubbleWorth, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, HOLD_MS, ENGAGE_RANGE, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
   BUILDINGS_PER_KING, PLAYER_BUILDING_CAP, RUIN_LIFETIME_MS, MASTERLESS_MS, REACH, SPAWN_SHIELD_MS, TEAM_COLORS,
   ANCHOR_GRACE_MS, DECAY_EVERY_MS, BUILDING_MAX_HP, WORK_AREA, cheb, distToRect, isLight,
   type Building, type BuildingType, type Facing, type NodeKind, type Piece, type PieceKind, type PlayerPublic, type PlayerSelf, type TurnMove,
 } from '@owc/shared';
-import { findPath, findPathLong, newGroup, stepGroup, bestGaitMove, productionMs, richness, type GroupState } from '@owc/rules';
+import { LAND_CELL, landKey, landUnkey } from '@owc/worldgen';
+import { rdAfter, RD_PROVISIONAL, findPath, findPathLong, newGroup, stepGroup, bestGaitMove, productionMs, richness, type GroupState } from '@owc/rules';
 import { randomBytes } from 'node:crypto';
 import { World, SETTLED_R } from './world.ts';
 import { Battles } from './battles.ts';
@@ -15,6 +16,20 @@ import { perf } from './perf.ts';
 import { Chronicle, type ChronState } from './chronicle.ts';
 import { shopOpen } from './shop.ts';
 import type { TikTokLink } from './tiktok.ts';
+
+/** How often the land's ratings are recomputed (elo.md §3). */
+const LAND_EVERY_MS = 30_000;
+/** A king's pull on the land fades over about this many squares (Gaussian sigma). */
+const LAND_SIGMA = 96;
+/** Cells within this many cells of a king are touched. */
+const LAND_REACH = 3;
+/** The generated map's own pull, as a king's weight (a single empire moves its land most of the way). */
+const LAND_PRIOR_WEIGHT = 0.75;
+/** Each recompute moves a cell this share of the way to its new value. */
+const LAND_EASE = 0.35;
+
+/** A player's population this economy tick: pieces by kind and room by kind (safeguards.md §1). */
+type Pop = { count: number; by: Record<PieceKind, number>; caps: Record<PieceKind, number> };
 
 export interface PlayerRec {
   id: string;
@@ -49,6 +64,8 @@ export interface PlayerRec {
   civ?: string;
   /** Crowns: the shop currency. */
   crowns?: number;
+  /** When this player last played a rated battle (its rating deviation grows back while away). */
+  ratedAt?: number;
   /** When the empire was last reset (a fresh start, at most once an hour). */
   resetAt?: number;
   /** Stripe checkout sessions already credited (each pays out once). */
@@ -56,6 +73,8 @@ export interface PlayerRec {
 }
 
 export interface GroupRec {
+  /** A raid on the wilds led by a pawn commander (battle.md §9): it may march beyond your kings' reach. */
+  raid?: boolean;
   state: GroupState;
   owner: string;
   kingId?: number;
@@ -180,16 +199,34 @@ export class Game {
    * Population cap (safeguards.md §1): per king, 16 plus 6 for each house within
    * its reach (at most 3 count), and never above the per-player hard cap.
    */
+  /** Pieces and room by kind, for the player's own view. */
+  popView(owner: string): Partial<Record<PieceKind, [number, number]>> {
+    const caps = this.popCaps(owner), have: Record<PieceKind, number> = { K: 0, Q: 0, R: 0, B: 0, N: 0, P: 0 };
+    for (const p of this.world.pieces.values()) if (p.owner === owner) have[p.kind]++;
+    return { P: [have.P, caps.P], N: [have.N, caps.N], B: [have.B, caps.B], R: [have.R, caps.R], Q: [have.Q, caps.Q] };
+  }
+
   popCap(owner: string): number {
-    let cap = 0;
-    // Titles add population per king (campaign.md §4.1).
+    const c = this.popCaps(owner);
+    return Math.min(PLAYER_PIECE_CAP, c.P + c.N + c.B + c.R + c.Q);
+  }
+
+  /**
+   * Room for each kind of piece (safeguards.md §1): pawns from each king's houses, knights
+   * from its stables, bishops from temples, elephants from barracks, queens from palaces,
+   * all counted within that king's reach. Titles add pawn room per king (campaign.md §4.1).
+   */
+  popCaps(owner: string): Record<PieceKind, number> {
+    const caps: Record<PieceKind, number> = { K: Infinity, Q: 0, R: 0, B: 0, N: 0, P: 0 };
     const pl = this.players.get(owner);
     const extra = pl && !pl.wild ? this.chronicle.popPerKing(pl) : 0;
     for (const k of this.kingsOf(owner)) {
-      const houses = this.world.buildingsNear(k.x, k.y, REACH).filter((b) => b.owner === owner && b.type === 'house' && b.built >= 1 && distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH).length;
-      cap += KING_POP + HOUSE_POP * Math.min(HOUSES_PER_KING, houses) + extra;
+      const near = this.world.buildingsNear(k.x, k.y, REACH).filter((b) => b.owner === owner && b.built >= 1 && distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH);
+      const n = (t: BuildingType) => near.filter((b) => b.type === t).length;
+      caps.P += POP_PAWNS_PER_KING + POP_PAWNS_PER_HOUSE * Math.min(POP_HOUSES_COUNTED, n('house')) + extra;
+      for (const [kind, per] of Object.entries(POP_PER_BUILDING) as [PieceKind, { type: BuildingType; n: number }][]) caps[kind] += per.n * n(per.type);
     }
-    return Math.min(PLAYER_PIECE_CAP, cap);
+    return caps;
   }
 
   /** The one reach rule (economy.md §2): is (x, y) within reach of one of owner's kings? */
@@ -214,10 +251,10 @@ export class Game {
 
   publicPlayer(p: PlayerRec): PlayerPublic {
     const cap = p.chron ? this.chronicle.capitalOf(p) : undefined;
-    return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), online: p.online, wild: p.wild?.faction, civ: p.civ, title: p.chron?.title, relics: p.chron?.relics.length ? p.chron.relics : undefined, capital: cap ? [cap.cx, cap.cy] : undefined };
+    return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), provisional: !p.wild && rdAfter(p.rd, p.ratedAt ? (this.now - p.ratedAt) / 86_400_000 : 0) > RD_PROVISIONAL ? true : undefined, online: p.online, wild: p.wild?.faction, civ: p.civ, title: p.chron?.title, relics: p.chron?.relics.length ? p.chron.relics : undefined, capital: cap ? [cap.cx, cap.cy] : undefined };
   }
   selfPlayer(p: PlayerRec): PlayerSelf {
-    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen(), chronicle: p.wild ? undefined : this.chronicle.view(p), tiktok: p.tiktok ? { name: p.tiktok.name } : undefined };
+    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), pop: this.popView(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen(), chronicle: p.wild ? undefined : perf.time('self.chronicle', () => this.chronicle.view(p)), tiktok: p.tiktok ? { name: p.tiktok.name } : undefined };
   }
 
   isGuest(p: PlayerRec) { return !p.googleSub && !p.tiktokId && !p.isBot; }
@@ -365,11 +402,11 @@ export class Game {
   }
 
   /** Move a selection (movement.md §4, §7). Returns an error message or null. */
-  orderMove(player: string, ids: number[], to: [number, number], attack?: number): string | null {
+  orderMove(player: string, ids: number[], to: [number, number], attack?: number, planMs?: number, commander?: number): string | null {
     const pieces = this.orderable(player, ids);
     if (!pieces.length) return 'Nothing to move';
     let [tx, ty] = to;
-    const king = pieces.find((p) => p.kind === 'K');
+    const king = pieces.find((p) => p.kind === 'K') ?? (commander != null ? pieces.find((p) => p.id === commander) : undefined);
     if (!king) {
       // Without a king, the group can only go where one of your kings reaches.
       if (!this.inReach(player, tx, ty)) {
@@ -385,15 +422,24 @@ export class Game {
     const endPath = perf.start('path.order');
     // Time limits keep a live server responsive; without one (tests) results mustn't depend on CPU speed.
     const live = !!this.viewed;
-    const path = findPathLong(leader.x, leader.y, tx, ty, (x, y) => this.world.walkable(x, y), 40000, !live ? 5000 : this.players.get(player)?.isBot || this.players.get(player)?.wild ? 80 : 250);
+    // A troop with war elephants may go through woods: the elephants knock the trees down ahead of it.
+    const clears = pieces.some((p) => p.kind === 'R');
+    const path = findPathLong(leader.x, leader.y, tx, ty, this.marchFree(clears), 40000, !live ? 5000 : planMs ?? (this.players.get(player)?.isBot || this.players.get(player)?.wild ? 80 : 250), this.marchCost(clears));
     endPath();
     const gid = this.world.id();
     const state = newGroup(gid, pieces, path, [leader.x, leader.y]);
     const strays = king ? undefined : new Set(pieces.filter((p) => !this.inReach(player, p.x, p.y, 1)).map((p) => p.id));
-    this.groups.set(gid, { state, owner: player, kingId: king?.id, attack: attack != null ? { targetKingId: attack, lastRepath: this.turn } : undefined, target: [tx, ty], legs: 0, strays: strays?.size ? strays : undefined });
+    this.groups.set(gid, { state, owner: player, kingId: king?.id, raid: commander != null || undefined, attack: attack != null ? { targetKingId: attack, lastRepath: this.turn } : undefined, target: [tx, ty], legs: 0, strays: strays?.size ? strays : undefined });
     for (const p of pieces) { p.groupId = gid; p.state = 'moving'; p.routine = undefined; this.world.touch(p); }
     return null;
   }
+
+  /** Where a troop's lead may walk: open ground, and standing trees if its elephants will clear them. */
+  private marchFree(clears: boolean) { return clears ? (x: number, y: number) => this.world.walkCode(x, y) > 0 : (x: number, y: number) => this.world.walkable(x, y); }
+  /** A tree on the road costs 8 steps: elephants cut short-cuts through tree lines, not lanes through deep forest. */
+  private marchCost(clears: boolean) { return clears ? { cost: (x: number, y: number) => (this.world.walkCode(x, y) === 2 ? 8 : 0) } : {}; }
+  /** Route plans for pieces that fell behind share a budget each turn (reset in worldTurn). */
+  private routeBudget = 0;
 
   /** Muster (campaign.md §4.1, chapter 12): every piece of yours within 20 squares gathers to a king. */
   muster(player: string, kingId: number): string | null {
@@ -414,17 +460,27 @@ export class Game {
     const target = this.world.pieces.get(targetKingId);
     if (!target || target.kind !== 'K' || !target.owner || target.owner === player) return 'Pick an enemy king';
     const pieces = this.orderable(player, ids);
-    const king = pieces.find((p) => p.kind === 'K');
-    if (!king) return 'An attack needs a king';
+    let king = pieces.find((p) => p.kind === 'K');
+    // Raiding the wilds (battle.md §9): any troop with a pawn may attack a camp without a king.
+    // A pawn becomes its commander and fights as the king, for that battle only; if the raid
+    // fails, only that pawn falls. Your real kings stay home.
+    let raid = false;
+    if (!king) {
+      if (!this.wilds.campOf(target.owner)) return 'An attack on an empire needs a king';
+      const pawns = pieces.filter((p) => p.kind === 'P' && (p.cooldownUntil ?? 0) <= this.now);
+      if (!pawns.length) return 'A raid on the wilds needs at least one pawn to lead it';
+      king = pawns.reduce((a, b) => (cheb(a.x, a.y, target.x, target.y) <= cheb(b.x, b.y, target.x, target.y) ? a : b));
+      raid = true;
+    }
     if ((king.cooldownUntil ?? 0) > this.now) return 'This king is recovering from battle';
     const err = this.battles.canTarget(target, player);
     if (err) return err;
-    // Attacking ends your own spawn shield (progression.md §4).
+    // Attacking an empire ends your own spawn shield (progression.md §4); raiding camps doesn't.
     const me = this.players.get(player);
-    if (me) me.shieldUntil = 0;
+    if (me && !raid) me.shieldUntil = 0;
     // Already in range? Engage now. Otherwise march there.
     if (this.engaged(king, target)) return this.battles.engage(king, target);
-    return this.orderMove(player, pieces.map((p) => p.id), [target.x, target.y], target.id);
+    return this.orderMove(player, pieces.map((p) => p.id), [target.x, target.y], target.id, undefined, raid ? king.id : undefined);
   }
 
   /** Attack range (battle.md §2): near the target king, or any piece or building it holds. */
@@ -532,6 +588,7 @@ export class Game {
     let endPhase = perf.start('turn.groups');
     // Long-route planning inside a turn shares one time budget; the rest waits a turn.
     let legMs = this.viewed ? 60 : Infinity;
+    this.routeBudget = this.viewed ? 24 : Infinity;
     for (const [gid, g] of [...this.groups].sort((a, b) => a[0] - b[0])) {
       const pieces = [...w.pieces.values()].filter((p) => p.groupId === gid && p.state === 'moving');
       if (!pieces.length) { this.groups.delete(gid); continue; }
@@ -563,15 +620,33 @@ export class Game {
         // shuffle each other off their slots forever.)
         return !q.groupId && q.state === 'idle' ? q : null;
       };
+      const lite = !pieces.some((p) => this.watched(p.x, p.y));
+      // A troop marching with its king stays beside it: only king-less pieces are held to the reach rule square by square.
+      const hasKing = g.kingId != null && pieces.some((p) => p.id === g.kingId);
+      const within = (p: Piece, x: number, y: number) => hasKing || p.kind === 'K' || !!g.strays?.has(p.id) || this.inReach(g.owner, x, y, 1);
       const step = () => stepGroup(g.state, pieces, {
         free: (gp, x, y) => {
           const p = gp as unknown as Piece;
           // Without a king, pieces stay within reach, except one already outside it, which may walk home.
-          if (!(p.kind === 'K' || g.strays?.has(p.id) || this.inReach(g.owner, x, y, 1))) return false;
+          if (!within(p, x, y)) return false;
           return w.free(x, y, p.id) || (w.walkable(x, y) && !!yields(p, x, y));
         },
         walkable: (x, y) => w.walkable(x, y),
-        lite: !pieces.some((p) => this.watched(p.x, p.y)),
+        lite,
+        // A piece that fell behind plans its own way back (pawns and elephants without diagonal steps).
+        route: (gp, tx, ty) => {
+          if (this.routeBudget <= 0) return null;
+          this.routeBudget--;
+          const p = gp as unknown as Piece;
+          return findPath(p.x, p.y, tx, ty, (x, y) => w.walkable(x, y) && within(p, x, y), lite ? 1500 : 4000, { orth: p.kind === 'P' || p.kind === 'R' });
+        },
+        tree: (x, y) => w.treeAt(x, y),
+        fell: (gp, x, y) => {
+          const n = w.nodeAt(x, y);
+          if (!n || n.kind !== 'tree' || n.remaining <= 0 || !within(gp as unknown as Piece, x, y)) return false;
+          w.drawNode(n, n.remaining, this.now);
+          return true;
+        },
       }, (gp, m) => {
         const p = gp as unknown as Piece;
         const fx = p.x, fy = p.y;
@@ -613,7 +688,8 @@ export class Game {
         g.legs = g.legFrom != null && left < g.legFrom - 4 ? 0 : (g.legs ?? 0) + 1;
         g.legFrom = left;
         const t0 = performance.now();
-        const leg = findPathLong(g.state.lead[0], g.state.lead[1], goal[0], goal[1], (x, y) => w.walkable(x, y), 40000, Math.min(this.viewed ? 60 : 5000, legMs));
+        const clears = !g.state.avoidTrees && pieces.some((p) => p.kind === 'R');
+        const leg = findPathLong(g.state.lead[0], g.state.lead[1], goal[0], goal[1], this.marchFree(clears), 40000, Math.min(this.viewed ? 60 : 5000, legMs), this.marchCost(clears));
         legMs -= performance.now() - t0;
         if (leg.length) { g.state.path = [...g.state.path, ...leg]; g.state.done = false; }
       }
@@ -658,7 +734,8 @@ export class Game {
           this.strayRoutes--;
           this.driftStuck.delete(p.id);
           this.strayRoutedAt.set(p.id, this.turn);
-          this.orderMove(p.owner, [p.id], [k.x, k.y]);
+          // A background walk home: a small planning budget (the rest is planned in legs as it goes).
+          this.orderMove(p.owner, [p.id], [k.x, k.y], undefined, 40);
         }
       }
 
@@ -718,6 +795,7 @@ export class Game {
     const dt = now - this.lastEconomy;
     this.lastEconomy = now;
     this.now = now;
+    if (now - this.lastLand >= LAND_EVERY_MS) { this.lastLand = now; perf.time('land', () => this.reshapeLand()); }
     const w = this.world;
     w.regrowNodes(now, dt);
     // Each node supplies one production at a time: buildings drawing from the same
@@ -730,15 +808,10 @@ export class Game {
     for (const b of w.buildings.values())
       if (b.owner && b.type !== 'ruin' && b.built >= 1 && !b.blocked && b.drawsFrom)
         for (const [nx, ny] of b.drawsFrom) { const k = nx * 134217728 + ny; this.nodeUsers.set(k, (this.nodeUsers.get(k) ?? 0) + 1); }
-    const pop = new Map<string, { count: number; cap: number }>();
+    const pop = new Map<string, Pop>();
     const popOf = (owner: string) => {
       let v = pop.get(owner);
-      if (!v) {
-        let count = 0;
-        for (const p of w.pieces.values()) if (p.owner === owner) count++;
-        v = { count, cap: this.popCap(owner) };
-        pop.set(owner, v);
-      }
+      if (!v) pop.set(owner, (v = this.popNow(owner)));
       return v;
     };
 
@@ -749,7 +822,7 @@ export class Game {
         if (now - b.ruinedAt > RUIN_LIFETIME_MS) w.removeBuilding(b.id);
         continue;
       }
-      const before = JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner]);
+      const before = JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner, b.bubbles]);
       // Holding the realm (campaign.md §4.3): a king (or, with Regents, a queen) in reach
       // keeps a building going; without one, a settlement holds itself for a while by its
       // tier (a capital forever), and it only decays when none of its owner's pieces are home.
@@ -785,7 +858,12 @@ export class Game {
       } else if (anchored && b.owner && b.type !== 'wonder') {
         this.produce(b, dt, popOf(b.owner));
       }
-      if (JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner]) !== before) w.dirtyBuildings.add(b.id);
+      // A building waiting for room (pop-cap) keeps its bubbles: popping banks progress toward
+      // the next piece, which is raised as soon as there's room (economy.md §7).
+      if (b.blocked === 'pop-cap' && b.built >= 1) { b.cycleMs ??= productionMs(b.type as BuildingType, 1, this.speed); this.bubbleTick(b, now); }
+      else if (b.blocked || b.built < 1) { b.cycleMs = undefined; b.bubbles = undefined; b.bubbleAt = undefined; }
+      else this.bubbleTick(b, now);
+      if (JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner, b.bubbles]) !== before) w.dirtyBuildings.add(b.id);
     }
   }
 
@@ -826,24 +904,111 @@ export class Game {
       fells++;
     }
   }
+  private lastLand = 0;
+  /**
+   * The land takes on the ratings of the empires living on it (elo.md §3): every
+   * king pulls the cells around it toward its owner's rating, weighted by distance,
+   * against a light pull back to the generated map. Cells move part of the way each
+   * time, so the land shifts gradually, and fade back to the map where nobody lives.
+   */
+  reshapeLand() {
+    const land = this.world.land, C = LAND_CELL;
+    const sum = new Map<number, [number, number]>(); // cell → [Σw, Σw·rating]
+    for (const p of this.players.values()) {
+      if (p.wild) continue;
+      const kings = this.kingsByOwner.get(p.id);
+      if (!kings?.size) continue;
+      for (const kid of kings) {
+        const k = this.world.pieces.get(kid);
+        if (!k) continue;
+        const kcx = Math.floor(k.x / C), kcy = Math.floor(k.y / C);
+        for (let dy = -LAND_REACH; dy <= LAND_REACH; dy++) for (let dx = -LAND_REACH; dx <= LAND_REACH; dx++) {
+          const cx = kcx + dx, cy = kcy + dy;
+          const ddx = (cx + 0.5) * C - k.x, ddy = (cy + 0.5) * C - k.y;
+          const wgt = Math.exp(-(ddx * ddx + ddy * ddy) / (2 * LAND_SIGMA * LAND_SIGMA));
+          if (wgt < 0.02) continue;
+          const key = landKey(cx, cy), cur = sum.get(key);
+          if (cur) { cur[0] += wgt; cur[1] += wgt * p.rating; } else sum.set(key, [wgt, wgt * p.rating]);
+        }
+      }
+    }
+    const next = new Map<number, number>();
+    for (const [key, [wsum, rsum]] of sum) {
+      const [cx, cy] = landUnkey(key), prior = land.prior(cx, cy);
+      const target = Math.max(400, Math.min(2800, (LAND_PRIOR_WEIGHT * prior + rsum) / (LAND_PRIOR_WEIGHT + wsum)));
+      const old = land.cells.get(key) ?? prior;
+      next.set(key, Math.round(old + (target - old) * LAND_EASE));
+    }
+    // Land nobody lives on any more drifts back toward the map, and is forgotten once it's close.
+    for (const [key, v] of land.cells) {
+      if (next.has(key)) continue;
+      const [cx, cy] = landUnkey(key), prior = land.prior(cx, cy), back = v + (prior - v) * LAND_EASE;
+      if (Math.abs(back - prior) > 10) next.set(key, Math.round(back));
+    }
+    land.cells = next;
+    this.landVersion++;
+  }
+  /** Bumps whenever the land's ratings are recomputed (the network layer sends changes). */
+  landVersion = 0;
+
   /** Drifting pieces that haven't gotten closer to their king, in drift steps. */
   private driftStuck = new Map<number, number>();
   private strayRoutedAt = new Map<number, number>();
   private strayRoutes = 0;
 
-  private produce(b: Building, dt: number, pop: { count: number; cap: number }) {
+  /** Pieces now, by kind, and the room for each (safeguards.md §1). */
+  popNow(owner: string): Pop {
+    const by: Record<PieceKind, number> = { K: 0, Q: 0, R: 0, B: 0, N: 0, P: 0 };
+    let count = 0;
+    for (const p of this.world.pieces.values()) if (p.owner === owner) { count++; by[p.kind]++; }
+    return { count, by, caps: this.popCaps(owner) };
+  }
+
+  /**
+   * Hurry bubbles (economy.md §7): while its owner is online, a working building grows a
+   * bubble every so often, a little irregularly, up to BUBBLE_MAX. Bots don't get them.
+   */
+  private bubbleTick(b: Building, now: number) {
+    const pl = b.owner ? this.players.get(b.owner) : undefined;
+    if (!pl || pl.wild || pl.isBot || !b.cycleMs || !BUILDINGS[b.type as BuildingType]?.produces.length) return;
+    if (!pl.online) { b.bubbleAt = undefined; return; }
+    const every = bubbleEveryMs(b.cycleMs);
+    if (b.bubbleAt == null) { b.bubbleAt = now + every * (0.3 + Math.random() * 0.7); return; }
+    if (now < b.bubbleAt) return;
+    b.bubbleAt = now + every * (0.7 + Math.random() * 0.6);
+    if ((b.bubbles?.length ?? 0) >= BUBBLE_MAX) return;
+    (b.bubbles ??= []).push(Math.random() < BUBBLE_GOLD_CHANCE ? 1 : 0);
+  }
+
+  /** The owner pops a bubble (economy.md §7): production jumps ahead, and a piece that's due now is raised at once. */
+  popBubble(player: string, id: number, i: number): boolean {
+    const b = this.world.buildings.get(id);
+    if (!b || b.owner !== player || b.bubbles?.[i] == null) return false;
+    const gold = b.bubbles[i] === 1;
+    b.bubbles.splice(i, 1);
+    if (!b.bubbles.length) b.bubbles = undefined;
+    this.world.dirtyBuildings.add(b.id);
+    if ((b.blocked && b.blocked !== 'pop-cap') || !b.cycleMs) return false;
+    b.prod = Math.min(1, b.prod + bubbleWorth(b.cycleMs, gold));
+    if (b.prod >= 1) this.produce(b, 0, this.popNow(player));
+    return true;
+  }
+
+  private produce(b: Building, dt: number, pop: Pop) {
     const spec = BUILDINGS[b.type as BuildingType];
     const w = this.world;
     if (b.paused) { b.blocked = 'paused'; return; }
     const work = w.nodesNear(b.x, b.y, b.size, WORK_AREA).filter((n) => n.remaining > 0);
     const chosen = spec.needs.map((k) => work.filter((n) => n.kind === k).sort((a, c) => c.remaining - a.remaining)[0]);
     if (chosen.some((n) => !n)) { b.blocked = 'no-node'; b.drawsFrom = []; return; }
-    // A full population never blocks what the Chronicle is asking for (campaign.md §12):
-    // otherwise a realm full of pawns could never raise the bishop its chapter needs.
-    if (pop.count >= pop.cap) {
+    // Room for this kind of piece (safeguards.md §1). A full room never blocks what the
+    // Chronicle is asking for (campaign.md §12), up to the number it still needs.
+    let kind: PieceKind = b.type === 'palace' ? (b.palaceNext ?? 'K') : spec.produces[0];
+    if (pop.count >= PLAYER_PIECE_CAP) { b.blocked = 'pop-cap'; return; }
+    if (kind !== 'K' && pop.by[kind] >= pop.caps[kind]) {
       const pl = this.players.get(b.owner!);
       const want = pl?.chron ? this.chronicle.wants(pl) : null;
-      if (!want || !spec.produces.includes(want.kind) || pop.count >= pop.cap + want.left) { b.blocked = 'pop-cap'; return; }
+      if (!want || want.kind !== kind || pop.by[kind] >= pop.caps[kind] + want.left) { b.blocked = 'pop-cap'; return; }
     }
     b.blocked = null;
     b.drawsFrom = chosen.map((n) => [n!.x, n!.y]);
@@ -857,7 +1022,13 @@ export class Game {
       const kings = this.kingsOf(b.owner!).length;
       // The title sets how many kings you may hold (campaign.md §4.1).
       const cap = pl && !pl.wild ? Math.min(PLAYER_KING_CAP, this.chronicle.kingCap(pl)) : PLAYER_KING_CAP;
-      if (kings >= cap) { b.palaceNext = 'Q'; if (b.palaceMode === 'K') { b.blocked = 'pop-cap'; return; } }
+      if (kings >= cap) {
+        b.palaceNext = 'Q';
+        if (b.palaceMode === 'K') { b.blocked = 'pop-cap'; return; }
+        // At the king limit the palace makes a queen instead, if there's room for one.
+        kind = 'Q';
+        if (pop.by.Q >= pop.caps.Q) { b.blocked = 'pop-cap'; return; }
+      }
       else slow = 1 + kings * KING_TIME_PER_KING;
       // Your first palace king comes quickly (campaign.md §7).
       if (pl?.chron && !pl.chron.firstKingDone) slow *= 0.5;
@@ -869,15 +1040,13 @@ export class Game {
     slow /= this.chronicle.bonus(b);
     const sharing = Math.max(1, ...chosen.map((n) => this.nodeUsers.get(n!.x * 134217728 + n!.y) ?? 1));
     b.rate = Math.round((rich / sharing) * 100) / 100;
-    b.prod += dt / (productionMs(b.type as BuildingType, rich, this.speed) * slow * sharing);
+    b.cycleMs = Math.round(productionMs(b.type as BuildingType, rich, this.speed) * slow * sharing);
+    b.prod += dt / b.cycleMs;
     if (b.prod < 1) return;
     b.prod = 0;
     for (const n of chosen) w.drawNode(n!, spec.draw[n!.kind] ?? 0, this.now);
-    let kind: PieceKind = spec.produces[0];
-    if (b.type === 'palace') {
-      kind = b.palaceNext ?? 'K';
-      if (b.palaceMode === 'alt') b.palaceNext = kind === 'K' ? 'Q' : 'K';
-    }
+    // (The kind was settled above; a palace on 'alt' switches to the other one next time.)
+    if (b.type === 'palace' && b.palaceMode === 'alt') b.palaceNext = kind === 'K' ? 'Q' : 'K';
     // Bishops alternate square color (economy.md §3): the spawn square decides.
     const doorX = b.x + (b.size >> 1), doorY = b.y + b.size;
     let wantLight: boolean | undefined;
@@ -890,7 +1059,7 @@ export class Game {
     if (!at) return;
     const piece: Piece = { id: w.id(), owner: b.owner, kind, x: at[0], y: at[1], facing: 2 as Facing, state: 'idle', routine: 'born' };
     this.addPiece(piece);
-    pop.count++;
+    pop.count++; pop.by[kind]++;
     // Quests count what you raise (campaign.md §5.2).
     this.chronicle.note(b.owner, `raise:${kind}`);
     if (kind === 'K') { this.chronicle.note(b.owner, 'crown'); if (pl?.chron) pl.chron.firstKingDone = true; }

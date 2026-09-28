@@ -149,4 +149,62 @@ describe('wilds', () => {
     expect(game.wilds.piecesOf(q).length).toBe(size);
     expect(game.wilds.quarry(p.id, p.home, 20, now)).toBeNull();
   });
+
+  it('a fight with a camp is rated, like a game against a player (elo.md §1)', () => {
+    for (const r of game.battles.recs.values()) if (r.pub.phase !== 'over') { r.pub.phase = 'over'; for (const k of r.sealed) game.world.sealed.delete(k); }
+    for (const p of game.world.pieces.values()) if (p.state === 'battle') { p.state = 'idle'; game.world.dropPiece(p, p.x, p.y); }
+    const hero = join('Rated');
+    const k = game.kingsOf(hero.id).find((x) => !x.emperor)!;
+    const camp = game.wilds.camps().find((c) => { const ck = game.wilds.king(c); return ck && ck.state === 'idle' && !ck.groupId; })!;
+    const ck = game.wilds.king(camp)!;
+    ck.protectedUntil = 0; ck.cooldownUntil = 0;
+    const spot = game.world.nearestFree(ck.x + 3, ck.y, 6)!;
+    game.world.movePiece(k, spot[0], spot[1]);
+    expect(game.battles.engage(k, ck)).toBeNull();
+    tick(10);
+    const rec = [...game.battles.recs.values()].find((r) => r.white.kingId === k.id)!;
+    expect(game.battles.move(hero.id, rec.pub.id, rec.game!.legalMoves()[0])).toBeNull();
+    expect(game.battles.move(camp.id, rec.pub.id, rec.game!.legalMoves()[0])).toBeNull();
+    const [r0, rd0] = [hero.rating, hero.rd];
+    game.battles.resign(camp.id, rec.pub.id);
+    expect(rec.pub.result).toBe('white');
+    // A new player's first win moves a lot (their deviation is high), and the deviation shrinks.
+    expect(hero.rating).toBeGreaterThan(r0 + 20);
+    expect(hero.rd).toBeLessThan(rd0);
+    expect(hero.ratedAt).toBe(now);
+  });
+
+  it('a troop without a king can raid a camp: a pawn commands, and only it falls if the raid fails (battle.md §9)', () => {
+    for (const r of game.battles.recs.values()) if (r.pub.phase !== 'over') { r.pub.phase = 'over'; for (const k of r.sealed) game.world.sealed.delete(k); }
+    for (const p of game.world.pieces.values()) if (p.state === 'battle') { p.state = 'idle'; game.world.dropPiece(p, p.x, p.y); }
+    const raider = join('Raider');
+    raider.chron!.ch = 6; // past the newcomers' grace, so a lost raid really costs the pawn
+    const camp = game.wilds.camps().find((c) => { const ck = game.wilds.king(c); return ck && ck.state === 'idle' && !ck.groupId; })!;
+    const ck = game.wilds.king(camp)!;
+    ck.protectedUntil = 0; ck.cooldownUntil = 0;
+    // Three pawns beside the camp, no king anywhere near.
+    const pawns = [0, 1, 2].map((i) => { const at = game.world.nearestFree(ck.x + 3, ck.y + i, 6)!; const p = { id: game.world.id(), owner: raider.id, kind: 'P' as const, x: at[0], y: at[1], facing: 3 as const, state: 'idle' as const }; game.addPiece(p); return p; });
+    const kings = game.kingsOf(raider.id).map((k) => k.id);
+    expect(game.orderAttack(raider.id, pawns.map((p) => p.id), ck.id)).toBeNull();
+    tick(10);
+    const rec = [...game.battles.recs.values()].find((r) => r.white.player === raider.id && r.pub.phase === 'live')!;
+    expect(rec).toBeTruthy();
+    const commander = rec.white.kingId;
+    expect(rec.pub.commanders).toEqual([commander]);
+    expect(game.world.pieces.get(commander)!.kind).toBe('P'); // a pawn in the world, a king only on the board
+    game.battles.resign(raider.id, rec.pub.id);
+    // Only the commander fell; the other raiders are still the raider's, and the real kings are untouched.
+    expect(game.world.pieces.has(commander)).toBe(false);
+    for (const p of pawns.filter((q) => q.id !== commander)) expect(game.world.pieces.get(p.id)?.owner).toBe(raider.id);
+    expect(game.kingsOf(raider.id).map((k) => k.id).sort()).toEqual(kings.sort());
+  });
+
+  it('an empire still needs a king to attack another empire', () => {
+    const a = join('NoKingA'), b = join('NoKingB');
+    const bk = game.kingsOf(b.id)[0];
+    const at = game.world.nearestFree(bk.x + 3, bk.y, 6)!;
+    const p = { id: game.world.id(), owner: a.id, kind: 'P' as const, x: at[0], y: at[1], facing: 3 as const, state: 'idle' as const };
+    game.addPiece(p);
+    expect(game.orderAttack(a.id, [p.id], bk.id)).toMatch(/needs a king/);
+  });
 });

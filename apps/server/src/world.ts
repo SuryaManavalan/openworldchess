@@ -2,7 +2,7 @@
 // runtime changes), pieces, buildings, and the indexes that answer "what's
 // here" and "what's near" quickly.
 import { CHUNK, chunkKey, chunkOf, key, REACH, distToRect, type Building, type NodeState, type Piece } from '@owc/shared';
-import { resourcesInRect, terrainAt, walkable as terrainWalkable, buildable as terrainBuildable, eloAt } from '@owc/worldgen';
+import { resourcesInRect, terrainAt, walkable as terrainWalkable, buildable as terrainBuildable, LandField } from '@owc/worldgen';
 
 /** Numeric chunk key (chunks within ±65536 of the origin, i.e. ±2M squares). */
 const cnum = (cx: number, cy: number) => (cx + 65536) * 131072 + (cy + 65536);
@@ -60,14 +60,17 @@ export class World {
   removedBuildings = new Set<number>();
   dirtyNodes = new Set<number>();
 
-  constructor(seed: number) { this.seed = seed; }
+  constructor(seed: number) {
+    this.land = new LandField(seed); this.seed = seed; }
 
   id() { return this.nextId++; }
 
   // ---------- terrain and nodes ----------
 
   terrain(x: number, y: number) { return terrainAt(this.seed, x, y); }
-  elo(x: number, y: number) { return eloAt(this.seed, x, y); }
+  /** The land's rating: the generated map, reshaped by the empires living there (elo.md §3). */
+  land: LandField;
+  elo(x: number, y: number) { return this.land.at(x, y); }
 
   ensureChunkNodes(cx: number, cy: number): NodeRec[] {
     const ck = chunkKey(cx, cy);
@@ -186,8 +189,20 @@ export class World {
     const cx = x >> 5, cy = y >> 5, c = cnum(cx, cy);
     let grid = this.walkGrid.get(c);
     if (!grid) grid = this.buildWalk(cx, cy, c);
-    if (!grid[((y & 31) << 5) | (x & 31)]) return false;
+    if (grid[((y & 31) << 5) | (x & 31)] !== 1) return false;
     return !(this.sealed.size && this.sealed.has(key(x, y)));
+  }
+
+  /**
+   * 1: walkable; 2: a standing tree a war elephant could knock down; 0: blocked.
+   * One grid lookup, so planning a troop's road through woods stays fast.
+   */
+  walkCode(x: number, y: number): number {
+    const cx = x >> 5, cy = y >> 5, c = cnum(cx, cy);
+    let grid = this.walkGrid.get(c);
+    if (!grid) grid = this.buildWalk(cx, cy, c);
+    const v = grid[((y & 31) << 5) | (x & 31)];
+    return v && this.sealed.size && this.sealed.has(key(x, y)) ? 0 : v;
   }
 
   private buildWalk(cx: number, cy: number, c: number): Uint8Array {
@@ -198,13 +213,16 @@ export class World {
         const x = cx * CHUNK + lx, y = cy * CHUNK + ly, k = key(x, y);
         if (!terrainWalkable(this.terrain(x, y)) || this.buildingAt.has(k)) continue;
         const n = this.nodes.get(k);
-        if (n && !n.gone && BLOCKING_NODE[n.kind] && n.remaining > 0) continue;
+        if (n && !n.gone && BLOCKING_NODE[n.kind] && n.remaining > 0) { if (n.kind === 'tree') grid[(ly << 5) | lx] = 2; continue; }
         grid[(ly << 5) | lx] = 1;
       }
     if (this.walkGrid.size > 20000) this.walkGrid.clear();
     this.walkGrid.set(c, grid);
     return grid;
   }
+
+  /** A standing tree on open ground at (x, y): a war elephant can knock it down (movement.md §4.3). */
+  treeAt(x: number, y: number): boolean { return this.walkCode(x, y) === 2; }
 
   /** Something that blocks walking changed at (x, y): rebuild that chunk's grid when next asked. */
   dirtyWalk(x: number, y: number) { this.walkGrid.delete(cnum(x >> 5, y >> 5)); }

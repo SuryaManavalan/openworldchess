@@ -106,23 +106,23 @@ export function creatureUrl(faction: string, kind: PieceKind): string {
   return u;
 }
 
-const ascended = ascendedArt.ascended as unknown as (ghost: string, pawn: string) => string;
+const ascended = ascendedArt.ascended as unknown as (ghost: string, pawn: string, gold?: boolean) => string;
 /** Markup of a piece as drawn in battle: a player's piece or a creature. */
 const pieceMarkup = (kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, emperor = false, civ?: string) =>
   wild ? creature(FACTIONS[wild], kind) : kind === 'K' ? piecesOf(civ).king({ side, team, emperor }) : piecesOf(civ)[ART_NAME[kind]]({ side, team });
 
 /** A promoted pawn (battle.md §5): the pawn inside a glowing spirit of the piece it's acting as. */
-function ascendedMarkup(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, civ?: string) {
-  return ascended(pieceMarkup(kind, side, team, wild, false, civ), pieceMarkup('P', side, team, wild, false, civ));
+function ascendedMarkup(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, civ?: string, gold = false) {
+  return ascended(pieceMarkup(kind, side, team, wild, false, civ), pieceMarkup('P', side, team, wild, false, civ), gold);
 }
 export function ascendedTexture(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, onReady?: () => void, civ?: string) {
   return get(`asc:${kind}:${side}:${team}:${wild ?? ''}:${civ ?? ''}`, () => ascendedMarkup(kind, side, team, wild, civ), RES, onReady);
 }
-export function ascendedUrl(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, civ?: string): string {
-  const k = `asc:${kind}:${side}:${team}:${wild ?? ''}:${civ ?? ''}`;
+export function ascendedUrl(kind: PieceKind, side: 'light' | 'dark', team: string, wild?: string, civ?: string, gold = false): string {
+  const k = `asc:${kind}:${side}:${team}:${wild ?? ''}:${civ ?? ''}:${gold ? 'g' : ''}`;
   let u = urlCache.get(k);
   if (!u) {
-    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${ascendedMarkup(kind, side, team, wild, civ)}</svg>`);
+    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${ascendedMarkup(kind, side, team, wild, civ, gold)}</svg>`);
     urlCache.set(k, u);
   }
   return u;

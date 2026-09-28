@@ -3,8 +3,9 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage, Server } from 'node:http';
 import { stats } from './stats.ts';
+import { LAND_CELL, landUnkey } from '@owc/worldgen';
 import {
-  ClientMsg, PROTOCOL_VERSION, TURN_MS, chunkKey, chunkOf,
+  CHUNK, ClientMsg, PROTOCOL_VERSION, TURN_MS, chunkKey, chunkOf,
   type BattlePublic, type BattleSummary, type Building, type NodeState, type Piece, type ServerMsg, type TurnMove,
   type PlayerSelf,
 } from '@owc/shared';
@@ -122,7 +123,7 @@ export class Net {
         if (recent.length >= 5) return this.send(s, { t: 'err', msg: 'Too many new empires from here. Try again later', code: 'bad-name' });
         this.newAccounts.set(s.ip, recent);
       }
-      const joined = g.join(msg.token, msg.name, msg.name?.startsWith('bot:') ?? false);
+      const joined = perf.time('hello.join', () => g.join(msg.token, msg.name, msg.name?.startsWith('bot:') ?? false));
       if (isNew && !('error' in joined) && !local) this.newAccounts.get(s.ip)?.push(now);
       if ('error' in joined) return this.send(s, { t: 'err', msg: joined.error, code: joined.code });
       const p = joined;
@@ -132,10 +133,12 @@ export class Net {
       s.player = p;
       p.online = true; p.lastSeen = now;
       g.battles.offlineSince.delete(p.id);
-      this.send(s, { t: 'welcome', v: PROTOCOL_VERSION, token: p.token, self: g.selfPlayer(p), seed: g.world.seed, turn: g.turn, turnMs: this.turnMs, serverTime: now, nextTurnAt: this.nextTurnAt });
+      const self = perf.time('hello.self', () => g.selfPlayer(p));
+      this.send(s, { t: 'welcome', v: PROTOCOL_VERSION, token: p.token, self, seed: g.world.seed, turn: g.turn, turnMs: this.turnMs, serverTime: now, nextTurnAt: this.nextTurnAt });
       this.send(s, { t: 'battles', battles: g.battles.active() });
-      this.sendMine(s);
-      this.broadcastPlayers();
+      perf.time('hello.mine', () => this.sendMine(s));
+      perf.time('hello.land', () => this.sendLand(s));
+      perf.time('hello.players', () => this.broadcastPlayers());
       const away = (g.events.get(p.id) ?? []).filter((e) => e.at > lastSeen);
       if (!p.isBot && now - lastSeen > 60_000 && away.length) this.send(s, { t: 'away', since: lastSeen, events: away });
       return;
@@ -162,6 +165,7 @@ export class Net {
       case 'order.cancelAttack': g.battles.cancel(p.id, msg.battleId); break;
       case 'build': reply(msg.rid, g.build(p.id, msg.building, msg.at)); break;
       case 'building.pause': g.setPaused(p.id, msg.buildingId, msg.paused); break;
+      case 'bubble.pop': g.popBubble(p.id, msg.buildingId, msg.i); break;
       case 'palace.mode': g.setPalaceMode(p.id, msg.buildingId, msg.mode); break;
       case 'battle.move': { const e = g.battles.move(p.id, msg.battleId, msg.uci); if (e) this.send(s, { t: 'err', msg: e }); break; }
       case 'battle.resign': g.battles.resign(p.id, msg.battleId); break;
@@ -287,6 +291,26 @@ export class Net {
   sendAllMine() { for (const s of this.sessions) this.sendMine(s); }
 
   /** The small, often-changing part (population cap, shield): people only, bots read it from resyncs. */
+  /** The shaped land around a session's empire (or where it's looking), as a box to replace (elo.md §3). */
+  sendLand(s: Session) {
+    const land = this.game.world.land, R = 10;
+    const p = s.player;
+    const at = p ? (this.game.kingsOf(p.id)[0] ?? { x: p.home[0], y: p.home[1] }) : null;
+    let cx = 0, cy = 0;
+    if (at) { cx = Math.floor(at.x / LAND_CELL); cy = Math.floor(at.y / LAND_CELL); }
+    else if (s.subs.size) { const [x, y] = [...s.subs][0].split(',').map(Number); cx = Math.floor((x * CHUNK) / LAND_CELL); cy = Math.floor((y * CHUNK) / LAND_CELL); }
+    const cells: number[] = [];
+    for (const [k, v] of land.cells) { const [x, y] = landUnkey(k); if (Math.abs(x - cx) <= R && Math.abs(y - cy) <= R) cells.push(x, y, v); }
+    this.send(s, { t: 'land', box: [cx - R, cy - R, cx + R, cy + R], cells });
+  }
+  private landSent = -1;
+  /** After the land is recomputed, everyone gets the cells around them. */
+  sendAllLand() {
+    if (this.landSent === this.game.landVersion) return;
+    this.landSent = this.game.landVersion;
+    for (const s of this.sessions) if (s.player || s.watcher) this.sendLand(s);
+  }
+
   sendAllSelf() { for (const s of this.sessions) if (s.player && !s.player.isBot) this.send(s, { t: 'self', self: this.game.selfPlayer(s.player) }); }
 
   private alert(pid: string, a: Alert) {

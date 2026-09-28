@@ -9,6 +9,7 @@ import { ascendedTexture, relicTexture, buildingTexture, campTexture, creatureTe
 import { nodeArt } from './biomeArt.ts';
 import { paintChunk, paintChunkFar, terrainCodes, biomeCodes, textureFrom, TPX, FAR_TPX } from './terrain.ts';
 import { Fx } from './fx.ts';
+import { Bubbles } from './bubbles.ts';
 import { computeSettlements, decorate, wallsFor, TIER_NAME, type Decor, type Settlement, type Wall } from './settlements.ts';
 import { decorTexture } from './textures.ts';
 import { useUI } from '../store.ts';
@@ -46,6 +47,8 @@ class BuildingView {
   sprite = new Sprite();
   bar = new Graphics();
   texKey = '';
+  /** When a bubble was popped here (the building squashes and springs back). */
+  squash = 0;
   constructor() { this.sprite.anchor.set(0.5, 0.88); }
 }
 
@@ -61,6 +64,7 @@ export class Scene {
   cam: Camera = { x: 0, y: 0, zoom: 1, rot: 0, rotShown: 0 };
   mirror: Mirror;
   fx: Fx;
+  bubbles: Bubbles;
   pieces = new Map<number, PieceView>();
   buildings = new Map<number, BuildingView>();
   nodes = new Map<number, Sprite>();
@@ -101,6 +105,7 @@ export class Scene {
   constructor(mirror: Mirror) {
     this.mirror = mirror;
     this.fx = new Fx(this);
+    this.bubbles = new Bubbles(this);
     this.worker = new Worker(new URL('./terrainWorker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e: MessageEvent<{ cx: number; cy: number; codes: Uint8Array; biomes: Uint8Array }>) => this.chunkReady(e.data.cx, e.data.cy, e.data.codes, e.data.biomes);
   }
@@ -109,7 +114,7 @@ export class Scene {
     await this.app.init({ resizeTo: el, background: '#6f8f4a', antialias: true, resolution: Math.min(2, devicePixelRatio), autoDensity: true });
     el.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
-    this.world.addChild(this.ground, this.wallsG, this.decals, this.objects, this.farG, this.arenas, this.fx.layer, this.labels);
+    this.world.addChild(this.ground, this.wallsG, this.decals, this.objects, this.farG, this.arenas, this.fx.layer, this.bubbles.layer, this.fx.top, this.labels);
     this.arenas.addChild(this.arenaG);
     this.arenaG.zIndex = -1e9;
     this.app.stage.addChild(this.world, this.fx.screenLayer, this.overlay);
@@ -475,6 +480,7 @@ export class Scene {
     this.objects.visible = !this.far;
     this.wallsG.visible = !this.far;
     for (const t of this.kingLabels.values()) if (this.far) t.visible = false;
+    this.bubbles.update(now, counter, view);
     this.drawFar(now);
     this.drawTown(zsort, counter);
     this.drawDecals(now, sel);
@@ -516,6 +522,9 @@ export class Scene {
     const cx = (b.x + b.size / 2) * S, cy = (b.y + b.size / 2) * S;
     const w = b.size * S * (b.size === 1 ? 1.25 : 1.12);
     v.sprite.width = w; v.sprite.height = w;
+    // A popped bubble squashes the building, and it springs back.
+    const sq = (now - v.squash) / 380;
+    if (sq >= 0 && sq < 1) { const a = Math.sin(sq * Math.PI * 3) * (1 - sq) * 0.09; v.sprite.width = w * (1 + a); v.sprite.height = w * (1 - a); }
     const drop = b.size * S * 0.44;
     v.sprite.position.set(cx + Math.sin(th) * drop, cy + Math.cos(th) * drop);
     v.sprite.rotation = counter;
@@ -858,6 +867,8 @@ export class Scene {
     }
     return best;
   }
+
+  squash(id: number) { const v = this.buildings.get(id); if (v) v.squash = performance.now(); }
 
   pickBuilding(x: number, y: number): Building | undefined {
     const rx = Math.floor(x + 0.5), ry = Math.floor(y + 0.5);

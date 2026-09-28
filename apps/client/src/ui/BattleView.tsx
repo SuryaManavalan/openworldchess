@@ -119,6 +119,8 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
     const wild = mirror.players.get(white ? battle.white.playerId : battle.black.playerId)?.wild;
     // A promoted pawn wears its new piece like a borrowed spirit, for this battle only.
     const civ = mirror.players.get(white ? battle.white.playerId : battle.black.playerId)?.civ;
+    // A raid's commander: a pawn wearing a golden king's spirit, for this battle only (battle.md §9).
+    if (pid != null && type === 'k' && battle.commanders?.includes(pid)) return ascendedUrl('K', white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, wild, civ, true);
     if (pid != null && type !== 'p' && battle.promoted?.includes(pid)) return ascendedUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, wild, civ);
     if (wild) return creatureUrl(wild, type.toUpperCase() as PieceKind);
     return pieceUrl(type.toUpperCase() as PieceKind, white ? 'light' : 'dark', white ? battle.white.color : battle.black.color, emperor, civ);
@@ -131,6 +133,7 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
     const wild = mirror.players.get(color === 'w' ? battle.white.playerId : battle.black.playerId)?.wild;
     const kind = type.toUpperCase() as PieceKind;
     const pid = battle.pieceMap[sq];
+    if (pid != null && type === 'k' && battle.commanders?.includes(pid)) return `${wild ? creatureName(wild, 'P') : 'Pawn'}, commanding this raid as its king (for this battle only)`;
     if (pid != null && type !== 'p' && battle.promoted?.includes(pid)) return `${wild ? creatureName(wild, 'P') : 'Pawn'}, fighting as a ${ROLE_NAME[kind].toLowerCase()} for this battle only`;
     return wild ? `${creatureName(wild, kind)} (${ROLE_NAME[kind]})` : undefined;
   };
@@ -173,7 +176,7 @@ export function BattleView({ battle }: { battle: BattlePublic }) {
       <div className={`bar ${active ? 'active' : ''}`}>
         <span className="chip" style={{ background: info.color }} />
         <span className="name">{info.name}</span>
-        <span className="rating">{info.rating}</span>
+        <span className="rating">{info.rating}{mirror.players.get(info.playerId)?.provisional ? '?' : ''}</span>
         {mirror.players.get(battle[c].playerId)?.wild ? <span className="badge">Wild</span> : battle.aiControlled[c] && <span className="badge">AI playing</span>}
         {battle.drawOfferBy === c && <span className="badge">offers a draw</span>}
         <span className={`clock ${active ? 'on' : ''} ${low ? 'low' : ''}`}>{fmt(clock(c))}</span>

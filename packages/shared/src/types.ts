@@ -49,6 +49,12 @@ export interface Building {
   built: number;
   /** 0..1 progress toward the next piece. */
   prod: number;
+  /** Ms per piece at the current rate, while producing. */
+  cycleMs?: number;
+  /** Hurry bubbles waiting to be popped by the owner (economy.md §7): 0 plain, 1 gold. */
+  bubbles?: number[];
+  /** Server: when the next bubble rises. */
+  bubbleAt?: number;
   /** Why production is paused, if it is. */
   blocked?: 'unanchored' | 'no-node' | 'pop-cap' | 'building' | 'paused' | null;
   /** The owner paused production here. */
@@ -83,6 +89,8 @@ export interface NodeState {
 }
 
 export interface PlayerPublic {
+  /** A new or returning player's rating is still settling (shown with a "?", like chess.com). */
+  provisional?: boolean;
   id: string;
   name: string;
   color: string;
@@ -106,6 +114,8 @@ export interface PlayerSelf extends PlayerPublic {
   email?: string;
   /** Current population cap (safeguards.md §1). */
   popCap: number;
+  /** Pieces and room by kind (safeguards.md §1): [have, room]. Kings aren't listed (your title sets them). */
+  pop?: Partial<Record<PieceKind, [number, number]>>;
   emperorId: number | null;
   shieldUntil: number;
   home: [number, number];
@@ -148,4 +158,6 @@ export interface BattlePublic {
   drawOfferBy?: 'white' | 'black' | null;
   /** World ids of pawns promoted in this battle: they fight as their new piece, then turn back into pawns (battle.md §5). */
   promoted?: number[];
+  /** World ids of pawns commanding a raid on the wilds: they fight as the king, for this battle only (battle.md §9). */
+  commanders?: number[];
 }

@@ -106,6 +106,11 @@ We **don't borrow** the manipulative mechanics:
 - no sounds that guilt you for leaving;
 - no rewards just for time spent.
 
+**Hurry bubbles** ([economy.md](economy.md) §7) use this craft: a climbing combo, gold surprises, instant feedback on every touch. They stay on the right side of the line:
+- they appear only while you're playing, and at most 3 wait per building, so there's nothing to come back for;
+- a pop always pays the same, and gold is shown before you tap it;
+- no notifications about them.
+
 The world should be absorbing because it's alive and satisfying, not because it exploits compulsion. That keeps player trust, avoids trouble with app store and regulatory rules on manipulative design, and the world doesn't need it.
 
 ## 8. Technology

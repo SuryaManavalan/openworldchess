@@ -1,6 +1,7 @@
 // A client's view of the world, rebuilt from server messages. Used by the web
 // client (to render), bots (to think) and tests. It only knows what the
 // server has sent: no hidden information (bots.md §1).
+import { LandField, landUnkey } from '@owc/worldgen';
 import {
   CHUNK, chunkKey, chunkOf, key,
   type BattlePublic, type BattleSummary, type Building, type NodeState, type Piece, type PlayerPublic, type PlayerSelf, type ServerMsg, type TurnMove,
@@ -11,6 +12,8 @@ export interface MoveEvent { id: number; from: [number, number]; to: [number, nu
 export class Mirror {
   self: PlayerSelf | null = null;
   seed = 0;
+  /** The land's ratings (the generated map, reshaped by the empires on it; elo.md §3). */
+  land = new LandField(0);
   turn = 0;
   turnMs = 600;
   /** serverTime − Date.now(), estimated. */
@@ -90,6 +93,7 @@ export class Mirror {
     switch (m.t) {
       case 'welcome':
         this.self = m.self; this.seed = m.seed; this.turn = m.turn; this.turnMs = m.turnMs;
+        if (this.land.seed !== m.seed) this.land = new LandField(m.seed);
         this.clockOffset = m.serverTime - Date.now(); this.nextTurnAt = m.nextTurnAt;
         this.onSelf();
         break;
@@ -142,6 +146,12 @@ export class Mirror {
       case 'alert': this.onAlert(m); break;
       case 'emote': this.onEmote(m); break;
       case 'away': this.onAway(m); break;
+      case 'land': {
+        const [x0, y0, x1, y1] = m.box;
+        for (const k of [...this.land.cells.keys()]) { const [cx, cy] = landUnkey(k); if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) this.land.cells.delete(k); }
+        this.land.apply(m.cells);
+        break;
+      }
       case 'err': this.onError(m.msg, m.rid); break;
       case 'ack': this.onAck(m.rid); break;
       case 'chapter': this.onChapter(m); break;

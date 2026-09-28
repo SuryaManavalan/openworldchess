@@ -59,7 +59,7 @@ What this makes possible, without any extra actions:
 
 ### Population
 
-Each king can support **16 pieces, plus 6 per house** within its reach (counting at most 3 houses), with a hard cap of 400 per player; see [safeguards.md](safeguards.md). At the cap, those buildings pause production. Pieces count toward the king whose buildings produced them, until that king dies (then they're re-counted).
+Each kind of piece has its own room, set by the buildings within each king's reach: pawns from houses (8 per king, +6 per house, counting 4), knights from stables, bishops from temples, elephants from barracks (2 each), queens from palaces (1 each); hard cap 400 per player. See [safeguards.md](safeguards.md) §1. A building whose piece is at its room pauses production. Pieces count toward the king whose buildings produced them, until that king dies (then they're re-counted).
 
 ## 3. Production (Decided pairings; resources and timings Proposed)
 
@@ -117,6 +117,27 @@ put a king near good nodes → buildings draw from nodes → pieces → troops (
           ↑                                                                                  │
           └───────── mines run out: expand, resettle, or conquer a better site ◄─────────────┘
 ```
+
+## 7. Hurry bubbles
+
+As built on 2026-09-28. Code: `Game.bubbleTick` and `Game.popBubble` (server), `apps/client/src/game/bubbles.ts` (client). Numbers are in `constants.ts` (`BUBBLE_*`).
+
+While you're online, **bubbles rise over your working buildings**. Tap one, or swipe across several, to pop it, and that building jumps ahead:
+
+- **When they appear:** one every fifth of a piece's time, 8 to 90 seconds apart, a little irregularly, up to **3** waiting per building.
+  - Only while the building is working: paused, blocked or unbuilt buildings drop theirs.
+  - **Except when it's waiting for room** (its piece is at its population limit, safeguards.md §1): bubbles still rise, **greyer and duller**. Popping one banks progress, up to one whole piece, which is raised as soon as there's room. Its pop sounds a little off-key (a semitone rub; gold rings a diminished run) and says "no room".
+  - Only while you're online: nothing piles up while you're away. Bots don't get them.
+- **What a pop is worth:** production advances by the time the bubble took to appear, so popping every bubble **about doubles** a building's output.
+  - About 1 in 12 bubbles is **gold** and worth 4 times as much (at most a whole piece).
+  - A pop that completes a piece raises it at once.
+- **The server grants every bubble.** Popping only spends a bubble it already gave you, so there's nothing to spam or script beyond what a diligent player gets.
+- **How it feels** (audio.md §7):
+  - Bubbles wobble, spring in, and hold the piece they're hurrying.
+  - A pop bursts into droplets, squashes the building, and floats up the time saved ("−12s"; gold: "★ −48s").
+  - Its sound is a quick falling blip that climbs the scale with each pop in a row.
+  - Gold rings a run of bells, and every fifth pop in a combo lands a chord.
+  - Only you see your bubbles.
 
 ## Open questions
 

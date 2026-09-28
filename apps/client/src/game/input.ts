@@ -149,6 +149,8 @@ export class Input {
         else { this.mode = 'box'; sc.box = { a: [wx, wy], b: [wx, wy] }; }
       } else this.mode = under && sel.includes(under.id) ? 'command' : 'pan';
     }
+    // Swiping across bubbles pops them, like running a thumb over bubble wrap.
+    if (this.mode === 'pan' || this.mode === 'box') this.popAt(this.sq(p));
     if (this.mode === 'pan') { this.panScreen(dx, dy); this.vel = { x: dx, y: dy }; }
     else if (this.mode === 'command') this.previewCommand(this.aim(p));
     else if (this.mode === 'lasso') {
@@ -224,9 +226,22 @@ export class Input {
     return mirror.myPieces().filter((q) => q.state !== 'battle' && cheb(q.x, q.y, king.x, king.y) <= REACH && (q.kind !== 'K' || q.id === king.id)).map((q) => q.id);
   }
 
+  /** Pop the hurry bubble at a point, if there is one. */
+  private popAt(at: [number, number]): boolean {
+    const hit = this.scene.bubbles.pick(at[0], at[1]);
+    if (!hit) return false;
+    const gold = this.scene.bubbles.pop(hit.building, hit.i);
+    if (gold == null) return false;
+    commands.popBubble(hit.building, hit.i);
+    haptic(gold ? 30 : 8);
+    return true;
+  }
+
   private tap(at: [number, number], type: string) {
     const ui = useUI.getState(), sc = this.scene;
     if (ui.flagMode) { ui.addFlag(at[0], at[1]); sc.fx.ripple(Math.round(at[0]), Math.round(at[1]), 0xe3b23c); haptic(15); return; }
+    // A hurry bubble floats above everything else (economy.md §7).
+    if (this.popAt(at)) return;
     const now = performance.now();
     const dbl = now - this.lastTap.t < 320 && Math.hypot(at[0] - this.lastTap.x, at[1] - this.lastTap.y) < 1.2;
     this.lastTap = { t: now, x: at[0], y: at[1] };
@@ -304,9 +319,13 @@ export class Input {
         .filter((p) => p.owner === enemyOwner && p.kind === 'K' && p.state !== 'battle')
         .sort((a, c) => cheb(a.x, a.y, ref.x, ref.y) - cheb(c.x, c.y, ref.x, ref.y))[0];
       if (!king) { ui.toast('No enemy king there to challenge', 'error'); return; }
-      if (!sel.some((id) => mirror.pieces.get(id)?.kind === 'K')) { ui.toast('An attack needs a king in your selection', 'error'); audio.error(); return; }
+      // Raiding the wilds needs no king (battle.md §9): a pawn in the troop leads as its commander.
+      const hasKing = sel.some((id) => mirror.pieces.get(id)?.kind === 'K');
+      const wild = !!mirror.players.get(enemyOwner)?.wild;
+      const raid = !hasKing && wild && sel.some((id) => mirror.pieces.get(id)?.kind === 'P');
+      if (!hasKing && !raid) { ui.toast(wild ? 'A raid on the wilds needs a king or at least one pawn' : 'An attack on an empire needs a king in your selection', 'error'); audio.error(); return; }
       const siege = [...mirror.buildings.values()].some((bl) => bl.owner === enemyOwner && cheb(bl.x, bl.y, king.x, king.y) <= REACH);
-      ui.set({ pendingAttack: { pieceIds: sel, targetKingId: king.id, name: mirror.players.get(enemyOwner)?.name ?? 'enemy', siege } });
+      ui.set({ pendingAttack: { pieceIds: sel, targetKingId: king.id, name: mirror.players.get(enemyOwner)?.name ?? 'enemy', siege, raid } });
       audio.attack(); haptic(20);
       return;
     }

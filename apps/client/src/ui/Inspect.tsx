@@ -61,7 +61,7 @@ export function Inspect() {
         <div>
           <b>{title}</b>
           <span>{sub}</span>
-          {pl && <span className="rating">Rating {pl.rating}</span>}
+          {pl && <span className="rating">Rating {pl.rating}{pl.provisional ? '?' : ''}</span>}
         </div>
       </div>
       {faction && (

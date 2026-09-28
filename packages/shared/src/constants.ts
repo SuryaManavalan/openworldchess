@@ -87,15 +87,32 @@ export const BUILDINGS: Record<BuildingType, BuildingSpec> = {
 };
 
 /**
- * Population (docs/specs/safeguards.md §1): each king supports KING_POP pieces,
- * plus HOUSE_POP per house within its reach, counting at most HOUSES_PER_KING
- * houses. So one king carries at most 34 pieces, about two chess sets. A hard
- * per-player cap protects the server whatever else happens.
+ * Population by piece (safeguards.md §1, as of 2026-09-28): each piece has its own room,
+ * set by the buildings in each king's city (within its reach). A city full of pawns can
+ * still raise knights and elephants; more stables make room for more knights.
  */
-export const KING_POP = 16;
-export const HOUSE_POP = 6;
-export const HOUSES_PER_KING = 3;
+export const POP_PAWNS_PER_KING = 8;
+export const POP_PAWNS_PER_HOUSE = 6;
+export const POP_HOUSES_COUNTED = 4;
+/** Room per building of the kind that makes the piece. Kings follow your title instead. */
+export const POP_PER_BUILDING: Partial<Record<PieceKind, { type: BuildingType; n: number }>> = {
+  N: { type: 'stable', n: 2 }, B: { type: 'temple', n: 2 }, R: { type: 'barracks', n: 2 }, Q: { type: 'palace', n: 1 },
+};
 export const PLAYER_PIECE_CAP = 400;
+/**
+ * Hurry bubbles (economy.md §7): while you're online, bubbles rise over your working
+ * buildings, one every fifth of a piece's time (8 s to 90 s apart, a little irregular),
+ * up to BUBBLE_MAX waiting. Popping one advances that building by the time it took to
+ * appear, so popping every bubble about doubles production. Now and then one is gold,
+ * worth BUBBLE_GOLD_TIMES as much.
+ */
+export const BUBBLE_MAX = 3;
+export const BUBBLE_GOLD_CHANCE = 0.08;
+export const BUBBLE_GOLD_TIMES = 4;
+/** Time between bubbles for a building making a piece every cycleMs. */
+export const bubbleEveryMs = (cycleMs: number) => Math.max(8_000, Math.min(90_000, cycleMs / 5));
+/** How far a popped bubble advances production (a fraction of a piece). */
+export const bubbleWorth = (cycleMs: number, gold: boolean) => Math.min(gold ? 1 : 0.25, (bubbleEveryMs(cycleMs) / cycleMs) * (gold ? BUBBLE_GOLD_TIMES : 1));
 /** Kings are the scarce resource: a hard cap, and each extra king takes longer to crown. */
 export const PLAYER_KING_CAP = 20;
 export const KING_TIME_PER_KING = 1 / 4; // palace king time × (1 + kings/4)

@@ -73,21 +73,42 @@ describe('the Chronicle', () => {
     expect(setWorth(['K', 'Q', 'Q', 'R', 'R', 'R', 'B', 'N', 'P'])).toBe(9 + 10 + 3 + 3 + 1);
   });
 
+  it('a realm full of pawns still raises knights', () => {
+    const p = join('Pawnful');
+    const k = game.kingsOf(p.id)[0];
+    const spot = game.world.nearestFree(k.x + 4, k.y - 4, 8)!;
+    const stable = place(p.id, 'stable', spot[0], spot[1], 2);
+    const mine = (kind: string) => [...game.world.pieces.values()].filter((q) => q.owner === p.id && q.kind === kind).length;
+    while (mine('P') < game.popCaps(p.id).P) {
+      const at = game.world.nearestFree(k.x - 6, k.y - 6, 14)!;
+      game.addPiece({ id: game.world.id(), owner: p.id, kind: 'P', x: at[0], y: at[1], facing: 2, state: 'idle' });
+    }
+    tick();
+    expect(stable.blocked).not.toBe('pop-cap');
+    // Fill the knights' room and the stable pauses.
+    while (mine('N') < game.popCaps(p.id).N) {
+      const at = game.world.nearestFree(k.x - 6, k.y + 6, 14)!;
+      game.addPiece({ id: game.world.id(), owner: p.id, kind: 'N', x: at[0], y: at[1], facing: 2, state: 'idle' });
+    }
+    tick();
+    expect(stable.blocked).toBe('pop-cap');
+  });
+
   it('a full population still raises the piece the chapter asks for', () => {
     const p = join('Crowded');
     const st = game.chronicle.of(p);
     st.ch = 4; st.step = 1; st.buildings = [...new Set([...st.buildings, 'temple'])];
     st.chBase = { ...st.tallies };
     const k = game.kingsOf(p.id)[0];
-    // A temple beside ore, and a realm filled to its cap with pawns.
+    // A temple beside ore, and a realm filled to its cap with bishops.
     const spot = game.world.nearestFree(k.x + 4, k.y + 4, 8)!;
     const temple = place(p.id, 'temple', spot[0], spot[1], 2);
     game.world.addHoard(spot[0] + 2, spot[1], 'ore', 500);
-    const mine = () => [...game.world.pieces.values()].filter((q) => q.owner === p.id).length;
-    const cap = game.popCap(p.id);
+    const mine = () => [...game.world.pieces.values()].filter((q) => q.owner === p.id && q.kind === 'B').length;
+    const cap = game.popCaps(p.id).B;
     while (mine() < cap) {
       const at = game.world.nearestFree(k.x - 6, k.y - 6, 14)!;
-      game.addPiece({ id: game.world.id(), owner: p.id, kind: 'P', x: at[0], y: at[1], facing: 2, state: 'idle' });
+      game.addPiece({ id: game.world.id(), owner: p.id, kind: 'B', x: at[0], y: at[1], facing: 2, state: 'idle' });
     }
     tick();
     expect(mine()).toBeGreaterThanOrEqual(cap);
@@ -144,6 +165,10 @@ describe('the Chronicle', () => {
     const p = join('Errand');
     const st = game.chronicle.of(p);
     st.ch = 2;
+    // A settlement one building short of its next tier, so a quest is always on offer (wherever the player spawned).
+    const k = game.kingsOf(p.id)[0];
+    for (const [dx, dy] of [[2, -3], [4, -3]]) { const at = game.world.nearestFree(k.x + dx, k.y + dy, 6)!; place(p.id, 'house', at[0], at[1]); }
+    game.chronicle.refreshSettlements(now, true);
     for (let i = 0; i < 7; i++) tick(5 * 60_000);
     expect(st.sides.length).toBeGreaterThan(0);
     const q = st.sides[0];

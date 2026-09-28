@@ -1,21 +1,24 @@
 // End to end: a real server, two protocol clients, the whole loop.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createServer, type AddressInfo } from 'node:net';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
 import { Chess } from 'chess.js';
 import { Connection } from '@owc/client-core';
-import { BUILDINGS, WORK_AREA, REACH, cheb, distToRect, type BattlePublic, type BattleSummary } from '@owc/shared';
+import { BUILDINGS, CHUNK, WORK_AREA, REACH, cheb, chunkKey, distToRect, type BattlePublic, type BattleSummary } from '@owc/shared';
 
-const PORT = 8800 + Math.floor(Math.random() * 90);
+// A port the OS says is free right now (a random pick could collide with anything else running).
+let PORT = 0;
 let server: ChildProcess;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function until<T>(f: () => T | undefined | null | false, ms = 20_000, step = 50): Promise<T> {
+async function until<T>(f: () => T | undefined | null | false | Promise<T | undefined | null | false>, ms = 20_000, step = 50): Promise<T> {
   const end = Date.now() + ms;
   for (;;) {
-    const v = f();
+    // Await it: a Promise is always truthy, so an async check used to "pass" at once.
+    const v = await f();
     if (v) return v;
     if (Date.now() > end) throw new Error('timed out');
     await sleep(step);
@@ -23,6 +26,7 @@ async function until<T>(f: () => T | undefined | null | false, ms = 20_000, step
 }
 
 beforeAll(async () => {
+  PORT = await new Promise<number>((ok) => { const s = createServer(); s.listen(0, () => { const p = (s.address() as AddressInfo).port; s.close(() => ok(p)); }); });
   const dir = mkdtempSync(join(tmpdir(), 'owc-'));
   server = spawn(process.execPath, ['apps/server/src/main.ts'], {
     env: { ...process.env, PORT: String(PORT), DATA: join(dir, 'w.json'), TURN_MS: '50', COUNTDOWN_SCALE: '0.05', SPEED: '400', SHIELD_MS: '0', SEED: '7', GUEST_GRACE_MS: '2500', WILDS: '0' },
@@ -75,10 +79,13 @@ describe('the whole loop', () => {
     // Build a house where wheat is in the work area and wood is in reach.
     const home = a.mirror.self!.home;
     a.watchArea(home[0], home[1], 40);
-    await until(() => a.mirror.chunks.size >= 4);
+    const king = a.mirror.myKings()[0];
+    // Every chunk around the king has arrived (its wheat and trees are what we build by).
+    const need: string[] = [];
+    for (const dy of [-1, 0, 1]) for (const dx of [-1, 0, 1]) need.push(chunkKey(Math.floor((king.x + dx * (REACH + 4)) / CHUNK), Math.floor((king.y + dy * (REACH + 4)) / CHUNK)));
+    await until(() => need.every((k) => a.mirror.chunks.has(k)));
     const nodes = [...a.mirror.nodes.values()];
     let spot: [number, number] | null = null;
-    const king = a.mirror.myKings()[0];
     for (let r = 1; r <= REACH && !spot; r++)
       for (let dy = -r; dy <= r && !spot; dy++)
         for (let dx = -r; dx <= r && !spot; dx++) {
