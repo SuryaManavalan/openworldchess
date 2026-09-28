@@ -166,7 +166,7 @@ export const CHAPTERS: Chapter[] = [
 ];
 
 /** Side quests (campaign.md §5.3): short errands written from the world around you. */
-export type SideKind = 'bounty' | 'rescue' | 'scout' | 'grow' | 'skirmish';
+export type SideKind = 'bounty' | 'rescue' | 'scout' | 'grow' | 'skirmish' | 'pilgrimage';
 export interface SideQuest {
   id: number;
   kind: SideKind;
@@ -180,6 +180,19 @@ export interface SideQuest {
   renown: number;
   /** Also: extra pieces for the reward. */
   pieces?: PieceKind[];
+  /**
+   * Offered quests wait for you to accept or decline them; only accepted (active) ones
+   * count progress (campaign.md §5.3). Older saves have no state: they're active.
+   */
+  state?: 'offered' | 'active';
+  /** Progress to show, when the quest counts something: [have, need]. */
+  progress?: [number, number];
+  /** A quest in stages (the pilgrimage, campaign.md §5.3): which one you're on, of how many. */
+  stage?: number;
+  stages?: number;
+  /** Pilgrimage: the grove to clear, [x0, y0, x1, y1], and how many trees stood in it. */
+  area?: [number, number, number, number];
+  trees?: number;
 }
 
 /** The client's view of a player's Chronicle. */

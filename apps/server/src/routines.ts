@@ -54,7 +54,7 @@ export class Routines {
     let i = 0;
     for (; i < n && this.moves > 0; i++) {
       const p = all[(this.cursor + i) % n];
-      if (p.state !== 'idle' || p.groupId || !p.owner || p.wild) { this.lives.delete(p.id); continue; }
+      if (p.state !== 'idle' || p.groupId || !p.owner || p.wild || p.routine === 'pave' || p.routine === 'clear' || p.routine === 'tend') { this.lives.delete(p.id); continue; }
       // Idle life is for watching: nobody looking, nothing to animate (performance.md §5).
       // Except merchants: trade is part of the game (campaign.md §4.4), so caravans keep going.
       const watched = g.watched(p.x, p.y);

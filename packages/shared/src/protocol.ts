@@ -13,9 +13,12 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('sub'), chunks: z.array(xy).max(81) }),
   z.object({ t: z.literal('order.move'), rid: z.number().optional(), pieceIds: ids, to: xy }),
   z.object({ t: z.literal('order.stop'), pieceIds: ids }),
+  // Works (movement.md §9): knights pave a road to a square; elephants clear an area.
+  z.object({ t: z.literal('order.pave'), rid: z.number().optional(), pieceIds: ids, to: xy }),
+  z.object({ t: z.literal('order.clear'), rid: z.number().optional(), pieceIds: ids, a: xy, b: xy, hard: z.boolean() }),
   z.object({ t: z.literal('order.attack'), rid: z.number().optional(), pieceIds: ids, targetKingId: z.number().int() }),
   z.object({ t: z.literal('order.cancelAttack'), battleId: z.number().int() }),
-  z.object({ t: z.literal('build'), rid: z.number().optional(), building: z.enum(['palace', 'house', 'stable', 'temple', 'barracks', 'wonder']), at: xy }),
+  z.object({ t: z.literal('build'), rid: z.number().optional(), building: z.enum(['palace', 'house', 'stable', 'temple', 'barracks', 'wonder', 'altar']), at: xy }),
   z.object({ t: z.literal('building.pause'), buildingId: z.number().int(), paused: z.boolean() }),
   z.object({ t: z.literal('bubble.pop'), buildingId: z.number().int(), i: z.number().int().min(0).max(7) }),
   z.object({ t: z.literal('palace.mode'), buildingId: z.number().int(), mode: z.enum(['alt', 'K', 'Q']) }),
@@ -34,6 +37,7 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('capital.set'), rid: z.number().optional(), buildingId: z.number().int() }),
   z.object({ t: z.literal('empire.reset'), rid: z.number().optional(), name: z.string().max(40) }),
   z.object({ t: z.literal('quest.decline'), id: z.number().int() }),
+  z.object({ t: z.literal('quest.accept'), rid: z.number().optional(), id: z.number().int() }),
   z.object({ t: z.literal('muster'), rid: z.number().optional(), kingId: z.number().int() }),
   z.object({ t: z.literal('profile'), name: z.string().min(2).max(20) }),
   z.object({ t: z.literal('ping'), at: z.number() }),
@@ -46,7 +50,7 @@ export type TurnMove = [number, number, number, number, number, number];
 export type ServerMsg =
   | { t: 'welcome'; v: number; token: string; self: PlayerSelf; seed: number; turn: number; turnMs: number; serverTime: number; nextTurnAt: number }
   | { t: 'chunk'; cx: number; cy: number; pieces: Piece[]; buildings: Building[]; nodes: NodeState[]; traffic: number[] }
-  | { t: 'turn'; n: number; at: number; moves: TurnMove[]; pieces: Piece[]; removed: number[]; buildings: Building[]; removedBuildings: number[]; nodes: NodeState[] }
+  | { t: 'turn'; n: number; at: number; moves: TurnMove[]; pieces: Piece[]; removed: number[]; buildings: Building[]; removedBuildings: number[]; nodes: NodeState[]; /** Newly paved squares, flat [x, y, ...]. */ paved?: number[] }
   | { t: 'mine'; pieces: Piece[]; buildings: Building[] }
   | { t: 'players'; players: PlayerPublic[] }
   /** The land's live ratings (elo.md §3) in a box of cells [cx0, cy0, cx1, cy1]: replace that box with these [cx, cy, rating, ...]. */

@@ -139,3 +139,34 @@ Pieces selected without a king can be sent anywhere (the command rule, §4): to 
 | Waiting pieces | Idle breathing (a 2% vertical scale), matching the stoic style. |
 
 Animations are driven by server move events. The client never invents moves, but it may **predict** your own troop's next move from the shared rules, so input feels instant; the server corrects it if needed.
+
+## 9. Works: knights pave, elephants clear
+
+As built on 2026-09-28. Code: `apps/server/src/works.ts`; numbers in `constants.ts` (`PAVE_*`, `CLEAR_*`).
+
+Knights and elephants have jobs outside battle. Both work as **crews**: select several, give one order, and the work is split between them. More hands finish sooner, less the time spent getting to their share, so returns diminish.
+- **Workers:** they're ordinary idle pieces with a job. They're posted where they work (§4), and idle routines leave them alone.
+- **Taken off the job:** any new order (move, stop, attack), or a battle, takes a piece off its job. What it finished stays done.
+- **Restarts:** jobs don't survive a server restart. The workers just stand where they were.
+
+### Paving (knights)
+
+- **The order:** select knights (up to 8), tap **Pave**, then tap where the road should go. The road runs from the crew along open ground to that square, up to 400 squares long, and costs only the knights' time.
+- **Splitting the work:**
+  - The route is cut into one stretch per knight. A knight riding farther out gets a shorter stretch, since riding is about 4× as fast as paving (`PAVE_RIDE`), so the crew finishes together.
+  - Whoever finishes first rides over and takes half of the longest stretch still left.
+- **Paving:** a knight paves the next square of its stretch when it's within 2 squares of it, taking 2 turns per square (`PAVE_TURNS`), and keeps up with the road as it goes.
+- **Measured** (40 squares): 1 knight takes 83 turns (about 50 s), 2 take 49, 4 take 34, and 8 take 26.
+- **A paved square** has a traffic value of 1000 (`PAVED`). It never fades, and footsteps don't wear it down. It's drawn wider than a street, with a kerb and set stones. Turns carry newly paved squares to the clients (`turn.paved`).
+- **Speed:** a troop whose lead square is paved takes an extra step every other turn (about 1.5×). With the chapter 7 *Roads* unlock, busy streets (traffic 60+) count too.
+
+### Clearing land (elephants)
+
+- **The order:** select elephants (up to 8), tap **Clear land**, then drag over the area (up to 40×40), or tap its middle for a 9×9 patch. A confirm sheet shows what's there and roughly how long it will take.
+- **Working:** each elephant takes the nearest thing left in the area, walks beside it, works it down, and moves on. Two never work the same spot. Something it can't reach is left for later.
+- **Time per spot, for one elephant** (`CLEAR_TURNS`): tree 2 turns, rock 8, ore 20.
+- **What's left:** a felled tree's stump is dug out after a minute instead of regrowing. Rock and ore are gone for good.
+- **Safeguards:**
+  - Rock and ore are only broken when you tick *Also break rock and ore*. The sheet then says how many would be destroyed, and notes that palaces need ore.
+  - Hoards are never cleared, and neither is anything within 10 squares of another empire's buildings.
+

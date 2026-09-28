@@ -110,7 +110,7 @@ One rule replaces "a king must always be there":
 
 ### 4.4 Roads and trade (existing traffic and merchants given a purpose)
 
-- **Roads speed marches** (from chapter 7): a troop whose lead point is on a street (traffic of 60 or more) advances 1.5× per turn. The roads players wear by walking become highways.
+- **Roads speed marches** (from chapter 7): a troop whose lead point is on a street (traffic of 60 or more) advances 1.5× per turn. The roads players wear by walking become highways. **Paved roads** that knights lay ([movement.md](movement.md) §9) give everyone the same speed from the start; this unlock extends it to busy streets.
 - **Trade** (from chapter 6): towns linked by a working merchant road produce 15% faster (at most +30% per town). The existing caravans become an economic reason to have two towns close together.
 
 ### 4.5 The Wonder (the one new building)
@@ -133,10 +133,10 @@ The Chronicle is *what* happens over 15 hours; quests are *how* a player is led 
   - Each chapter is 2–3 steps, shown one at a time.
   - Each step has a line from the Chronicle, the scribe-narrator whose book is the quest icon, and a concrete target: *"The deer of Mossglade grow bold. Hunt the Stag Herd east of your village."*
   - Finishing the last step completes the chapter: the unlock ceremony plays and the next chapter's first step appears.
-- **Side quests,** up to three: short, optional errands **generated from the world around you** (§5.3).
+- **Side quests,** up to four at once: short, optional errands **generated from the world around you** (§5.3).
   - They pay Renown and small, useful rewards.
   - They fill the gaps between chapters and send you toward things you'd enjoy anyway.
-  - You can decline any; a new one arrives within 30 minutes.
+  - Each arrives as an **offer** you accept or decline (§5.5). Nothing is lost by declining: a declined or dropped quest is offered again about 20 minutes of play later, if it still makes sense.
 
 There is no quest log to manage, no quest chains to track and no fetch-and-carry. If a quest can't be expressed with the game's existing verbs (§5.2), it doesn't exist.
 
@@ -163,7 +163,7 @@ Steps carry a **target and a map marker** whenever there's a place: a camp, a si
 
 ### 5.3 Side quests from the world around you
 
-Every 30 minutes of active play, and whenever a slot is free, the server writes one side quest from the player's surroundings. It picks the first template that fits, rotating so the same kind never comes twice in a row:
+From chapter 2, 10 minutes into play and then every 12 minutes, while you hold fewer than four quests and have fewer than two offers waiting, the server offers one side quest (as of 2026-09-28; it was every 30 minutes). A declined quest that's due comes back first; otherwise it writes a new one from the player's surroundings. It picks the first template that fits, rotating so the same kind never comes twice in a row:
 
 | Template | When it fits | Reward |
 |---|---|---|
@@ -174,6 +174,12 @@ Every 30 minutes of active play, and whenever a slot is free, the server writes 
 | **Grow** | A settlement one building short of the next tier | One free piece from its best building |
 | **Skirmish** | A rival empire (bot or person) within 200 squares, not shielded, of similar strength | Renown ×2 for the win |
 | **Defend** | A horde whose roaming passes near your town | Renown, and the camp's full hoard |
+| **Pilgrimage** (a chain of 3) | Temples are open, and a grove of 10+ trees lies 30–45 squares from your capital (or biggest town), away from other empires | 150 Renown and a bishop |
+
+The **pilgrimage** (as built on 2026-09-28) teaches what pieces do outside battle, in three stages:
+1. **Clear the grove** with elephants: 80% of its trees down (movement.md §9). Progress shows as trees cleared.
+2. **Raise an altar** in the clearing, with a bishop beside it (economy.md §8).
+3. **Pave a road** with knights from the altar to one of your towns (movement.md §9). It's done when paved squares link the altar to within 10 squares of a town.
 
 Rewards stay small and **never outgrow the main quest**. Side quests give variety and a nudge, not a second progression track. They're also how the world keeps offering something after the campaign ends (§8, the Epilogue).
 
@@ -188,7 +194,11 @@ Rewards stay small and **never outgrow the main quest**. Side quests give variet
 
 ### 5.5 Presentation
 
-- **Tracker:** a compact card, top left (where the guide sits now), with the main step, its progress ("2/3 knights") and Show me. Side quests appear under it as a single collapsed line.
+- **Tracker:** a compact card, top left (where the guide sits now), with the main step, its progress ("2/3 knights") and Show me.
+  - **Offers** appear under it as cards: the quest, its reward, *Where?*, **Decline** (tap twice; it says the quest will come back) and **Accept**.
+  - **Your side quests** sit in a list under that, collapsed to one line. Tap one to **focus** it: the top card then shows that quest (its progress, Show me, and *Drop*), with a chip back to the chapter. Focus is remembered across reloads.
+  - Every control is at least 36–44px tall, with no small close buttons beside the list (a thumb reaching to close it used to decline a quest by accident).
+- **Sheets:** every bottom sheet has a full-width handle: tap it, or swipe it down (the sheet follows your finger), to close.
 - **Map:** quest targets get a gold pin that joins the existing marker system (flags, settlement pins, edge arrows), so off-screen targets show as edge arrows with distances.
 - **Moments:**
   - A finished step gives a soft chime and a check mark.

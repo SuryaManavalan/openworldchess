@@ -186,10 +186,13 @@ export class Bot {
       const b = m.myBuildings().filter((x) => x.type !== 'ruin').sort((a, z) => cheb(a.x, a.y, emp.x, emp.y) - cheb(z.x, z.y, emp.x, emp.y))[0];
       if (b) return { u: 1, run: () => { this.lastQuest = Date.now(); this.conn.request({ t: 'capital.set', buildingId: b.id }); } };
     }
+    // Side quests arrive as offers: take them up, as a person would.
+    const offer = c.sides.find((q) => q.state === 'offered');
+    if (offer) return { u: 1, run: () => { this.lastQuest = Date.now(); this.conn.request({ t: 'quest.accept', id: offer.id }); } };
     if (!step) return null;
     const idle = kings.filter((k) => !k.emperor && k.state === 'idle' && (k.cooldownUntil ?? 0) < m.serverNow());
     const troopOf = (k: Piece) => m.myPieces().filter((p) => p.state !== 'battle' && cheb(p.x, p.y, k.x, k.y) <= REACH && (p.kind !== 'K' || p.id === k.id));
-    const at = c.target ?? c.sides.find((q) => q.camp || q.kind === 'skirmish')?.at;
+    const at = c.target ?? c.sides.find((q) => q.state !== 'offered' && (q.camp || q.kind === 'skirmish'))?.at;
     if ((step.verb === 'hunt' || step.verb === 'free' || step.verb === 'win') && at) {
       // The strongest idle king leads; attack if its king is in sight and we
       // outweigh it, otherwise march closer (or wait and grow). While the

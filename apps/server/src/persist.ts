@@ -64,6 +64,8 @@ export function load(game: Game, file: string): boolean {
   for (const p of snap.pieces) {
     // Battles and marches in progress don't survive a restart.
     if (p.state === 'battle' || p.state === 'moving') p.state = 'idle';
+    // Jobs (movement.md §9) don't survive a restart either.
+    if (p.routine === 'pave' || p.routine === 'clear') p.routine = undefined;
     p.groupId = undefined;
     game.addPiece(p);
   }

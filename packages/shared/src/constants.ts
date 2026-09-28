@@ -57,7 +57,7 @@ export function setWorth(kinds: Iterable<PieceKind>): number {
   return w;
 }
 
-export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks' | 'wonder';
+export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks' | 'wonder' | 'altar';
 /** Resources. "ore" looks different in each biome (gold, silver, copper, gems) but is one resource. */
 export type NodeKind = 'tree' | 'wheat' | 'rock' | 'ore';
 
@@ -83,6 +83,8 @@ export const BUILDINGS: Record<BuildingType, BuildingSpec> = {
   barracks: { type: 'barracks', size: 2, cost: { tree: 60, rock: 80 }, buildMs: 60_000, needs: ['rock'], draw: { rock: 30 }, produces: ['R'], baseMs: 300_000 },
   palace: { type: 'palace', size: 3, cost: { tree: 120, rock: 150 }, buildMs: 90_000, needs: ['ore', 'rock'], draw: { ore: 40, rock: 40 }, produces: ['K', 'Q'], baseMs: 1_200_000 },
   // The campaign's capstone (campaign.md §4.5): one per empire, in a city capital; it produces nothing, it lifts its town.
+  // A bishop's altar (economy.md §8): raised anywhere by a bishop standing beside it; free, and it produces nothing.
+  altar: { type: 'altar', size: 1, cost: {}, buildMs: 60_000, needs: [], draw: {}, produces: [], baseMs: 0 },
   wonder: { type: 'wonder', size: 3, cost: { tree: 400, rock: 400, ore: 150 }, buildMs: 30 * 60_000, needs: [], draw: {}, produces: [], baseMs: 0 },
 };
 
@@ -99,6 +101,36 @@ export const POP_PER_BUILDING: Partial<Record<PieceKind, { type: BuildingType; n
   N: { type: 'stable', n: 2 }, B: { type: 'temple', n: 2 }, R: { type: 'barracks', n: 2 }, Q: { type: 'palace', n: 1 },
 };
 export const PLAYER_PIECE_CAP = 400;
+/**
+ * Paved roads (movement.md §9): a square's traffic at or above PAVED is a paved road.
+ * Paving never wears off, and troops on it move about 1.5× as fast.
+ */
+export const PAVED = 1000;
+/**
+ * Altars (economy.md §8): a small outpost a bishop holds far from any king. While a bishop
+ * of yours stands within ALTAR_TEND squares of it, it holds the land within ALTAR_REACH:
+ * up to ALTAR_BUILDINGS houses, stables or temples can stand there and keep working, at
+ * ALTAR_RATE of the usual speed. They add no population room (that stays with kings).
+ */
+export const ALTAR_TEND = 2;
+export const ALTAR_REACH = 5;
+export const ALTAR_BUILDINGS = 3;
+export const ALTAR_TYPES: BuildingType[] = ['house', 'stable', 'temple'];
+export const ALTAR_RATE = 0.6;
+export const ALTARS_PER_PLAYER = 4;
+/** Knights in one paving crew, and the longest road one order lays. */
+export const PAVE_CREW = 8;
+export const PAVE_MAX = 400;
+/** Turns of a knight's work per square, and how many times faster a knight rides than it paves. */
+export const PAVE_TURNS = 2;
+export const PAVE_RIDE = 4;
+/**
+ * Clearing (movement.md §9): elephants in one crew, the largest area one order clears, and
+ * turns of one elephant's work to bring each down. Rock and ore are only cleared when asked.
+ */
+export const CLEAR_CREW = 8;
+export const CLEAR_MAX = 40;
+export const CLEAR_TURNS = { tree: 2, rock: 8, ore: 20 } as const;
 /**
  * Hurry bubbles (economy.md §7): while you're online, bubbles rise over your working
  * buildings, one every fifth of a piece's time (8 s to 90 s apart, a little irregular),

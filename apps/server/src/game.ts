@@ -1,6 +1,6 @@
 // The authoritative game: players, orders, world turns and the economy.
 import {
-  BUILDINGS, BUBBLE_GOLD_CHANCE, BUBBLE_MAX, bubbleEveryMs, bubbleWorth, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, HOLD_MS, ENGAGE_RANGE, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
+  ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, ALTAR_TEND, ALTAR_TYPES, ALTARS_PER_PLAYER, BUILDINGS, PAVED, BUBBLE_GOLD_CHANCE, BUBBLE_MAX, bubbleEveryMs, bubbleWorth, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, HOLD_MS, ENGAGE_RANGE, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
   BUILDINGS_PER_KING, PLAYER_BUILDING_CAP, RUIN_LIFETIME_MS, MASTERLESS_MS, REACH, SPAWN_SHIELD_MS, TEAM_COLORS,
   ANCHOR_GRACE_MS, DECAY_EVERY_MS, BUILDING_MAX_HP, WORK_AREA, cheb, distToRect, isLight,
   type Building, type BuildingType, type Facing, type NodeKind, type Piece, type PieceKind, type PlayerPublic, type PlayerSelf, type TurnMove,
@@ -14,6 +14,7 @@ import { Routines } from './routines.ts';
 import { Wilds, type CampInfo } from './wilds.ts';
 import { perf } from './perf.ts';
 import { Chronicle, type ChronState } from './chronicle.ts';
+import { Works } from './works.ts';
 import { shopOpen } from './shop.ts';
 import type { TikTokLink } from './tiktok.ts';
 
@@ -114,6 +115,8 @@ export class Game {
   kingsByOwner = new Map<string, Set<number>>();
   battles: Battles;
   routines: Routines;
+  /** Knights paving and elephants clearing (movement.md §9). */
+  works: Works;
   wilds: Wilds;
   chronicle: Chronicle;
   turn = 0;
@@ -151,6 +154,7 @@ export class Game {
     this.speed = opts.speed;
     this.battles = new Battles(this);
     this.routines = new Routines(this);
+    this.works = new Works(this);
     this.wilds = new Wilds(this);
     this.chronicle = new Chronicle(this);
     this.wilds.enabled = opts.wilds ?? true;
@@ -389,7 +393,7 @@ export class Game {
 
   // ---------- orders ----------
 
-  private orderable(player: string, ids: number[]): Piece[] {
+  orderable(player: string, ids: number[]): Piece[] {
     return ids.map((id) => this.world.pieces.get(id)!).filter((p) =>
       // Routed pieces (outside every king's reach) can be ordered too: you can always bring them home.
       p && p.owner === player && (p.state === 'idle' || p.state === 'moving' || p.state === 'routed') && !this.battles.frozen(p));
@@ -406,11 +410,13 @@ export class Game {
   /**
    * `post`: the player sent these pieces there themselves. Any selection may go anywhere
    * (movement.md §4); pieces sent without a king are posted where they arrive and don't
-   * drift home (background walks home don't post).
+   * drift home (background walks home don't post). `work`: a worker riding to its job
+   * (movement.md §9); any other order takes pieces off their jobs.
    */
-  orderMove(player: string, ids: number[], to: [number, number], attack?: number, planMs?: number, commander?: number, post = false): string | null {
+  orderMove(player: string, ids: number[], to: [number, number], attack?: number, planMs?: number, commander?: number, post = false, work = false): string | null {
     const pieces = this.orderable(player, ids);
     if (!pieces.length) return 'Nothing to move';
+    if (!work) this.works.release(pieces.map((p) => p.id));
     const [tx, ty] = to;
     const king = pieces.find((p) => p.kind === 'K') ?? (commander != null ? pieces.find((p) => p.id === commander) : undefined);
     for (const p of pieces) p.posted = post && !king ? true : undefined;
@@ -449,6 +455,7 @@ export class Game {
   }
 
   orderStop(player: string, ids: number[]) {
+    this.works.release(ids);
     for (const p of this.orderable(player, ids)) this.leaveGroup(p);
   }
 
@@ -524,12 +531,25 @@ export class Game {
       }
     }
     const kings = this.kingsOf(player).filter((k) => distToRect(k.x, k.y, x, y, size) <= REACH);
-    if (!kings.length) return 'Buildings need a king within 10 squares';
+    // Altars (economy.md §8): a bishop raises one anywhere; a tended altar holds a few small buildings.
+    if (type === 'altar') {
+      const bishop = w.piecesNear(x, y, ALTAR_TEND).find((p) => p.owner === player && p.kind === 'B' && p.state !== 'battle' && cheb(p.x, p.y, x, y) <= ALTAR_TEND);
+      if (!bishop) return 'A bishop raises an altar: bring one of yours beside the spot';
+      const mine = [...w.buildings.values()].filter((b) => b.owner === player && b.type === 'altar');
+      if (mine.length >= ALTARS_PER_PLAYER) return `You can hold at most ${ALTARS_PER_PLAYER} altars`;
+      if (mine.some((a) => cheb(a.x, a.y, x, y) <= 2 * ALTAR_REACH)) return 'Too close to another of your altars';
+    } else if (!kings.length) {
+      const altar = w.altarOver(x, y, size, player);
+      if (!altar) return 'Buildings need a king within 10 squares, or a tended altar within 5';
+      if (!ALTAR_TYPES.includes(type)) return 'By an altar you can build only houses, stables and temples';
+      const held = w.buildingsNear(altar.x, altar.y, ALTAR_REACH + 3).filter((b) => b.owner === player && b.type !== 'ruin' && b.type !== 'altar' && distToRect(altar.x, altar.y, b.x, b.y, b.size) <= ALTAR_REACH);
+      if (held.length >= ALTAR_BUILDINGS) return `An altar holds at most ${ALTAR_BUILDINGS} buildings`;
+    }
     // Building caps (safeguards.md §3): per king in reach, and per player.
     let owned = 0;
     for (const bl of w.buildings.values()) if (bl.owner === player && bl.type !== 'ruin') owned++;
     if (owned >= PLAYER_BUILDING_CAP) return `You have the maximum of ${PLAYER_BUILDING_CAP} buildings`;
-    if (kings.every((k) => w.buildingsNear(k.x, k.y, REACH).filter((bl) => bl.owner === player && bl.type !== 'ruin' && distToRect(k.x, k.y, bl.x, bl.y, bl.size) <= REACH).length >= BUILDINGS_PER_KING))
+    if (kings.length && kings.every((k) => w.buildingsNear(k.x, k.y, REACH).filter((bl) => bl.owner === player && bl.type !== 'ruin' && distToRect(k.x, k.y, bl.x, bl.y, bl.size) <= REACH).length >= BUILDINGS_PER_KING))
       return `A king can hold at most ${BUILDINGS_PER_KING} buildings: bring another king`;
     if (type === 'palace' && w.buildingsNear(x, y, REACH).some((b) => b.owner === player && b.type === 'palace' && kings.some((k) => distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH)))
       return 'One palace per king';
@@ -668,7 +688,9 @@ export class Game {
       step();
       // Roads speed marches (campaign.md §4.4): on a street, a troop takes an extra step every other turn.
       const owner = this.players.get(g.owner);
-      if (owner && this.chronicle.has(owner, 'roads') && this.turn % 2 === 0 && !g.state.done && (w.traffic.get(g.state.lead[0] * 134217728 + g.state.lead[1]) ?? 0) >= 60) step();
+      // Paved roads (movement.md §9) speed everyone the same way; with Roads, busy streets do too.
+      const road = w.traffic.get(g.state.lead[0] * 134217728 + g.state.lead[1]) ?? 0;
+      if (this.turn % 2 === 0 && !g.state.done && (road >= PAVED || (road >= 60 && owner && this.chronicle.has(owner, 'roads')))) step();
       // A stray's walk home that's hopelessly stuck just ends (it drifts, and may try again later).
       if (g.homeward && pieces.every((p) => (g.state.stuck[p.id] ?? 0) >= 8)) {
         for (const p of pieces) { p.groupId = undefined; p.state = 'idle'; w.touch(p); }
@@ -753,6 +775,7 @@ export class Game {
     if (this.turn % 5 === 0) perf.time('turn.claims', () => this.claims());
 
     // Idle life in settlements (visuals.md §2), and in the wilds' camps.
+    perf.time('turn.works', () => this.works.step(record));
     perf.time('turn.routines', () => this.routines.step(record));
     perf.time('turn.wilds', () => this.wilds.step(record));
   }
@@ -773,6 +796,24 @@ export class Game {
       this.kingsByOwner.delete(p.id);
       this.events.delete(p.id);
       this.onPlayers();
+    }
+  }
+
+  /**
+   * An altar's defenders were beaten by an empire (economy.md §8): the altar falls to ruin,
+   * and the buildings it held (those no king holds) are left masterless for anyone to claim.
+   */
+  fallOfAltar(owner: string, at: [number, number]) {
+    const w = this.world;
+    for (const a of w.buildingsNear(at[0], at[1], ALTAR_REACH).filter((b) => b.owner === owner && b.type === 'altar')) {
+      for (const b of w.buildingsNear(a.x, a.y, ALTAR_REACH + 3))
+        if (b !== a && b.owner === owner && b.type !== 'ruin' && distToRect(a.x, a.y, b.x, b.y, b.size) <= ALTAR_REACH && !w.anchorsOf(b, owner).length) {
+          b.owner = null; b.outpost = undefined; b.unanchoredSince = this.now; w.dirtyBuildings.add(b.id);
+        }
+      const bishop = w.tenderOf(a);
+      if (bishop?.routine === 'tend') { bishop.routine = undefined; w.touch(bishop); }
+      a.type = 'ruin'; a.owner = null; a.hp = 0; a.blocked = null; a.ruinedAt = this.now; w.dirtyBuildings.add(a.id);
+      this.onAlert(owner, { kind: 'info', text: 'Your altar has fallen', at: [a.x, a.y] });
     }
   }
 
@@ -831,12 +872,25 @@ export class Game {
         if (now - b.ruinedAt > RUIN_LIFETIME_MS) w.removeBuilding(b.id);
         continue;
       }
-      const before = JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner, b.bubbles]);
+      const before = JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner, b.bubbles, b.outpost]);
       // Holding the realm (campaign.md §4.3): a king (or, with Regents, a queen) in reach
       // keeps a building going; without one, a settlement holds itself for a while by its
       // tier (a capital forever), and it only decays when none of its owner's pieces are home.
       const owner = b.owner ? this.players.get(b.owner) : undefined;
       let ruled = b.owner ? w.anchorsOf(b, b.owner).length > 0 : false;
+      // Altars (economy.md §8): a bishop tending one holds it, and the little land around it.
+      let outpost = false;
+      if (!ruled && b.owner) {
+        if (b.type === 'altar') {
+          const bishop = w.tenderOf(b);
+          if (bishop) {
+            ruled = true;
+            // The tending bishop stays put: posted, and out of idle routines.
+            if (bishop.routine !== 'tend' || !bishop.posted) { bishop.routine = 'tend'; bishop.posted = true; w.touch(bishop); }
+          }
+        } else if (w.altarOver(b.x, b.y, b.size, b.owner)) { ruled = true; outpost = true; }
+      }
+      if (!!b.outpost !== outpost) b.outpost = outpost || undefined;
       if (!ruled && owner && this.chronicle.has(owner, 'regents'))
         ruled = w.piecesNear(b.x + (b.size >> 1), b.y + (b.size >> 1), REACH + b.size).some((q) => q.owner === b.owner && q.kind === 'Q' && q.state !== 'battle' && distToRect(q.x, q.y, b.x, b.y, b.size) <= REACH);
       let anchored = ruled;
@@ -864,7 +918,7 @@ export class Game {
       if (b.built < 1) {
         if (anchored) b.built = Math.min(1, b.built + (dt * this.speed) / BUILDINGS[b.type].buildMs);
         b.blocked = b.built < 1 ? 'building' : null;
-      } else if (anchored && b.owner && b.type !== 'wonder') {
+      } else if (anchored && b.owner && b.type !== 'wonder' && b.type !== 'altar') {
         this.produce(b, dt, popOf(b.owner));
       }
       // A building waiting for room (pop-cap) keeps its bubbles: popping banks progress toward
@@ -872,7 +926,7 @@ export class Game {
       if (b.blocked === 'pop-cap' && b.built >= 1) { b.cycleMs ??= productionMs(b.type as BuildingType, 1, this.speed); this.bubbleTick(b, now); }
       else if (b.blocked || b.built < 1) { b.cycleMs = undefined; b.bubbles = undefined; b.bubbleAt = undefined; }
       else this.bubbleTick(b, now);
-      if (JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner, b.bubbles]) !== before) w.dirtyBuildings.add(b.id);
+      if (JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner, b.bubbles, b.outpost]) !== before) w.dirtyBuildings.add(b.id);
     }
   }
 
@@ -1047,6 +1101,8 @@ export class Game {
     }
     // Relics, trade and a Wonder speed their towns (campaign.md §4).
     slow /= this.chronicle.bonus(b);
+    // Held by an altar, not a king (economy.md §8): a bishop's hamlet works slower.
+    if (b.outpost) slow /= ALTAR_RATE;
     const sharing = Math.max(1, ...chosen.map((n) => this.nodeUsers.get(n!.x * 134217728 + n!.y) ?? 1));
     b.rate = Math.round((rich / sharing) * 100) / 100;
     b.cycleMs = Math.round(productionMs(b.type as BuildingType, rich, this.speed) * slow * sharing);

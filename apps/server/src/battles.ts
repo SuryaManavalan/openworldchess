@@ -399,6 +399,8 @@ export class Battles {
       // stood in for a king); only a beaten raid on the wilds costs nothing but its pawn.
       const raidLost = commanderLost && !!wildWin;
       if (!spared && !raidLost) for (const p of reserves) convert(p);
+      // An altar's defenders beaten by an empire: the altar falls (economy.md §8).
+      if (commanderLost && !wildWin) g.fallOfAltar(lose.player, kingAt);
       // A beaten raid's troop walks home (it was posted out there, movement.md §4).
       if (raidLost) for (const p of [...reserves, ...loserSurvivors.map((id) => w.pieces.get(id)).filter((p): p is Piece => !!p)]) if (p.posted) { p.posted = undefined; w.touch(p); }
       if (emperor) {

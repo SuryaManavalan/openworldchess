@@ -160,6 +160,8 @@ export class Net {
         if (now - s.lastSub < 250) break;
         s.lastSub = now; this.subscribe(s, msg.chunks.slice(0, 81)); break;
       case 'order.move': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderMove(p.id, msg.pieceIds, msg.to, undefined, undefined, undefined, true)); break;
+      case 'order.pave': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.works.pave(p.id, msg.pieceIds, msg.to)); break;
+      case 'order.clear': reply(msg.rid, g.works.clear(p.id, msg.pieceIds, msg.a, msg.b, msg.hard)); break;
       case 'order.stop': g.orderStop(p.id, msg.pieceIds); break;
       case 'order.attack': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderAttack(p.id, msg.pieceIds, msg.targetKingId)); break;
       case 'order.cancelAttack': g.battles.cancel(p.id, msg.battleId); break;
@@ -187,6 +189,7 @@ export class Net {
         break;
       }
       case 'capital.set': reply(msg.rid, g.chronicle.setCapital(p, msg.buildingId)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
+      case 'quest.accept': reply(msg.rid, g.chronicle.accept(p, msg.id)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'quest.decline': g.chronicle.decline(p, msg.id); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'muster': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.muster(p.id, msg.kingId)); break;
       case 'civ.equip': {
@@ -245,6 +248,8 @@ export class Net {
     const removedB = [...w.removedBuildings];
     const nodes: NodeState[] = [...w.dirtyNodes].map((k) => w.nodeRecByKey(k)!).filter(Boolean)
       .map(({ x, y, kind, capacity, remaining, gone, hoard }) => ({ x, y, kind, capacity, remaining: gone ? -1 : remaining, hoard }));
+    const paved = w.pavedNow;
+    w.pavedNow = [];
     w.dirtyPieces.clear(); w.movedPieces.clear(); w.removedPieces.clear(); w.dirtyBuildings.clear(); w.removedBuildings.clear(); w.dirtyNodes.clear();
     const at = this.nextTurnAt - this.turnMs;
     for (const s of this.sessions) {
@@ -254,6 +259,7 @@ export class Net {
       // The client already knew the piece (it started in view) and gets this move: nothing else to send.
       const gotMove = (p: Piece) => { const m = moveOf.get(p.id); return !!m && m[3] === p.x && m[4] === p.y && inSubs(s, m[1], m[2]); };
       const out = pieces.filter(seen);
+      const pavedIn = (s: Session) => { if (bot || !paved.length) return undefined; const v: number[] = []; for (let i = 0; i < paved.length; i += 2) if (inSubs(s, paved[i], paved[i + 1])) v.push(paved[i], paved[i + 1]); return v.length ? v : undefined; };
       for (const p of walked) if (seen(p) && (bot || !gotMove(p))) out.push(p);
       this.send(s, {
         t: 'turn', n: this.game.turn, at,
@@ -264,6 +270,7 @@ export class Net {
         buildings: buildings.filter((b) => b.owner === mine || inSubs(s, b.x, b.y)),
         removedBuildings: removedB,
         nodes: nodes.filter((n) => inSubs(s, n.x, n.y)),
+        paved: pavedIn(s),
       });
     }
   }

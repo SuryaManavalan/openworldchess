@@ -53,6 +53,8 @@ export interface Building {
   prod: number;
   /** Ms per piece at the current rate, while producing. */
   cycleMs?: number;
+  /** Held by a tended altar rather than a king (economy.md §8): works at ALTAR_RATE. */
+  outpost?: boolean;
   /** Hurry bubbles waiting to be popped by the owner (economy.md §7): 0 plain, 1 gold. */
   bubbles?: number[];
   /** Server: when the next bubble rises. */

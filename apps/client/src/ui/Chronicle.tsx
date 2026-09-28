@@ -24,23 +24,55 @@ function tip(s: Step, phone: boolean): string | null {
   }
 }
 
+/** Keep which quest is in focus across reloads. */
+function setFocus(id: number | null) {
+  useUI.getState().set({ questFocus: id });
+  try { if (id) localStorage.setItem('owc.questFocus', String(id)); else localStorage.removeItem('owc.questFocus'); } catch { /* private mode */ }
+}
+
+/**
+ * The quest tracker (campaign.md §5.5): the banner shows the chapter's step, or a side quest
+ * you've focused. New side quests arrive as offers to accept or decline; accepted ones go in
+ * your list, and tapping one focuses it. Declined quests come back later, so a mis-tap never
+ * loses one for good.
+ */
 export function ChronicleTracker() {
   const ui = useUI();
   const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState<number | null>(null);
   const c = mirror.self?.chronicle;
   if (!c || ui.battleFocus != null) return null;
   const ch = CHAPTERS[c.chapter - 1];
   const step = ch?.steps[c.step];
   const show = (at?: [number, number]) => { if (at) scene?.flyTo(at[0], at[1], Math.max(scene.cam.zoom, 0.7)); };
-  if (!ch) {
-    // The Epilogue: side quests only.
-    if (!c.sides.length) return null;
-  }
+  const offers = c.sides.filter((q) => q.state === 'offered');
+  const mine = c.sides.filter((q) => q.state !== 'offered');
+  const focused = mine.find((q) => q.id === ui.questFocus);
+  if (!ch && !c.sides.length) return null; // the Epilogue: side quests only
   const [have, need] = c.progress;
   const t = step && c.chapter <= 2 ? tip(step, ui.layout === 'phone') : null;
+  const decline = (id: number) => {
+    if (confirm !== id) { setConfirm(id); return; }
+    commands.declineQuest(id); setConfirm(null);
+    if (ui.questFocus === id) setFocus(null);
+  };
   return (
     <div className="tracker">
-      {ch && step && (
+      {focused ? (
+        <div className="main side-focus">
+          <button className="book" aria-label="Back to the chapter" onClick={() => setFocus(null)}><Icon name="star" size={18} /></button>
+          <div className="body">
+            <span className="kicker">Side quest · +{focused.renown} Renown</span>
+            <b>{focused.line}</b>
+            {focused.progress && focused.progress[1] > 1 && <span className="prog"><span style={{ width: `${(100 * focused.progress[0]) / focused.progress[1]}%` }} /><em>{focused.progress[0]}/{focused.progress[1]}</em></span>}
+            <span className="focus-actions">
+              {ch && <button className="chip" onClick={() => setFocus(null)}><Icon name="book" size={12} /> Chapter {ch.n}</button>}
+              <button className={`chip ${confirm === focused.id ? 'warn' : ''}`} onClick={() => decline(focused.id)}>{confirm === focused.id ? 'Drop it? It comes back later' : 'Drop'}</button>
+            </span>
+          </div>
+          {focused.at && <button className="link show" onClick={() => show(focused.at)}><Icon name="target" size={15} /> Show me</button>}
+        </div>
+      ) : ch && step && (
         <div className="main">
           <button className="book" aria-label="Open the Chronicle" onClick={() => ui.set({ sheet: 'chronicle' })}><Icon name="book" size={18} /></button>
           <div className="body">
@@ -52,16 +84,30 @@ export function ChronicleTracker() {
           {c.target && <button className="link show" onClick={() => show(c.target)}><Icon name="target" size={15} /> Show me</button>}
         </div>
       )}
-      {c.sides.length > 0 && (
-        <div className="sides">
-          <button className="sides-head" onClick={() => setOpen(!open)}><Icon name="star" size={13} /> {c.sides.length} side quest{c.sides.length > 1 ? 's' : ''} <Icon name="chevron" size={12} style={{ transform: open ? 'rotate(90deg)' : undefined }} /></button>
-          {open && c.sides.map((q) => (
-            <div key={q.id} className="side">
-              <span>{q.line} <em>+{q.renown} Renown</em></span>
-              {q.at && <button className="link" onClick={() => show(q.at)}>Show</button>}
-              <button className="x" aria-label="Decline" onClick={() => commands.declineQuest(q.id)}><Icon name="close" size={11} stroke={2.6} /></button>
-            </div>
+      {offers.map((q) => (
+        <div key={q.id} className="offer">
+          <span className="kicker"><Icon name="star" size={12} /> A quest is offered · +{q.renown} Renown</span>
+          <span className="line">{q.line}</span>
+          <span className="offer-actions">
+            {q.at && <button className="link" onClick={() => show(q.at)}>Where?</button>}
+            <button className={`btn small ghost ${confirm === q.id ? 'warn' : ''}`} onClick={() => decline(q.id)}>{confirm === q.id ? 'Sure? It comes back later' : 'Decline'}</button>
+            <button className="btn small gold" onClick={() => { void commands.acceptQuest(q.id); setFocus(q.id); setConfirm(null); }}>Accept</button>
+          </span>
+        </div>
+      ))}
+      {mine.length > 0 && (
+        <div className={`sides ${open ? 'open' : ''}`}>
+          <button className="sides-head" onClick={() => setOpen(!open)}>
+            <Icon name="star" size={13} /> {mine.length} side quest{mine.length > 1 ? 's' : ''}{focused ? '' : ' · tap one to follow it'}
+            <Icon name="chevron" size={13} style={{ transform: open ? 'rotate(-90deg)' : 'rotate(90deg)', marginLeft: 'auto' }} />
+          </button>
+          {open && mine.map((q) => (
+            <button key={q.id} className={`side ${q.id === ui.questFocus ? 'on' : ''}`} onClick={() => { setFocus(q.id === ui.questFocus ? null : q.id); show(q.at); setOpen(false); }}>
+              <Icon name={q.id === ui.questFocus ? 'target' : 'star'} size={13} />
+              <span>{q.line} <em>+{q.renown}</em></span>
+            </button>
           ))}
+          {open && <button className="sides-close" aria-label="Hide side quests" onClick={() => setOpen(false)}><span className="grabber" /></button>}
         </div>
       )}
     </div>

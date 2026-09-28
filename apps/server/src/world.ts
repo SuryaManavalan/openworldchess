@@ -1,7 +1,7 @@
 // The world's state: terrain (from worldgen), resource nodes (worldgen plus
 // runtime changes), pieces, buildings, and the indexes that answer "what's
 // here" and "what's near" quickly.
-import { CHUNK, chunkKey, chunkOf, key, REACH, distToRect, type Building, type NodeState, type Piece } from '@owc/shared';
+import { ALTAR_REACH, ALTAR_TEND, CHUNK, cheb, chunkKey, chunkOf, key, PAVED, REACH, distToRect, type Building, type NodeState, type Piece } from '@owc/shared';
 import { resourcesInRect, terrainAt, walkable as terrainWalkable, buildable as terrainBuildable, LandField } from '@owc/worldgen';
 
 /** Numeric chunk key (chunks within ±65536 of the origin, i.e. ±2M squares). */
@@ -19,6 +19,8 @@ export interface NodeRec extends NodeState {
   gone?: boolean;
   /** Wheat regrowth accumulator. */
   acc?: number;
+  /** A tree felled to clear land (movement.md §9): its stump is dug out instead of regrowing. */
+  dig?: boolean;
 }
 
 export class World {
@@ -166,7 +168,7 @@ export class World {
       if (n.gone || n.hoard) continue;
       if (n.kind === 'tree' && n.remaining === 0 && n.regrowAt && now >= n.regrowAt) {
         // Inside a settlement the stump is dug out instead: towns open into clearings (visuals.md §10).
-        if (this.settledNear(n.x, n.y, SETTLED_R)) { n.gone = true; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y); continue; }
+        if (n.dig || this.settledNear(n.x, n.y, SETTLED_R)) { n.gone = true; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y); continue; }
         n.remaining = n.capacity; n.regrowAt = undefined; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y);
       } else if (n.kind === 'wheat' && n.remaining < n.capacity) {
         n.acc = (n.acc ?? 0) + dt;
@@ -265,8 +267,8 @@ export class World {
     p.x = x; p.y = y;
     this.placeIndex(p);
     const k = key(x, y);
-    this.traffic.set(k, Math.min(255, (this.traffic.get(k) ?? 0) + 1));
-    this.trafficCache.delete(chunkKey(...chunkOf(x, y)));
+    const t = this.traffic.get(k) ?? 0;
+    if (t < PAVED) { this.traffic.set(k, Math.min(255, t + 1)); this.trafficCache.delete(chunkKey(...chunkOf(x, y))); }
     this.movedPieces.add(p.id);
   }
 
@@ -356,13 +358,25 @@ export class World {
     );
   }
 
+  /** The bishop tending an altar (economy.md §8): one of its owner's, within ALTAR_TEND. */
+  tenderOf(altar: Building): Piece | undefined {
+    if (!altar.owner) return undefined;
+    return this.piecesNear(altar.x, altar.y, ALTAR_TEND).find((p) => p.owner === altar.owner && p.kind === 'B' && p.state !== 'battle' && cheb(p.x, p.y, altar.x, altar.y) <= ALTAR_TEND);
+  }
+
+  /** A tended altar of `owner` whose land (ALTAR_REACH) covers this footprint. */
+  altarOver(x: number, y: number, size: number, owner: string): Building | undefined {
+    return this.buildingsNear(x, y, ALTAR_REACH + size).find((a) => a.type === 'altar' && a.owner === owner && a.built >= 1
+      && distToRect(a.x, a.y, x, y, size) <= ALTAR_REACH && !!this.tenderOf(a));
+  }
+
   /**
    * Memory upkeep (safeguards.md §6): trails fade, fully regrown nodes stop
    * being stored, and cached chunks nobody is near get dropped (they
    * regenerate from the seed plus the stored changes).
    */
   maintain(keep: Set<string>, fadeTrails: boolean) {
-    if (fadeTrails) { for (const [k, t] of this.traffic) { const n = t >> 1; if (n) this.traffic.set(k, n); else this.traffic.delete(k); } this.trafficCache.clear(); }
+    if (fadeTrails) { for (const [k, t] of this.traffic) { if (t >= PAVED) continue; const n = t >> 1; if (n) this.traffic.set(k, n); else this.traffic.delete(k); } this.trafficCache.clear(); }
     if (this.trafficCache.size > 5000) this.trafficCache.clear();
     for (const [k, n] of this.nodeOverlay) if (!n.gone && !n.hoard && n.remaining >= n.capacity && !n.regrowAt) this.nodeOverlay.delete(k);
     if (this.nodesByChunk.size > 8000) {
@@ -375,6 +389,18 @@ export class World {
         this.walkGrid.delete(cnum(cx, cy));
       }
     }
+  }
+
+  /** Squares paved since the last turn went out, flat [x, y, ...]. */
+  pavedNow: number[] = [];
+  paved(x: number, y: number) { return (this.traffic.get(key(x, y)) ?? 0) >= PAVED; }
+  /** Pave a square (movement.md §9): a road that never wears off. */
+  pave(x: number, y: number): boolean {
+    if (this.paved(x, y) || !this.walkable(x, y)) return false;
+    this.traffic.set(key(x, y), PAVED);
+    this.trafficCache.delete(chunkKey(...chunkOf(x, y)));
+    this.pavedNow.push(x, y);
+    return true;
   }
 
   trafficInChunk(cx: number, cy: number): number[] {

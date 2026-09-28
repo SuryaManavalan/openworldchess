@@ -38,6 +38,12 @@ interface UIState {
   layout: 'phone' | 'desktop';
   settings: Settings;
   hint: string | null;
+  /** The side quest shown in the top banner instead of the chapter (campaign.md §5.5); null: the chapter. */
+  questFocus: number | null;
+  /** A work order waiting for its place (movement.md §9): where to pave to, or what to clear. */
+  orderMode: 'pave' | 'clear' | null;
+  /** An area chosen for elephants to clear, waiting for confirmation. */
+  pendingClear: { ids: number[]; a: [number, number]; b: [number, number] } | null;
   lassoMode: boolean;
   watching: boolean;
   needName: boolean;
@@ -84,6 +90,9 @@ export const useUI = create<UIState>((set, get) => ({
   layout: 'desktop',
   settings: loadSettings(),
   hint: null,
+  orderMode: null,
+  pendingClear: null,
+  questFocus: (() => { try { const v = Number(localStorage.getItem('owc.questFocus')); return v > 0 ? v : null; } catch { return null; } })(),
   lassoMode: false,
   watching: false,
   needName: false,

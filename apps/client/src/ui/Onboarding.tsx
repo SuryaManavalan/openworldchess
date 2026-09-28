@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { randomName } from '@owc/shared';
 import { conn, mirror } from '../net.ts';
 import { Icon } from './Icon.tsx';
+import { SheetGrab } from './SheetGrab.tsx';
 import type { ReactNode } from 'react';
 import { useUI } from '../store.ts';
 import { pieceUrl } from '../game/textures.ts';
@@ -75,7 +76,7 @@ export function SignIn() {
   return (
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
       <div className="sheet confirm">
-        <div className="grabber" />
+        <SheetGrab onClose={() => setOpen(false)} />
         {self.guest ? <>
           <h3>Keep your empire</h3>
           <p>You're playing as a guest. <b>If you don't sign in, your empire will fall</b> {mins} minutes after you leave: your pieces go masterless for anyone to claim, and the name <b>{self.name}</b> becomes free again.</p>
@@ -105,7 +106,7 @@ export function AwayReport() {
   return (
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && setReport(null)}>
       <div className="sheet">
-        <div className="grabber" />
+        <SheetGrab onClose={() => setReport(null)} />
         <h3>While you were away <span className="muted small">({mins < 90 ? `${mins} min` : `${Math.round(mins / 60)} h`})</span></h3>
         <ul className="away-list">{report.events.slice(-12).reverse().map((e, i) => <li key={i} className={e.kind}>{e.text}</li>)}</ul>
         <button className="btn" style={{ width: '100%' }} onClick={() => setReport(null)}>Back to the world</button>

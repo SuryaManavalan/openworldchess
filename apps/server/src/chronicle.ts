@@ -3,7 +3,7 @@
 // (packages/shared/src/chronicle.ts); this module keeps score from events the
 // game already produces and hands out rewards.
 import {
-  CHAPTERS, FACTIONS, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
+  CHAPTERS, FACTIONS, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
   type Ability, type BuildingType, type ChronicleView, type PieceKind, type SettlementInfo, type SideQuest, type Step,
 } from '@owc/shared';
 import { biomeAt, RARE_BIOMES, resourcesInRect } from '@owc/worldgen';
@@ -28,6 +28,8 @@ export interface ChronState {
   capital?: number;
   sides: SideQuest[];
   nextSideAt: number;
+  /** Declined or dropped quests, offered again later (played time when they come back). */
+  shelved?: { q: SideQuest; back: number }[];
   /** Active play time, in ms. */
   played: number;
   /** Played time when each chapter was completed. */
@@ -41,8 +43,15 @@ export interface ChronState {
 
 /** Keys counted only since their chapter began (the rest count from whenever they happened). */
 const SINCE_STEP = (k: string) => k === 'hunt' || k.startsWith('raise:');
-const SIDE_EVERY_MS = 30 * 60_000;
-const MAX_SIDES = 3;
+/** A new side quest is offered every so often while you play (campaign.md §5.3). */
+const SIDE_FIRST_MS = 10 * 60_000;
+const SIDE_EVERY_MS = 12 * 60_000;
+/** Quests you can hold at once, and offers waiting for an answer. */
+const MAX_SIDES = 4;
+const MAX_OFFERS = 2;
+/** A declined quest comes back as an offer after this much play. */
+const SHELF_MS = 20 * 60_000;
+const active = (q: SideQuest) => q.state !== 'offered';
 
 const keyOf = (s: Step): string | null => {
   switch (s.verb) {
@@ -89,7 +98,7 @@ export class Chronicle {
     const st: ChronState = {
       ch: 1, step: 0, base: 0, tallies: {}, title: 0, renown: 0, abilities: [],
       buildings: legacy ? ['house', 'stable', 'temple', 'barracks', 'palace'] : ['house'],
-      relics: [], sides: [], nextSideAt: SIDE_EVERY_MS, played: 0, doneAt: [],
+      relics: [], sides: [], nextSideAt: SIDE_FIRST_MS, played: 0, doneAt: [],
     };
     p.chron = st;
     if (legacy) this.catchUp(p);
@@ -135,6 +144,8 @@ export class Chronicle {
   kingCap(p: PlayerRec) { return TITLES[this.of(p).title].kingCap; }
   popPerKing(p: PlayerRec) { return TITLES[this.of(p).title].popPerKing; }
   canBuild(p: PlayerRec, type: BuildingType): string | null {
+    // Altars open with temples: a bishop is needed to raise one anyway (economy.md §8).
+    if (type === 'altar') return this.canBuild(p, 'temple') ? 'Altars open with temples' : null;
     const st = this.of(p);
     if (st.buildings.includes(type)) return null;
     const ch = CHAPTERS.find((c) => c.reward.buildings?.includes(type) || (type === 'wonder' && c.reward.abilities?.includes('wonder')));
@@ -170,7 +181,7 @@ export class Chronicle {
     const st = this.of(p);
     st.tallies[key] = (st.tallies[key] ?? 0) + n;
     // Side quests tied to a camp, or to a kind of event.
-    for (const q of [...st.sides]) {
+    for (const q of st.sides.filter(active)) {
       const done = (q.kind === 'bounty' || q.kind === 'rescue') ? key === 'hunt' && extra?.camp === q.camp
         : q.kind === 'skirmish' ? key === 'win:empire' : false;
       if (done) this.finishSide(p, q);
@@ -515,21 +526,49 @@ export class Chronicle {
           if (st.discovered) break;
         }
       // Scout side quests complete by getting there.
-      for (const q of [...st.sides]) {
+      for (const q of st.sides) {
+        // A bounty whose camp is gone (someone else cleared it) quietly expires, offered or not.
+        if ((q.kind === 'bounty' || q.kind === 'rescue') && q.camp && !this.game.players.has(q.camp)) { st.sides = st.sides.filter((x) => x !== q); continue; }
+        if (!active(q)) continue;
         if (q.kind === 'scout' && q.at && kings.some((k) => cheb(k.x, k.y, q.at![0], q.at![1]) <= 8)) this.finishSide(p, q);
         if (q.kind === 'grow' && q.tier && this.settlementsOf(p.id).some((s) => s.tier >= q.tier!)) this.finishSide(p, q);
-        // A bounty whose camp is gone (someone else cleared it) quietly expires.
-        if ((q.kind === 'bounty' || q.kind === 'rescue') && q.camp && !this.game.players.has(q.camp)) st.sides = st.sides.filter((x) => x !== q);
+        if (q.kind === 'pilgrimage' && this.pilgrimageStep(p, q)) this.finishSide(p, q);
       }
-      if (p.online && st.played >= st.nextSideAt && st.sides.length < MAX_SIDES && st.ch >= 2) {
+      if (p.online && st.played >= st.nextSideAt && st.sides.filter(active).length < MAX_SIDES && st.sides.filter((q) => !active(q)).length < MAX_OFFERS && st.ch >= 2) {
         st.nextSideAt = st.played + SIDE_EVERY_MS;
-        this.writeSide(p);
+        this.offerSide(p);
       }
       this.advance(p);
     }
   }
 
   // ---------- side quests ----------
+
+  /** Offer a quest: one you declined a while ago, if it still makes sense, or a new one. */
+  private offerSide(p: PlayerRec) {
+    const st = this.of(p);
+    const back = (st.shelved ?? []).find((s) => st.played >= s.back && (!s.q.camp || this.game.players.has(s.q.camp)));
+    if (back) {
+      st.shelved = st.shelved!.filter((s) => s !== back);
+      const q: SideQuest = { ...back.q, state: 'offered' };
+      st.sides.push(q);
+      this.game.onAlert(p.id, { kind: 'info', text: `A quest is offered again: ${q.line}`, at: q.at });
+      return;
+    }
+    this.writeSide(p);
+  }
+
+  /** Take up an offered quest (campaign.md §5.3). */
+  accept(p: PlayerRec, id: number): string | null {
+    const st = this.of(p);
+    const q = st.sides.find((x) => x.id === id);
+    if (!q) return 'That quest is gone';
+    if (active(q)) return null;
+    if (st.sides.filter(active).length >= MAX_SIDES) return `You can hold ${MAX_SIDES} quests at once: finish or drop one first`;
+    q.state = 'active';
+    this.advance(p);
+    return null;
+  }
 
   private writeSide(p: PlayerRec) {
     const g = this.game, w = this.w, st = this.of(p);
@@ -549,14 +588,82 @@ export class Chronicle {
       () => { const t = camps.find(({ size }) => size <= army + 2); return t ? { id, kind: 'bounty', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `A bounty on the ${t.f.name} (${t.f.camp}).`, renown: Math.round(RENOWN[t.f.rarity] * 1.5) } : null; },
       () => { const at = this.searchRing(from.x, from.y, 500, 30, (x, y) => RARE_BIOMES.includes(biomeAt(w.seed, x, y))); return at && !st.discovered ? { id, kind: 'scout', at, line: 'Travelers speak of a strange land nearby. See it for yourself.', renown: 50 } : null; },
       () => { const s = this.settlementsOf(p.id).find((x) => x.tier < 4 && [3, 6, 10].includes(x.buildings.length + 1)); return s ? { id, kind: 'grow', at: [s.cx, s.cy], tier: s.tier + 1, line: 'One more building and this settlement rises a tier.', renown: 30, pieces: ['N'] } : null; },
+      () => this.pilgrimage(p, id),
       () => { const rival = [...w.pieces.values()].find((k) => k.kind === 'K' && k.owner && k.owner !== p.id && !k.emperor && !g.players.get(k.owner)?.wild && cheb(k.x, k.y, from.x, from.y) <= 200 && (g.players.get(k.owner)?.shieldUntil ?? 0) < g.now); return rival ? { id, kind: 'skirmish', at: [rival.x, rival.y], line: `${g.players.get(rival.owner!)?.name ?? 'A rival'} has troops nearby. Win a battle against an empire.`, renown: RENOWN.empireWin * 2 } : null; },
     ];
     // Rotate: don't repeat the last kind.
     const order = makers.map((m, i) => ({ m, i })).sort((a, b) => ((a.i + id) % makers.length) - ((b.i + id) % makers.length));
     for (const { m } of order) {
       const q = m();
-      if (q && q.kind !== last) { st.sides.push(q); this.game.onAlert(p.id, { kind: 'info', text: `New quest: ${q.line}`, at: q.at }); return; }
+      if (q && q.kind !== last) { q.state = 'offered'; st.sides.push(q); this.game.onAlert(p.id, { kind: 'info', text: `A quest is offered: ${q.line}`, at: q.at }); return; }
     }
+  }
+
+  /**
+   * The pilgrimage (campaign.md §5.3): a chain of three. Clear a grove some way out from your
+   * town with elephants, raise an altar in the clearing with a bishop, then have knights pave
+   * a road from the altar home. It teaches what those pieces do outside battle.
+   */
+  private pilgrimage(p: PlayerRec, id: number): SideQuest | null {
+    const st = this.of(p), w = this.w;
+    if (!st.buildings.includes('temple') || st.sides.some((q) => q.kind === 'pilgrimage') || (st.shelved ?? []).some((s) => s.q.kind === 'pilgrimage')) return null;
+    const home = this.capitalOf(p) ?? this.settlementsOf(p.id).sort((a, b) => b.buildings.length - a.buildings.length)[0];
+    if (!home) return null;
+    // The woodiest 10×10 patch on a ring 30–45 squares out, away from other empires.
+    let best: { x: number; y: number; n: number } | null = null;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2, r = 30 + (i % 3) * 7;
+      const x = Math.round(home.cx + Math.cos(a) * r) - 5, y = Math.round(home.cy + Math.sin(a) * r) - 5;
+      if (w.buildingsNear(x + 5, y + 5, 20).some((b) => b.owner && b.owner !== p.id)) continue;
+      const n = w.nodesNear(x, y, 10, 0).filter((q) => q.kind === 'tree' && q.remaining > 0 && !q.hoard).length;
+      if (n >= 10 && (!best || n > best.n)) best = { x, y, n };
+    }
+    if (!best) return null;
+    return {
+      id, kind: 'pilgrimage', stage: 0, stages: 3, area: [best.x, best.y, best.x + 9, best.y + 9], trees: best.n, progress: [0, best.n],
+      at: [best.x + 5, best.y + 5], line: 'A pilgrimage, 1 of 3: an old grove hides a holy place. Clear its trees with elephants.', renown: 150, pieces: ['B'],
+    };
+  }
+
+  /** Move a pilgrimage along its stages; true when it's done. */
+  private pilgrimageStep(p: PlayerRec, q: SideQuest): boolean {
+    const w = this.w, [x0, y0, x1, y1] = q.area!;
+    if (q.stage === 0) {
+      const left = w.nodesNear(x0, y0, 10, 0).filter((n) => n.kind === 'tree' && n.remaining > 0 && !n.hoard && n.x <= x1 && n.y <= y1).length;
+      q.progress = [Math.max(0, q.trees! - left), q.trees!];
+      if (left <= Math.floor(q.trees! * 0.2)) {
+        q.stage = 1; q.progress = undefined;
+        q.line = 'A pilgrimage, 2 of 3: raise an altar in the clearing. A bishop must stand beside the spot.';
+        this.game.onAlert(p.id, { kind: 'info', text: 'The grove is cleared. Now raise an altar there', at: q.at });
+      }
+      return false;
+    }
+    const altar = w.buildingsNear(x0 + 5, y0 + 5, 9).find((b) => b.owner === p.id && b.type === 'altar' && b.built >= 1);
+    if (q.stage === 1) {
+      if (!altar) return false;
+      q.stage = 2; q.at = [altar.x, altar.y];
+      q.line = 'A pilgrimage, 3 of 3: pave a road with knights from the altar to your town.';
+      this.game.onAlert(p.id, { kind: 'info', text: 'The altar stands. Now pave a road home to it', at: q.at });
+      return false;
+    }
+    // Stage 3: paved squares link the altar to one of your settlements.
+    return !!altar && this.roadHome(p, altar.x, altar.y);
+  }
+
+  /** Is there a paved road from beside (x, y) to within reach of one of your towns? */
+  private roadHome(p: PlayerRec, x: number, y: number): boolean {
+    const w = this.w, towns = this.settlementsOf(p.id).filter((s) => s.buildings.length >= 2);
+    const seen = new Set<number>(), queue: [number, number][] = [];
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (w.paved(x + dx, y + dy)) { queue.push([x + dx, y + dy]); seen.add((x + dx) * 134217728 + y + dy); }
+    while (queue.length && seen.size < 4000) {
+      const [cx, cy] = queue.shift()!;
+      if (cheb(cx, cy, x, y) > 8 && towns.some((s) => cheb(s.cx, s.cy, cx, cy) <= REACH)) return true;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = cx + dx, ny = cy + dy, k = nx * 134217728 + ny;
+        if (!seen.has(k) && w.paved(nx, ny)) { seen.add(k); queue.push([nx, ny]); }
+      }
+    }
+    return false;
   }
 
   private finishSide(p: PlayerRec, q: SideQuest) {
@@ -564,12 +671,16 @@ export class Chronicle {
     st.sides = st.sides.filter((x) => x.id !== q.id);
     st.renown += q.renown;
     for (const k of q.pieces ?? []) this.grantPiece(p, k, q.at);
-    this.game.onAlert(p.id, { kind: 'info', text: `Quest complete: +${q.renown} Renown${q.pieces?.length ? ` and a ${q.pieces.join(', ') === 'N' ? 'knight' : 'pawn'}` : ''}` });
+    this.game.onAlert(p.id, { kind: 'info', text: `Quest complete: +${q.renown} Renown${q.pieces?.length ? ` and ${q.pieces.map((k) => `a ${PIECE_NAME[k].toLowerCase()}`).join(', ')}` : ''}` });
   }
 
+  /** Decline an offer or drop a quest: it's shelved, and offered again later (never lost for good). */
   decline(p: PlayerRec, id: number) {
     const st = this.of(p);
-    st.sides = st.sides.filter((q) => q.id !== id);
+    const q = st.sides.find((x) => x.id === id);
+    if (!q) return;
+    st.sides = st.sides.filter((x) => x !== q);
+    st.shelved = [...(st.shelved ?? []), { q: { ...q, state: undefined }, back: st.played + SHELF_MS }].slice(-6);
   }
 
   /** Name a capital (campaign.md §4.3): any of your buildings marks its settlement. */

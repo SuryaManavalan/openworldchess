@@ -3,7 +3,7 @@
 // server has sent: no hidden information (bots.md §1).
 import { LandField, landUnkey } from '@owc/worldgen';
 import {
-  CHUNK, chunkKey, chunkOf, key,
+  CHUNK, PAVED, chunkKey, chunkOf, key,
   type BattlePublic, type BattleSummary, type Building, type NodeState, type Piece, type PlayerPublic, type PlayerSelf, type ServerMsg, type TurnMove,
 } from '@owc/shared';
 
@@ -39,6 +39,7 @@ export class Mirror {
   onBuildingRemoved: (id: number) => void = () => {};
   onNodeChange: (n: NodeState) => void = () => {};
   onChunk: (cx: number, cy: number) => void = () => {};
+  onPaved: (x: number, y: number) => void = () => {};
   /** A node forgotten because its chunk left the view (not depleted: no effects). */
   onNodeDropped: (k: number) => void = () => {};
   onBattle: (b: BattlePublic) => void = () => {};
@@ -122,9 +123,12 @@ export class Mirror {
             p.x = tx; p.y = ty; p.facing = facing as Piece['facing'];
             this.pieceAt.set(key(tx, ty), id);
             const k = key(tx, ty);
-            this.traffic.set(k, Math.min(255, (this.traffic.get(k) ?? 0) + 1));
+            const t = this.traffic.get(k) ?? 0;
+            if (t < PAVED) this.traffic.set(k, Math.min(255, t + 1));
           }
         }
+        // Newly paved roads (movement.md §9).
+        if (m.paved) for (let i = 0; i + 1 < m.paved.length; i += 2) { this.traffic.set(key(m.paved[i], m.paved[i + 1]), PAVED); this.onPaved(m.paved[i], m.paved[i + 1]); }
         for (const p of m.pieces) this.setPiece(p);
         for (const id of m.removed) this.dropPiece(id);
         for (const b of m.buildings) this.setBuilding(b);

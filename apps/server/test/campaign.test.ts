@@ -1,7 +1,8 @@
 // The Chronicle (docs/specs/campaign.md): chapters, unlocks, titles, coronations,
 // holding the realm, side quests.
 import { afterAll, describe, expect, it } from 'vitest';
-import { CHAPTERS, TITLES, cheb, setWorth, type Building } from '@owc/shared';
+import { CHAPTERS, TITLES, cheb, setWorth, type Building, type SideQuest } from '@owc/shared';
+import { findPath } from '@owc/rules';
 import { Game, type PlayerRec } from '../src/game.ts';
 
 let rs = 777;
@@ -172,11 +173,66 @@ describe('the Chronicle', () => {
     for (let i = 0; i < 7; i++) tick(5 * 60_000);
     expect(st.sides.length).toBeGreaterThan(0);
     const q = st.sides[0];
+    // It's an offer until accepted, and only accepted quests count.
+    expect(q.state).toBe('offered');
+    expect(game.chronicle.accept(p, q.id)).toBeNull();
+    expect(q.state).toBe('active');
     const renown = st.renown;
     // A skirmish, scout or grow quest here; finish whichever came.
     if (q.kind === 'skirmish') game.chronicle.note(p.id, 'win:empire');
     else { game.chronicle.decline(p, q.id); expect(st.sides.some((x) => x.id === q.id)).toBe(false); return; }
     expect(st.renown).toBeGreaterThan(renown);
+  });
+
+  it('a declined quest is shelved and offered again later, never lost', () => {
+    const p = join('Picky');
+    const st = game.chronicle.of(p);
+    st.ch = 2;
+    const k = game.kingsOf(p.id)[0];
+    for (const [dx, dy] of [[2, -3], [4, -3]]) { const at = game.world.nearestFree(k.x + dx, k.y + dy, 6)!; place(p.id, 'house', at[0], at[1]); }
+    game.chronicle.refreshSettlements(now, true);
+    for (let i = 0; i < 4 && !st.sides.length; i++) tick(5 * 60_000);
+    const q = st.sides[0];
+    expect(q).toBeTruthy();
+    game.chronicle.decline(p, q.id);
+    expect(st.sides.some((x) => x.id === q.id)).toBe(false);
+    for (let i = 0; i < 12 && !st.sides.some((x) => x.id === q.id); i++) tick(5 * 60_000);
+    const again = st.sides.find((x) => x.id === q.id);
+    expect(again?.state).toBe('offered');
+    expect(again?.line).toBe(q.line);
+  });
+
+  it('the pilgrimage: clear a grove, raise an altar there, pave a road home', () => {
+    const p = join('Palmer');
+    const st = game.chronicle.of(p);
+    st.ch = 5; st.buildings = [...new Set([...st.buildings, 'house', 'temple'])];
+    const k = game.kingsOf(p.id)[0];
+    for (const [dx, dy] of [[2, -3], [4, -3], [6, -3]]) { const at = game.world.nearestFree(k.x + dx, k.y + dy, 6)!; place(p.id, 'house', at[0], at[1]); }
+    game.chronicle.refreshSettlements(now, true);
+    const q = (game.chronicle as unknown as { pilgrimage: (p: PlayerRec, id: number) => SideQuest | null }).pilgrimage(p, 900);
+    expect(q).toBeTruthy();
+    if (!q) return;
+    q.state = 'active';
+    st.sides.push(q);
+    const [x0, y0, x1, y1] = q.area!;
+    // 1: clear the grove (as elephants would).
+    for (const n of game.world.nodesNear(x0, y0, 10, 0)) if (n.kind === 'tree' && n.x <= x1 && n.y <= y1) { game.world.drawNode(n, n.remaining, now); }
+    tick();
+    expect(q.stage).toBe(1);
+    // 2: an altar in the clearing, raised by a bishop.
+    const site = game.world.nearestFree(x0 + 5, y0 + 5, 5, (x, y) => game.world.buildable(x, y) && !game.world.nodeAt(x, y))!;
+    const b = { id: game.world.id(), owner: p.id, kind: 'B' as const, x: site[0] + 1, y: site[1], facing: 2 as const, state: 'idle' as const };
+    game.addPiece(game.world.pieceIdAt(b.x, b.y) == null ? b : { ...b, x: site[0], y: site[1] + 1 });
+    expect(game.build(p.id, 'altar', site)).toBeNull();
+    for (let i = 0; i < 14; i++) tick();
+    expect(q.stage).toBe(2);
+    // 3: pave a road home (straight along a path, as knights would).
+    const path = findPath(site[0], site[1], k.x, k.y, (x, y) => game.world.walkable(x, y) || (x === site[0] && y === site[1]), 40000);
+    for (const [x, y] of path) game.world.pave(x, y);
+    const renown = st.renown;
+    tick();
+    expect(st.sides.some((x) => x.id === q.id)).toBe(false);
+    expect(st.renown).toBe(renown + 150);
   });
 
   it("a player's king cap follows their title", () => {

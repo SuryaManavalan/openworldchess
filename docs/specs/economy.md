@@ -139,6 +139,25 @@ While you're online, **bubbles rise over your working buildings**. Tap one, or s
   - Gold rings a run of bells, and every fifth pop in a combo lands a chord.
   - Only you see your bubbles.
 
+## 8. Altars: a bishop's outpost
+
+As built on 2026-09-28. Code: `Game.build`, `Game.economy`, `Game.fallOfAltar`, `World.tenderOf` and `World.altarOver`. Art: `art/assets/altars.mjs`. Numbers: `ALTAR_*` in `constants.ts`.
+
+An altar is a small outpost far from any king, held by a bishop instead. It's meant as a forward farm or staging post, deliberately smaller than a city: kings stay the scarce resource.
+
+- **Raising one:** a bishop of yours must stand within 2 squares of the spot. It costs nothing but the bishop's time (60 s to build) and can go anywhere a building can, with no king needed.
+  - Altars open with temples, and you can hold at most 4, at least 11 squares apart.
+  - An altar looks like its land: 18 biomes in six styles (standing stones, a timber shrine, a sandstone obelisk, a vine-wrapped stone, and a ring of spires or a giant mushroom in the rare lands). Each has a bishop's mitre and a cloth in your color.
+- **Tending:** while a bishop of yours stands within 2 squares, the altar is **tended**.
+  - The tending bishop stays put: it's posted (movement.md §4) and skips idle routines.
+  - Untended, the altar starts the same hold-then-decay clock as a town without a king (§2).
+- **The land it holds:** within 5 squares of a tended altar, up to **3 houses, stables or temples** can be built and keep working without a king.
+  - They work at **60%** speed (`ALTAR_RATE`).
+  - They add **no population room**: that stays with kings (safeguards.md §1). What they raise counts against the room your kings give.
+  - No palaces, barracks or Wonders, so an altar can never make kings.
+- **Attacking it:** it's a troop without a king (battle.md §9). Attack the altar or its bishop, and the bishop (or a pawn beside it) defends as commander.
+  - If the defenders lose to an empire, the **altar falls to ruin**, and the buildings it held (those no king holds) become **masterless**, for any king to claim.
+
 ## Open questions
 
 - Should pieces cost **upkeep** (food per minute)? It would stop hoarding, but it punishes players who are offline.

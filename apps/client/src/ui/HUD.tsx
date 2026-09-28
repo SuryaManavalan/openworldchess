@@ -1,7 +1,7 @@
 // The HUD (ux.md §4–5). Phone: information on top, actions in the thumb zone,
 // detail in bottom sheets. Desktop: side panels and hotkeys. Same features.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BUILDINGS, CHAPTERS, PIECE_NAME, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, TITLES, cheb, setWorth, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
+import { ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, BUILDINGS, CLEAR_TURNS, TURN_MS, CHAPTERS, PIECE_NAME, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, TITLES, cheb, setWorth, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
 import { terrainAt } from '@owc/worldgen';
 import { commands, conn, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
@@ -18,6 +18,7 @@ import { CivShowcase } from './CivShowcase.tsx';
 import { PerfOverlay, perfOn } from './PerfOverlay.tsx';
 import { Markers } from './Markers.tsx';
 import { Icon, type IconName } from './Icon.tsx';
+import { SheetGrab } from './SheetGrab.tsx';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
 const NODE_NAME: Record<string, string> = { tree: 'wood', rock: 'stone', ore: 'ore', wheat: 'crops' };
@@ -43,6 +44,7 @@ export function HUD() {
       <Inspect />
       {ui.layout === 'desktop' && <HoverTag />}
       {ui.pendingAttack && <AttackConfirm />}
+      {ui.pendingClear && <ClearConfirm />}
       {battle && <BattleView battle={battle} />}
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
       <AwayReport />
@@ -198,11 +200,14 @@ function BottomDock() {
           </> : <>
             {(() => { const k = sel.find((p) => p.kind === 'K'); const all = k && input ? input.groupOf(k) : []; return k && all.length > sel.length ? <button className="btn ghost" title="Everything under this king, not just its best army" onClick={() => ui.select(all)}>All {all.length}</button> : null; })()}
             <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
+            {/* Works (movement.md §9): knights pave, elephants clear. */}
+            {sel.some((p) => p.kind === 'N') && <button className={`btn ghost ${ui.orderMode === 'pave' ? 'on' : ''}`} title="Knights pave a road from here to where you tap" onClick={() => ui.set({ orderMode: ui.orderMode === 'pave' ? null : 'pave' })}>Pave</button>}
+            {sel.some((p) => p.kind === 'R') && <button className={`btn ghost ${ui.orderMode === 'clear' ? 'on' : ''}`} title="Elephants clear the trees (and, if you choose, rock and ore) in an area" onClick={() => ui.set({ orderMode: ui.orderMode === 'clear' ? null : 'clear' })}>Clear land</button>}
             {mirror.self?.chronicle?.abilities.includes('muster') && sel.length === 1 && sel[0].kind === 'K' && <button className="btn ghost" title="Gather every piece within 20 squares to this king" onClick={() => commands.muster(sel[0].id).then((e) => e && ui.toast(e, 'error'))}><Icon name="horn" size={15} /> Muster</button>}
             {ui.layout === 'phone' && <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>+ Add</button>}
-            <button className="btn ghost" onClick={() => ui.select([])}>Clear</button>
+            <button className="btn ghost" onClick={() => ui.select([])}>Deselect</button>
           </>}
-          {!pending && <span className="hint-text">{ui.layout === 'phone' ? 'Drag from your pieces to a square, or onto an enemy' : 'Right-click a square to move · on an enemy to attack'}</span>}
+          {!pending && <span className="hint-text">{ui.orderMode === 'pave' ? `Tap where the road should go: ${sel.filter((p) => p.kind === 'N').length} knight${sel.filter((p) => p.kind === 'N').length > 1 ? 's' : ''} will pave it` : ui.orderMode === 'clear' ? 'Drag over the land to clear, or tap its middle' : ui.layout === 'phone' ? 'Drag from your pieces to a square, or onto an enemy' : 'Right-click a square to move · on an enemy to attack'}</span>}
         </div>
       )}
       {ui.layout === 'phone' && (
@@ -244,13 +249,14 @@ function BuildList() {
   const color = mirror.self?.color ?? '#888';
   const chron = mirror.self?.chronicle;
   // The Chronicle opens buildings chapter by chapter; the Wonder appears once it's earned (campaign.md §3).
-  const types: BuildingType[] = ['house', 'stable', 'temple', 'barracks', 'palace', ...(chron?.buildings.includes('wonder') ? ['wonder' as const] : [])];
-  const opensAt = (t: BuildingType) => CHAPTERS.find((c) => c.reward.buildings?.includes(t))?.n;
+  const types: BuildingType[] = ['house', 'stable', 'temple', 'barracks', 'palace', 'altar', ...(chron?.buildings.includes('wonder') ? ['wonder' as const] : [])];
+  // Altars open with temples (economy.md §8).
+  const opensAt = (t: BuildingType) => CHAPTERS.find((c) => c.reward.buildings?.includes(t === 'altar' ? 'temple' : t))?.n;
   return (
     <div className="build-list">
       {types.map((t) => {
         const s = BUILDINGS[t];
-        const locked = !!chron && !chron.buildings.includes(t);
+        const locked = !!chron && !chron.buildings.includes(t === 'altar' ? 'temple' : t);
         if (locked) return (
           <div key={t} className="build-card locked" title="Opens as you progress through the Chronicle">
             <img src={buildingUrl(t, color, mirror.self?.civ)} alt="" />
@@ -266,8 +272,8 @@ function BuildList() {
           }}>
             <img src={buildingUrl(t, color, mirror.self?.civ)} alt="" />
             <span className="bname">{t[0].toUpperCase() + t.slice(1)}</span>
-            <span className="bmeta">{t === 'wonder' ? 'A monument the world can see · in your capital' : `${s.produces.map((k) => PIECE_NAME[k]).join(' / ')} · needs ${s.needs.map((n) => NODE_NAME[n]).join(' + ')} nearby`}</span>
-            <span className="bcost">{Object.entries(s.cost).map(([k, v]) => `${v} ${NODE_NAME[k]}`).join(', ')}</span>
+            <span className="bmeta">{t === 'altar' ? 'Raised by a bishop, anywhere · holds up to 3 houses, stables or temples around it' : t === 'wonder' ? 'A monument the world can see · in your capital' : `${s.produces.map((k) => PIECE_NAME[k]).join(' / ')} · needs ${s.needs.map((n) => NODE_NAME[n]).join(' + ')} nearby`}</span>
+            <span className="bcost">{Object.entries(s.cost).map(([k, v]) => `${v} ${NODE_NAME[k]}`).join(', ') || 'Free: a bishop\'s time'}</span>
           </button>
         );
       })}
@@ -297,14 +303,15 @@ function Details() {
   const b = id != null ? mirror.buildings.get(id) : undefined;
   if (!b || b.type === 'ruin') return <p className="muted">Tap one of your buildings to see it here.</p>;
   const spec = BUILDINGS[b.type as BuildingType];
-  const why: Record<string, string> = { unanchored: 'No king nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': popFull(b.type as BuildingType), building: 'Under construction', paused: 'Paused by you' };
+  const why: Record<string, string> = { unanchored: b.type === 'altar' ? 'No bishop tending it: bring one within 2 squares, or it will fall to ruin' : 'No king (or tended altar) nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': popFull(b.type as BuildingType), building: 'Under construction', paused: 'Paused by you' };
   return (
     <div className="details">
       <h3>{b.type[0].toUpperCase() + b.type.slice(1)}</h3>
       <div className="meter"><span style={{ width: `${(b.built < 1 ? b.built : b.prod) * 100}%` }} /></div>
-      <p>{b.blocked ? why[b.blocked] : `Producing ${spec.produces.map((k) => PIECE_NAME[k]).join('/')} · ${b.rate ?? 1}× speed from local richness`}</p>
+      <p>{b.blocked ? why[b.blocked] : b.type === 'altar' ? `Tended by a bishop: it holds the land within ${ALTAR_REACH} squares, where up to ${ALTAR_BUILDINGS} houses, stables or temples can stand without a king.` : `Producing ${spec.produces.map((k) => PIECE_NAME[k]).join('/')} · ${b.rate ?? 1}× speed from local richness`}</p>
+      {b.outpost && <p className="muted">Held by an altar, not a king: it works at {Math.round(ALTAR_RATE * 100)}% speed.</p>}
       <p className="muted">Condition {b.hp}/100</p>
-      <button className="btn ghost small" onClick={() => commands.pause(b.id, !b.paused)}>{b.paused ? <><Icon name="play" size={14} /> Resume production</> : <><Icon name="pause" size={14} /> Pause production</>}</button>
+      {b.type !== 'altar' && <button className="btn ghost small" onClick={() => commands.pause(b.id, !b.paused)}>{b.paused ? <><Icon name="play" size={14} /> Resume production</> : <><Icon name="pause" size={14} /> Pause production</>}</button>}
       {mirror.self?.chronicle?.abilities.includes('capital') && (
         mirror.self.chronicle.capital && Math.max(Math.abs(mirror.self.chronicle.capital[0] - b.x), Math.abs(mirror.self.chronicle.capital[1] - b.y)) <= 10
           ? <p className="muted"><Icon name="crown" size={13} /> Your capital: it holds itself forever and crowns kings faster.</p>
@@ -326,7 +333,7 @@ function Sheet() {
   return (
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && close()}>
       <div className="sheet">
-        <div className="grabber" onClick={close} />
+        <SheetGrab onClose={close} />
         {ui.sheet === 'build' && <><h3>Build near a king</h3><BuildList /></>}
         {ui.sheet === 'details' && <Details />}
         {ui.sheet === 'battles' && <BattleList />}
@@ -434,6 +441,41 @@ function Help() {
         <li><b>Higher elo lands are richer:</b> buildings there produce faster and ore is common. The players there are stronger too.</li>
       </ul>
       <p className="muted">Phone: drag from your pieces to command · long-press and draw to select many · double-tap a piece for its king's group · pinch to zoom · twist with two fingers to rotate.</p>
+    </div>
+  );
+}
+
+/**
+ * Confirm land to clear (movement.md §9): what's there, how long it takes, and a choice to
+ * break rock and ore too. Those never grow back, so it says how many would go.
+ */
+function ClearConfirm() {
+  const ui = useUI();
+  const c = ui.pendingClear!;
+  const [hard, setHard] = useState(false);
+  const x0 = Math.min(c.a[0], c.b[0]), x1 = Math.max(c.a[0], c.b[0]), y0 = Math.min(c.a[1], c.b[1]), y1 = Math.max(c.a[1], c.b[1]);
+  const count = { tree: 0, rock: 0, ore: 0 };
+  for (const n of mirror.nodes.values()) if (!n.hoard && n.remaining > 0 && n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1 && n.kind in count) count[n.kind as keyof typeof count]++;
+  const crew = c.ids.filter((id) => mirror.pieces.get(id)?.kind === 'R').length || 1;
+  const turns = (count.tree * CLEAR_TURNS.tree + (hard ? count.rock * CLEAR_TURNS.rock + count.ore * CLEAR_TURNS.ore : 0)) / crew;
+  const secs = Math.round((turns * 1.6 * TURN_MS) / 1000); // walking between spots too
+  const close = () => ui.set({ pendingClear: null });
+  const nothing = !count.tree && (!hard || (!count.rock && !count.ore));
+  return (
+    <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && close()}>
+      <div className="sheet confirm">
+        <SheetGrab onClose={close} />
+        <h3>Clear this land?</h3>
+        <p>{x1 - x0 + 1}×{y1 - y0 + 1} squares: {count.tree} tree{count.tree === 1 ? '' : 's'}{count.rock ? `, ${count.rock} rock` : ''}{count.ore ? `, ${count.ore} ore` : ''}. {crew} elephant{crew > 1 ? 's' : ''} {nothing ? '' : `will take about ${secs < 90 ? `${Math.max(5, secs)} seconds` : `${Math.round(secs / 60)} minutes`}.`}</p>
+        {(count.rock > 0 || count.ore > 0) && (
+          <label className="check-row"><input type="checkbox" checked={hard} onChange={(e) => setHard(e.target.checked)} /> Also break rock and ore</label>
+        )}
+        {hard && (count.rock > 0 || count.ore > 0) && <p className="warn-text">Rock and ore never grow back. This destroys {count.rock ? `${count.rock} rock` : ''}{count.rock && count.ore ? ' and ' : ''}{count.ore ? `${count.ore} ore` : ''}{count.ore ? ', which palaces need' : ''}.</p>}
+        <div className="row-actions">
+          <button className="btn" disabled={nothing} onClick={() => { void commands.clearLand(c.ids, [x0, y0], [x1, y1], hard); close(); }}>Clear</button>
+          <button className="btn ghost" onClick={close}>Not now</button>
+        </div>
+      </div>
     </div>
   );
 }

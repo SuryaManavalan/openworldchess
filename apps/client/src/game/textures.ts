@@ -10,6 +10,7 @@ import * as natureArt from 'owc-art/nature';
 import * as campsArt from 'owc-art/camps';
 import * as ascendedArt from 'owc-art/ascended';
 import * as campaignArt from 'owc-art/campaign';
+import * as altarArt from 'owc-art/altars';
 import * as dravidianArt from 'owc-art/civ-dravidian';
 import * as romanArt from 'owc-art/civ-roman';
 import * as chineseArt from 'owc-art/civ-chinese';
@@ -34,7 +35,9 @@ const WONDERS = campaignArt.WONDERS as unknown as Record<string, ArtFn>;
 const RELICS = campaignArt.RELICS as unknown as Record<string, () => string>;
 const HOARDS = campaignArt.HOARDS as unknown as Record<string, () => string>;
 const piecesOf = (civ?: string) => (civ && CIV_ART[civ]?.PIECES) || PIECES;
-const buildingsOf = (civ?: string): Record<string, ArtFn> => ({ ...((civ && CIV_ART[civ]?.BUILDINGS) || BUILDINGS), wonder: WONDERS[civ && WONDERS[civ] ? civ : 'classic'] });
+/** Altars look like their land, not their civilization (economy.md §8). */
+const altar = altarArt.altar as unknown as (o: { biome?: string; team?: string }) => string;
+const buildingsOf = (civ?: string): Record<string, ArtFn> => ({ ...((civ && CIV_ART[civ]?.BUILDINGS) || BUILDINGS), wonder: WONDERS[civ && WONDERS[civ] ? civ : 'classic'], altar: (o) => altar({ team: o?.team }) });
 const ART_NAME: Record<PieceKind, string> = { K: 'king', Q: 'queen', R: 'elephant', B: 'bishop', N: 'knight', P: 'pawn' };
 export const RES = 128; // raster size per 100x100 art unit
 
@@ -72,8 +75,9 @@ export function pieceTexture(kind: PieceKind, side: 'light' | 'dark', team: stri
     kind === 'K' ? P.king({ side, team, emperor }) : P[ART_NAME[kind]]({ side, team }), RES, onReady);
 }
 
-export function buildingTexture(type: string, team: string, onReady?: () => void, civ?: string) {
+export function buildingTexture(type: string, team: string, onReady?: () => void, civ?: string, biome?: string) {
   if (type === 'ruin') return get('b:ruin', ruinArt, 192, onReady);
+  if (type === 'altar') return get(`b:altar:${biome ?? 'meadow'}:${team}`, () => altar({ biome, team }), 192, onReady);
   return get(`b:${type}:${team}:${civ ?? ''}`, () => buildingsOf(civ)[type]({ team }), 192, onReady);
 }
 

@@ -22,6 +22,7 @@
     "./civ-chinese": "./assets/civ-chinese.mjs",
     "./civ-egyptian": "./assets/civ-egyptian.mjs",
     "./crowns": "./assets/crowns.mjs",
-    "./campaign": "./assets/campaign.mjs"
+    "./campaign": "./assets/campaign.mjs",
+    "./altars": "./assets/altars.mjs"
   }
 }

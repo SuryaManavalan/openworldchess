@@ -1,7 +1,7 @@
 // The world view: camera, chunk streaming, and live views of pieces,
 // buildings and resource nodes, animated from server turns (movement.md §8).
 import { Application, Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
-import { BUILDINGS, CHUNK, REACH, cheb, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
+import { BUILDINGS, CHUNK, PAVED, REACH, cheb, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
 import { biomeAt, hash01 } from '@owc/worldgen';
 import { Chess } from 'chess.js';
 import type { Mirror, MoveEvent } from '@owc/client-core';
@@ -300,6 +300,7 @@ export class Scene {
     m.onNodeChange = (n) => this.syncNode(n);
     // Forgotten with its chunk: drop the sprite too (they used to pile up as you panned).
     m.onNodeDropped = (k) => { const s = this.nodes.get(k); if (s) { s.destroy(); this.nodes.delete(k); } };
+    m.onPaved = (x, y) => this.markTraffic(x, y);
     m.onChunk = (cx, cy) => {
       for (const n of m.nodes.values()) if (Math.floor(n.x / CHUNK) === cx && Math.floor(n.y / CHUNK) === cy) this.syncNode(n);
       const v = this.chunkViews.get(chunkKey(cx, cy));
@@ -312,7 +313,7 @@ export class Scene {
   private markTraffic(x: number, y: number) {
     const t = this.mirror.traffic.get(key(x, y)) ?? 0;
     // A square just became a trail, road or street: repaint (and neighbors across chunk edges).
-    if (t === 12 || t === 60) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) this.markChunkDirty(x + dx, y + dy);
+    if (t === 8 || t === 16 || t === 32 || t === 60 || t === 100 || t === 160 || t === PAVED) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) this.markChunkDirty(x + dx, y + dy);
   }
 
   private syncNode(n: NodeState) {
@@ -516,8 +517,9 @@ export class Scene {
     }
     const color = this.colorOf(b.owner);
     const civ = this.civOf(b.owner);
-    const k = b.camp ? `camp:${b.camp.art}:${b.camp.faction}` : `${b.type}:${color}:${civ ?? ''}`;
-    if (k !== v.texKey) { const tex = b.camp ? campTexture(b.camp.art, b.camp.faction) : buildingTexture(b.type, color, undefined, civ); if (tex) { v.sprite.texture = tex; v.texKey = k; } }
+    const biome = b.type === 'altar' ? biomeAt(this.mirror.seed, b.x, b.y) : undefined;
+    const k = b.camp ? `camp:${b.camp.art}:${b.camp.faction}` : `${b.type}:${color}:${civ ?? ''}:${biome ?? ''}`;
+    if (k !== v.texKey) { const tex = b.camp ? campTexture(b.camp.art, b.camp.faction) : buildingTexture(b.type, color, undefined, civ, biome); if (tex) { v.sprite.texture = tex; v.texKey = k; } }
     const th = this.theta;
     const cx = (b.x + b.size / 2) * S, cy = (b.y + b.size / 2) * S;
     const w = b.size * S * (b.size === 1 ? 1.25 : 1.12);
@@ -747,7 +749,7 @@ export class Scene {
       const tex = d.kind.startsWith('relic:') ? relicTexture(d.kind.slice(6)) : decorTexture(d.kind, d.color, d.variant);
       if (tex) s.texture = tex;
       const wx = (d.x + 0.5) * S, wy = (d.y + 0.5) * S;
-      const size = d.kind === 'gate' || d.kind === 'belltower' ? S * 1.25 : d.kind === 'tower' ? S * 1.1 : d.kind === 'stall' || d.kind === 'well' ? S * 0.95 : S * 0.78;
+      const size = d.kind === 'fountain' ? S * 1.45 : d.kind === 'gate' || d.kind === 'belltower' ? S * 1.25 : d.kind === 'tower' ? S * 1.1 : d.kind === 'stall' || d.kind === 'well' || d.kind === 'planter' ? S * 0.95 : d.kind === 'shrub' ? S * 0.85 : S * 0.78;
       s.width = size; s.height = size;
       s.position.set(wx + Math.sin(th) * S * 0.36, wy + Math.cos(th) * S * 0.36);
       // A ringing bell tower sways.

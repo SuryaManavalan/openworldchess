@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUI } from '../store.ts';
 import { recordClip, type ClipData, type Recording } from '../game/clip.ts';
 import { Icon } from './Icon.tsx';
+import { SheetGrab } from './SheetGrab.tsx';
 
 const get = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const CLIP_KEY = 'owc.clip';
@@ -105,7 +106,7 @@ export function ShareTikTok() {
   return (
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && !sending && close()}>
       <div className="sheet share-sheet">
-        <div className="grabber" />
+        <SheetGrab onClose={() => { if (!sending) close(); }} />
         <div className="share-head">
           <h3>Share this battle</h3>
           <button className="icon-btn" aria-label="Close" onClick={close} disabled={!!sending}><Icon name="close" size={18} /></button>

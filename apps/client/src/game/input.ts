@@ -143,7 +143,9 @@ export class Input {
       const [wx, wy] = this.sq({ ...p, x: p.sx, y: p.sy });
       const under = sc.pickPiece(wx, wy, 0.75);
       const sel = useUI.getState().selection;
-      if (p.type === 'mouse') {
+      // Choosing land to clear: any drag marks out the area (movement.md §9).
+      if (useUI.getState().orderMode === 'clear' && p.button !== 2 && p.button !== 1) { this.mode = 'box'; sc.box = { a: [wx, wy], b: [wx, wy] }; }
+      else if (p.type === 'mouse') {
         if (p.button === 2 || p.button === 1) this.mode = 'pan';
         else if (under && sel.includes(under.id)) this.mode = 'command';
         else { this.mode = 'box'; sc.box = { a: [wx, wy], b: [wx, wy] }; }
@@ -242,6 +244,15 @@ export class Input {
     if (ui.flagMode) { ui.addFlag(at[0], at[1]); sc.fx.ripple(Math.round(at[0]), Math.round(at[1]), 0xe3b23c); haptic(15); return; }
     // A hurry bubble floats above everything else (economy.md §7).
     if (this.popAt(at)) return;
+    // A work order waiting for its place (movement.md §9).
+    if (ui.orderMode && !ui.selection.length) ui.set({ orderMode: null });
+    if (ui.orderMode && ui.selection.length) {
+      const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
+      if (ui.orderMode === 'pave') { void commands.pave(ui.selection, to); sc.fx.ripple(to[0], to[1], 0xa39a8b); audio.commit(); haptic(); }
+      else ui.set({ pendingClear: { ids: ui.selection, a: [to[0] - 4, to[1] - 4], b: [to[0] + 4, to[1] + 4] } });
+      ui.set({ orderMode: null });
+      return;
+    }
     const now = performance.now();
     const dbl = now - this.lastTap.t < 320 && Math.hypot(at[0] - this.lastTap.x, at[1] - this.lastTap.y) < 1.2;
     this.lastTap = { t: now, x: at[0], y: at[1] };
@@ -321,7 +332,9 @@ export class Input {
       // a king can still be attacked: the server names one of its pawns commander (battle.md §9).
       const inReach = kings[0] && cheb(kings[0].x, kings[0].y, ref.x, ref.y) <= REACH ? kings[0] : undefined;
       const wild = !!mirror.players.get(enemyOwner)?.wild;
-      const king = target?.kind === 'K' ? target : inReach ?? (target && !wild ? target : kings[0]);
+      // A building held without a king (an altar's, economy.md §8): the pieces tending it answer.
+      const keeper = !target && b && !inReach && !wild ? [...mirror.pieces.values()].filter((p) => p.owner === enemyOwner && p.state !== 'battle' && cheb(p.x, p.y, b.x, b.y) <= 6).sort((a, c) => cheb(a.x, a.y, b.x, b.y) - cheb(c.x, c.y, b.x, b.y))[0] : undefined;
+      const king = target?.kind === 'K' ? target : inReach ?? keeper ?? (target && !wild ? target : kings[0]);
       if (!king) { ui.toast('No enemy king there to challenge', 'error'); return; }
       this.attack(sel, king, enemyOwner);
       return;
@@ -376,6 +389,11 @@ export class Input {
     const b = this.scene.box;
     if (!b) return;
     const [x0, x1] = [Math.min(b.a[0], b.b[0]), Math.max(b.a[0], b.b[0])], [y0, y1] = [Math.min(b.a[1], b.b[1]), Math.max(b.a[1], b.b[1])];
+    const ui = useUI.getState();
+    if (ui.orderMode === 'clear') {
+      ui.set({ orderMode: null, pendingClear: { ids: ui.selection, a: [Math.round(x0), Math.round(y0)], b: [Math.round(x1), Math.round(y1)] } });
+      return;
+    }
     const ids = mirror.myPieces().filter((p) => p.state !== 'battle' && p.x >= x0 - 0.5 && p.x <= x1 + 0.5 && p.y >= y0 - 0.5 && p.y <= y1 + 0.5).map((p) => p.id);
     const sel = this.keys.has('Shift') ? [...new Set([...useUI.getState().selection, ...ids])] : ids;
     this.selectWithSound(sel);
@@ -415,7 +433,7 @@ export class Input {
     const ui = useUI.getState(), sc = this.scene;
     if (k === 'q') sc.rotate(-1);
     else if (k === 'e') sc.rotate(1);
-    else if (k === 'Escape') { if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else ui.select([]); }
+    else if (k === 'Escape') { if (ui.orderMode) ui.set({ orderMode: null }); else if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else ui.select([]); }
     else if (k === 's' && !e.ctrlKey) { if (ui.selection.length) commands.stop(ui.selection); }
     else if (k === 'b') ui.set({ sheet: ui.sheet === 'build' ? null : 'build' });
     else if (k === 'f' && this.scene.hover) { ui.addFlag(this.scene.hover[0], this.scene.hover[1]); this.scene.fx.ripple(this.scene.hover[0], this.scene.hover[1], 0xe3b23c); }

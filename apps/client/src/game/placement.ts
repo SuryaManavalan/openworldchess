@@ -1,6 +1,6 @@
 // Client-side building placement check, mirroring the server's rules
 // (economy.md §2–3), so the ghost turns green or red before you commit.
-import { BUILDINGS, BUILD_SPACING, REACH, WORK_AREA, distToRect, key, type BuildingType, type NodeKind } from '@owc/shared';
+import { ALTAR_BUILDINGS, ALTAR_REACH, ALTAR_TEND, ALTAR_TYPES, BUILDINGS, BUILD_SPACING, REACH, WORK_AREA, distToRect, key, type BuildingType, type NodeKind } from '@owc/shared';
 import { buildable, terrainAt } from '@owc/worldgen';
 import { mirror } from '../net.ts';
 
@@ -9,7 +9,17 @@ const NAME: Record<NodeKind, string> = { tree: 'wood', rock: 'stone', ore: 'ore'
 export function checkPlacement(type: BuildingType, x: number, y: number): { ok: boolean; reason: string; rate?: number } {
   const spec = BUILDINGS[type], size = spec.size;
   const kings = mirror.myKings().filter((k) => k.state !== 'battle' && distToRect(k.x, k.y, x, y, size) <= REACH);
-  if (!kings.length) return { ok: false, reason: 'Needs one of your kings within 10 squares' };
+  // Altars (economy.md §8): a bishop raises one anywhere; a tended one holds a few small buildings.
+  const tended = (a: { x: number; y: number }) => mirror.myPieces().some((p) => p.kind === 'B' && p.state !== 'battle' && Math.max(Math.abs(p.x - a.x), Math.abs(p.y - a.y)) <= ALTAR_TEND);
+  if (type === 'altar') {
+    if (!tended({ x, y })) return { ok: false, reason: 'Needs one of your bishops beside it' };
+    if (mirror.myBuildings().some((b) => b.type === 'altar' && Math.max(Math.abs(b.x - x), Math.abs(b.y - y)) <= 2 * ALTAR_REACH)) return { ok: false, reason: 'Too close to another of your altars' };
+  } else if (!kings.length) {
+    const altar = mirror.myBuildings().find((b) => b.type === 'altar' && b.built >= 1 && distToRect(b.x, b.y, x, y, size) <= ALTAR_REACH && tended(b));
+    if (!altar) return { ok: false, reason: 'Needs one of your kings within 10 squares (or a tended altar within 5)' };
+    if (!ALTAR_TYPES.includes(type)) return { ok: false, reason: 'By an altar: only houses, stables and temples' };
+    if (mirror.myBuildings().filter((b) => b.type !== 'altar' && b.type !== 'ruin' && distToRect(altar.x, altar.y, b.x, b.y, b.size) <= ALTAR_REACH).length >= ALTAR_BUILDINGS) return { ok: false, reason: `An altar holds at most ${ALTAR_BUILDINGS} buildings` };
+  }
   for (let dy = 0; dy < size; dy++)
     for (let dx = 0; dx < size; dx++) {
       const sx = x + dx, sy = y + dy;

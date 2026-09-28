@@ -118,15 +118,24 @@ These are seeded and deterministic (§1.6): everyone watching sees the same mome
 A settlement should visibly grow from a camp into a city, and the growth should come from what actually happens there.
 
 - **Tiers from size:** hamlet (1–2 buildings), village (3–5), town (6–9), city (10+).
-  - The settled ground spreads further with each tier and changes material: packed earth, then pebbled earth, then cobblestones.
-  - **A city's heart becomes a real chessboard.** The more civilized the land, the more it looks like the board.
+  - The settled ground spreads further with each tier and changes material (as redrawn on 2026-09-28):
+    - hamlets and villages: packed earth;
+    - towns: warm flagstones, laid in staggered courses that don't follow the square grid, with a kerb;
+    - **cities: a real chessboard**, walnut and cream (the classic board), in a bronze frame. The more civilized the land, the more it looks like the board.
+  - It's painted as **one soft shape** over the whole settlement: rounded corners, a slightly hand-laid edge, and a trodden rim where it meets the grass, instead of square-cut blocks. The light/dark checker always shows through, faintly on earth and stone.
 - **Roads from real footsteps:**
   - Pawns **haul goods** between each working building and the resource it draws from, so roads trace real supply lines: farm to house, quarry to barracks, and between neighboring towns.
-  - Traffic makes a dirt path (12 steps), then a cobbled street (60). Roads are drawn as smoothed, slightly irregular curves through trodden squares, with lone squares ignored; squares surrounded by streets pave over into small plazas. Roads are drawn as connected, rounded strokes, not tinted squares.
+  - **Roads follow the crest of the traffic** (redrawn on 2026-09-28). Drawn square by square, the parallel lanes a marching column wears made a grid. Now:
+    - Traffic is blurred heavily (a Gaussian about 2 squares wide).
+    - A road is drawn along the crest of each worn band, placed between squares where the true crest lies, so a diagonal route draws straight.
+    - The result is one worn road down the middle of each route, wider where it's busier, with forks where routes part, and pebbles on the busy stretches.
+    - Inside a settlement, the plaza covers the roads.
+  - **Paved roads** that knights lay (movement.md §9) are drawn apart from worn ones: a kerbed band of laid stones.
   - Unused roads fade by half every hour and grass returns.
 - **Names:** every settlement gets a name drawn from its land (water gives "-ford"/"-bridge", mountains "-crag", forest "-wood"), shown with its tier as a label when zoomed out.
 - **Props from state, seeded so everyone sees the same town:**
-  - a village gets a well with benches;
+  - a village gets a well with benches (a city, a **fountain**);
+  - shrubs, some flowering, along the rim of the settled ground, and young trees in stone tubs around a town's heart, so a settlement softens into the land;
   - stables get haystacks, barracks training dummies, temples and palaces flower beds, houses crates and barrels;
   - a town adds market stalls in the owner's colors, and **street lamps** along its roads that glow at night;
   - a city raises banners at its edges.

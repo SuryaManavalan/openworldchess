@@ -116,4 +116,34 @@ export function belltower({ team = '#d9534a' } = {}) {
     part(rr(44, 70, 12, 18, 6), MAT.wood, null) + part(circ(50, 14, 2.6), team, null);
 }
 
-export const DECOR = { well, lamp, stall, haystack, dummy, flowers, crates, bench, banner, cargo, gate, tower, belltower };
+// A city's fountain: a round stone basin, a tiered spout, and water catching the light.
+export function fountain() {
+  return groundShadow(34, 86) +
+    part(ell(50, 74, 36, 13), MAT.stone, MAT.stoneShade, { shadeX: 66 }) +
+    part(ell(50, 70, 30, 9), '#6fb3d2', null) +
+    part(ell(42, 68, 8, 2), '#bfe6f5', null, { stroke: false }) +
+    part(rr(45, 40, 10, 30, 3), MAT.stone, MAT.stoneShade, { shadeX: 52 }) +
+    part(ell(50, 42, 14, 5), MAT.stone, MAT.stoneShade, { shadeX: 56 }) +
+    part(ell(50, 40, 10, 3), '#6fb3d2', null) +
+    line('M50 38 C50 26 44 22 40 30 M50 38 C50 26 56 22 60 30', 2.6, '#8fd0e8') +
+    part(circ(50, 22, 3.5), '#bfe6f5', null);
+}
+
+// A rounded shrub, clipped: the green edge of a plaza.
+export function shrub({ awning = 'a' } = {}) {
+  const flowers = awning === 'b' ? part(circ(40, 60, 3), '#f2a9c0', null, { stroke: false }) + part(circ(58, 54, 3), '#f7e08a', null, { stroke: false }) + part(circ(52, 68, 2.6), '#f2a9c0', null, { stroke: false }) : '';
+  return groundShadow(24, 86) +
+    part('M24 82 C16 70 22 50 38 48 C42 36 60 36 64 48 C80 48 86 70 76 82 Z', MAT.leaf, MAT.leafShade, { shadeX: 60 }) +
+    line('M36 62 q6 -4 10 0 M54 58 q6 -4 10 0', 1.8, MAT.leafDark) + flowers;
+}
+
+// A young tree planted in a stone tub: towns bring the green inside.
+export function planter() {
+  return groundShadow(18, 88) +
+    part(rr(36, 70, 28, 16, 3), MAT.stone, MAT.stoneShade, { shadeX: 56 }) +
+    line('M50 70 V48', 3.4, '#7a5230') +
+    part(circ(50, 36, 17), MAT.leaf, MAT.leafShade, { shadeX: 56 }) +
+    part(circ(43, 31, 5), '#86c262', null, { stroke: false });
+}
+
+export const DECOR = { well, lamp, stall, haystack, dummy, flowers, crates, bench, banner, cargo, gate, tower, belltower, fountain, shrub, planter };

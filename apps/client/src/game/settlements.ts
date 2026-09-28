@@ -113,11 +113,11 @@ export function decorate(m: Mirror, s: Settlement, color: string, traffic: (x: n
     for (let y = b.y - d; y < b.y + b.size + d; y++) for (let x = b.x - d; x < b.x + b.size + d; x++) if (distToRect(x, y, b.x, b.y, b.size) === d) sq.push([x, y]);
     return sq;
   };
-  // Village: a well at the heart, benches around it.
+  // Village: a well at the heart (a city's is a fountain), benches around it.
   if (s.tier >= 2) {
     for (let r = 0; r < 5; r++) {
       let done = false;
-      for (let dy = -r; dy <= r && !done; dy++) for (let dx = -r; dx <= r && !done; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) done = put(s.cx + dx, s.cy + dy, 'well');
+      for (let dy = -r; dy <= r && !done; dy++) for (let dx = -r; dx <= r && !done; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) done = put(s.cx + dx, s.cy + dy, s.tier >= 4 ? 'fountain' : 'well');
       if (done) break;
     }
     for (const [dx, dy] of [[2, 0], [-2, 0]]) if (h(s.cx + dx, s.cy + dy, 403) < 0.6) put(s.cx + dx, s.cy + dy, 'bench');
@@ -160,6 +160,23 @@ export function decorate(m: Mirror, s: Settlement, color: string, traffic: (x: n
     for (let r = 1; r < 9 && !done; r++)
       for (let dy = -r; dy <= r && !done; dy++) for (let dx = -r; dx <= r && !done; dx++)
         if (Math.max(Math.abs(dx), Math.abs(dy)) === r) done = put(s.cx + dx, s.cy + dy, 'belltower', { color, bell: s.tier });
+  }
+  // The green edge: shrubs (some flowering) along the rim of the settled ground, and
+  // trees in tubs around a town's heart. They soften where the settlement meets the land.
+  if (s.tier >= 2) {
+    let n = 0;
+    for (const k of s.ground.keys()) {
+      if (n >= 6 + s.tier * 3) break;
+      const [x, y] = unk(k);
+      const edge = SIDES.some(([dx, dy]) => !s.ground.has(key(x + dx, y + dy)));
+      if (edge && h(x, y, 440) < 0.16 && !SIDES.some(([dx, dy]) => traffic(x + dx, y + dy) >= 12) && put(x, y, 'shrub', { variant: h(x, y, 441) < 0.4 ? 'b' : 'a' })) n++;
+    }
+  }
+  if (s.tier >= 3) {
+    let n = 0;
+    for (let r = 3; r <= 6 && n < s.tier; r++)
+      for (let dy = -r; dy <= r && n < s.tier; dy++) for (let dx = -r; dx <= r && n < s.tier; dx++)
+        if (Math.max(Math.abs(dx), Math.abs(dy)) === r && h(s.cx + dx, s.cy + dy, 442) < 0.08 && put(s.cx + dx, s.cy + dy, 'planter')) n++;
   }
   // City: banners at the edges.
   if (s.tier >= 4) {

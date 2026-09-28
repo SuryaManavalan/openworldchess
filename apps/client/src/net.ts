@@ -39,6 +39,14 @@ export const commands = {
     if (err) useUI.getState().toast(err, 'error');
     return err;
   },
+  async pave(pieceIds: number[], to: [number, number]) {
+    const err = await conn.request({ t: 'order.pave', pieceIds, to });
+    if (err) useUI.getState().toast(err, 'error'); else useUI.getState().toast('The knights ride out to pave', 'info');
+  },
+  async clearLand(pieceIds: number[], a: [number, number], b: [number, number], hard: boolean) {
+    const err = await conn.request({ t: 'order.clear', pieceIds, a, b, hard });
+    if (err) useUI.getState().toast(err, 'error'); else useUI.getState().toast('The elephants set to work', 'info');
+  },
   stop(pieceIds: number[]) { conn.send({ t: 'order.stop', pieceIds }); },
   async attack(pieceIds: number[], targetKingId: number) {
     const err = await conn.request({ t: 'order.attack', pieceIds, targetKingId });
@@ -64,6 +72,10 @@ export const commands = {
   setCapital(buildingId: number) { return conn.request({ t: 'capital.set', buildingId }); },
   resetEmpire(name: string) { return conn.request({ t: 'empire.reset', name }); },
   declineQuest(id: number) { conn.send({ t: 'quest.decline', id }); },
+  async acceptQuest(id: number) {
+    const err = await conn.request({ t: 'quest.accept', id });
+    if (err) useUI.getState().toast(err, 'error');
+  },
   muster(kingId: number) { return conn.request({ t: 'muster', kingId }); },
   checkout(pack: string) { return conn.request({ t: 'shop.checkout', pack }); },
   buyCiv(civ: string) { return conn.request({ t: 'civ.buy', civ }); },
