@@ -222,6 +222,7 @@ Rewards stay small and **never outgrow the main quest**. Side quests give variet
   - **Side quests live in the Chronicle** (as of 2026-09-28), at the top of the book: offers with *Where?*, **Decline** (tap twice; it says the quest will come back) and **Accept**, then your quests with *Where?*, *Drop* and **Follow**. The Chronicle button shows a badge while a quest is offered, and a short alert says so once.
   - **Following** a side quest puts it in the banner (its progress, Show, a how-to tip for the pilgrimage, *Drop*), with a chip back to the chapter. It's remembered across reloads.
   - Every control is at least 36–44px tall, with no small close buttons beside a list (a thumb reaching to close one used to decline a quest by accident).
+- **Help for every quest** (as of 2026-09-28): **How?** on the banner (and on each side quest in the Chronicle) opens a card with numbered steps, **what to look for** drawn in this land's own art and named locally (in a taiga the crops are berry bushes), and buttons that do the fiddly part: *Show me the crops* (flies there and rings the nearest), *Place a house for me* (puts the outline on a good spot; you confirm), *Select my army*, *Show me the camp*. Code: `apps/client/src/ui/QuestHelp.tsx`.
 - **Sheets:** every bottom sheet has a full-width handle: tap it, or swipe it down (the sheet follows your finger), to close.
 - **Map:** quest targets get a gold pin that joins the existing marker system (flags, settlement pins, edge arrows), so off-screen targets show as edge arrows with distances.
 - **Moments:**
@@ -252,6 +253,8 @@ What a player should have at each point: the target the tuning aims for.
 | 15 | High King | 9–10 | 140+ | 5–6 plus a Wonder | A legendary camp |
 
 ## 7. The first-session fixes (they don't wait for the Chronicle)
+
+- **Starting beside grown camps** (as of 2026-09-28): new players aren't placed within 35 squares of a camp of more than 8 pieces (camps grow with the empires around them, so a spot beside an old empire can be ringed by full sets). And every new empire gets **a young band of its own** nearby: a small camp under 80% of its strength that never grows, so the first hunt always has something beatable.
 
 These address the stall directly, and should ship first:
 

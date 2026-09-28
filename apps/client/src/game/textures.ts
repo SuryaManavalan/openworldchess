@@ -153,6 +153,19 @@ function ruinArt() {
 
 /** Piece art as a data URL, for the React battle board. */
 const urlCache = new Map<string, string>();
+/** A resource's art as an image URL (for help cards): a node variant like "crop:berries". */
+export function nodeUrl(kind: string): string {
+  const k = `n:${kind}`;
+  let u = urlCache.get(k);
+  if (!u) {
+    const [group, name] = kind.split(':');
+    const svg = name ? (NATURE[group]?.[name] ?? RESOURCES.rock)() : RESOURCES[NODE_ART[kind]]();
+    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${svg}</svg>`);
+    urlCache.set(k, u);
+  }
+  return u;
+}
+
 export function pieceUrl(kind: PieceKind, side: 'light' | 'dark', team: string, emperor = false, civ?: string): string {
   const k = `${kind}:${side}:${team}:${emperor}:${civ ?? ''}`;
   let u = urlCache.get(k);

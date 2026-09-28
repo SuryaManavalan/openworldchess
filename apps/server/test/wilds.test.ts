@@ -54,7 +54,7 @@ describe('wilds', () => {
   });
 
   it('camps grow toward a full set as players build nearby, and their rating rises', () => {
-    const c = game.wilds.camps()[0];
+    const c = game.wilds.camps().find((x) => !x.wild!.quarryFor)!; // (a newcomer's own band never grows)
     const info = c.wild!;
     const start = c.rating;
     // A city grows beside the camp.
@@ -224,6 +224,21 @@ describe('wilds', () => {
     // Beaten like any troop: the commander falls, and the survivors flee home.
     expect(game.world.pieces.has(commander)).toBe(false);
     for (const p of [knight, ...pawns].filter((q) => q.id !== commander && game.world.pieces.has(q.id))) expect(game.world.pieces.get(p.id)!.state).toBe('routed');
+  });
+
+  it("a new empire gets a young band of its own nearby, and isn't placed beside grown camps", () => {
+    const p = join('Newcomer');
+    const band = game.wilds.camps().find((c) => c.wild!.quarryFor === p.id);
+    expect(band).toBeTruthy();
+    const size = band!.wild!.awake === false ? band!.wild!.roster?.length ?? 0 : game.wilds.piecesOf(band!).length;
+    expect(size).toBeLessThanOrEqual(4);
+    expect(cheb(band!.wild!.x, band!.wild!.y, p.home[0], p.home[1])).toBeLessThanOrEqual(32);
+    // No camp of more than 8 pieces within 35 squares of where it starts (when there's room elsewhere).
+    for (const c of game.wilds.camps()) {
+      if (c === band) continue;
+      const n = c.wild!.awake === false ? c.wild!.roster?.length ?? 0 : game.wilds.piecesOf(c).length;
+      if (n > 8) expect(cheb(c.wild!.x, c.wild!.y, p.home[0], p.home[1])).toBeGreaterThan(35);
+    }
   });
 
   it('an empire still needs a king to attack another empire', () => {

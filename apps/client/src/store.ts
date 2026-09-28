@@ -44,6 +44,8 @@ interface UIState {
   trackerMin: boolean;
   /** A shrine's riddle open on screen (the side quest's id). */
   riddle: number | null;
+  /** Help for a quest open (campaign.md §5.5): the banner's step, or a side quest by id. */
+  questHelp: { side?: number } | null;
   /** A work order waiting for its place (movement.md §9): where to pave to, or what to clear. */
   orderMode: 'pave' | 'clear' | null;
   /** An area chosen for elephants to clear, waiting for confirmation. */
@@ -97,6 +99,7 @@ export const useUI = create<UIState>((set, get) => ({
   trackerMin: (() => { try { return localStorage.getItem('owc.trackerMin') === '1'; } catch { return false; } })(),
   orderMode: null,
   riddle: null,
+  questHelp: null,
   pendingClear: null,
   questFocus: (() => { try { const v = Number(localStorage.getItem('owc.questFocus')); return v > 0 ? v : null; } catch { return null; } })(),
   lassoMode: false,

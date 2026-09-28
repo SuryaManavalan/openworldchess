@@ -89,3 +89,13 @@ export function nodeArt(seed: number, kind: string, x: number, y: number, biome:
   if (kind === 'ore') return `ore:${l.ore}`;
   return `crop:${l.crop}`;
 }
+
+/** What a resource is called where it grows (the quest says "crops"; in taiga they're berry bushes). */
+const CROP_NAME: Record<string, string> = { wheat: 'wheat fields', berries: 'berry bushes', pumpkins: 'pumpkin patches', corn: 'corn', rice: 'rice paddies', cactusfruit: 'cactus fruit', firebloom: 'firebloom flowers', glowcaps: 'glowing mushrooms' };
+export function localName(kind: string, biome: Biome): string {
+  const l = LOOK[biome];
+  if (kind === 'wheat') return CROP_NAME[l.crop] ?? 'crops';
+  if (kind === 'ore') return `${l.ore} ore`;
+  if (kind === 'rock') return 'rocks';
+  return `trees (${l.trees[0]})`;
+}

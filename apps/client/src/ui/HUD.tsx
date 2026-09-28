@@ -20,6 +20,7 @@ import { Markers } from './Markers.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { SheetGrab } from './SheetGrab.tsx';
 import { Riddle } from './Riddle.tsx';
+import { QuestHelp } from './QuestHelp.tsx';
 import { checkPlacement } from '../game/placement.ts';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
@@ -52,6 +53,7 @@ export function HUD() {
       {ui.pendingAttack && <AttackConfirm />}
       {ui.pendingClear && <ClearConfirm />}
       {ui.riddle != null && <Riddle />}
+      <QuestHelp />
       {battle && <BattleView battle={battle} />}
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
       <AwayReport />

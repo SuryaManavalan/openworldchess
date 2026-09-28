@@ -95,6 +95,7 @@ export function ChronicleTracker() {
         <div className="side-btns">
           <button className="icon-btn small" aria-label="Fold the quest away" onClick={() => setMin(true)}><Icon name="chevron" size={14} style={{ transform: 'rotate(-90deg)' }} /></button>
           {target && <button className="link show" onClick={() => show(target)}><Icon name="target" size={15} /> Show</button>}
+          <button className="link show how" onClick={() => ui.set({ questHelp: focused ? { side: focused.id } : {} })}><Icon name="help" size={15} /> How?</button>
         </div>
       </div>
     </div>
@@ -133,6 +134,7 @@ function SideQuests() {
           <span className="sq-actions">
             {q.at && <button className="link" onClick={() => fly(q.at)}>Where?</button>}
             <button className={`btn small ghost ${confirm === q.id ? 'warn' : ''}`} onClick={() => decline(q.id)}>{confirm === q.id ? 'Drop it? It comes back' : 'Drop'}</button>
+            <button className="btn small ghost" onClick={() => ui.set({ questHelp: { side: q.id }, sheet: null })}>How?</button>
             {q.puzzle && <button className="btn small gold" onClick={() => ui.set({ riddle: q.id, sheet: null })}>Answer</button>}
             <button className={`btn small ${q.id === ui.questFocus ? 'gold' : 'ghost'}`} onClick={() => { setFocus(q.id === ui.questFocus ? null : q.id); setMin(false); }}>{q.id === ui.questFocus ? 'Following' : 'Follow'}</button>
           </span>

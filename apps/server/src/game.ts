@@ -1,6 +1,6 @@
 // The authoritative game: players, orders, world turns and the economy.
 import {
-  ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, ALTAR_TEND, ALTAR_TYPES, ALTARS_PER_PLAYER, BUILDINGS, PAVED, BUBBLE_GOLD_CHANCE, BUBBLE_MAX, bubbleEveryMs, bubbleWorth, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, HOLD_MS, ENGAGE_RANGE, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
+  setWorth, ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, ALTAR_TEND, ALTAR_TYPES, ALTARS_PER_PLAYER, BUILDINGS, PAVED, BUBBLE_GOLD_CHANCE, BUBBLE_MAX, bubbleEveryMs, bubbleWorth, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, HOLD_MS, ENGAGE_RANGE, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
   BUILDINGS_PER_KING, PLAYER_BUILDING_CAP, RUIN_LIFETIME_MS, MASTERLESS_MS, REACH, SPAWN_SHIELD_MS, TEAM_COLORS,
   ANCHOR_GRACE_MS, DECAY_EVERY_MS, BUILDING_MAX_HP, WORK_AREA, cheb, distToRect, isLight,
   type Building, type BuildingType, type Facing, type NodeKind, type Piece, type PieceKind, type PlayerPublic, type PlayerSelf, type TurnMove,
@@ -357,6 +357,10 @@ export class Game {
     // 14 from pieces). Empires are people and bots; the wilds' camps don't count.
     const empires = [...this.players.values()].filter((o) => o !== p && !o.wild && this.kingsByOwner.get(o.id)?.size);
     const settled = empires.length;
+    // Not beside camps grown to fight an old empire: a newcomer with six pieces can't beat a
+    // full set. (Camps near a new empire are its own size: see the young band below.)
+    const camps = this.wilds.camps().map((c) => ({ x: c.wild!.x, y: c.wild!.y, n: c.wild!.awake === false ? c.wild!.roster?.length ?? 2 : this.wilds.piecesOf(c).length }));
+    const bigCampNear = (x: number, y: number) => camps.some((c) => c.n > 8 && cheb(c.x, c.y, x, y) <= 35);
     for (let i = 0; i < 1500 && !site; i++) {
       const a = Math.random() * Math.PI * 2;
       let ox = 0, oy = 0, r: number;
@@ -372,6 +376,7 @@ export class Game {
       if (targetElo == null ? e > 1050 : Math.abs(e - targetElo) > 200) continue;
       // Neighbors, not roommates: no other empire's king within 60 squares.
       if (targetElo == null && i < 1200 && w.piecesNear(x, y, 60).some((q) => q.kind === 'K' && q.owner && q.owner !== p.id && !this.players.get(q.owner)?.wild)) continue;
+      if (i < 1200 && bigCampNear(x, y)) continue;
       if (this.viableSite(x, y)) site = [x, y];
     }
     site ??= [Math.round((Math.random() - 0.5) * 400), Math.round((Math.random() - 0.5) * 400)];
@@ -389,6 +394,9 @@ export class Game {
     p.emperorId = emp?.id ?? null;
     p.home = [sx, sy];
     p.shieldUntil = this.now + this.shieldMs;
+    // A young band of its own nearby (at most 80% of the kit's strength, and it never grows),
+    // so a new empire's first hunt always has something it can beat (campaign.md §7).
+    if (this.wilds.enabled && !p.isBot) this.wilds.quarry(p.id, [sx, sy], setWorth(['K', 'P', 'P', 'P', 'P']), this.now);
   }
 
   // ---------- orders ----------
