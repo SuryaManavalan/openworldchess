@@ -2,10 +2,11 @@
 // tactics to open when you want everything (campaign.md §5.7).
 import type { Lesson } from '@owc/shared';
 
-export function LessonView({ l, open }: { l: Lesson; open?: boolean }) {
+/** `bare` leaves the title out, for lists whose row already shows it. */
+export function LessonView({ l, open, bare }: { l: Lesson; open?: boolean; bare?: boolean }) {
   return (
     <div className="lesson">
-      <p><b>{l.title}.</b> {l.text}</p>
+      <p>{!bare && <b>{l.title}. </b>}{l.text}</p>
       <details open={open}>
         <summary>Fine print</summary>
         <ul>{l.fine.map((f, i) => <li key={i}>{f}</li>)}</ul>

@@ -39,7 +39,7 @@ export function HUD() {
       <Markers />
       <TopBar />
       {/* On phones these stack in one column under the top bar, so they never overlap. */}
-      <div className={`top-stack ${ui.layout === 'phone' && (ui.sheet || ui.pendingAttack || ui.pendingClear || ui.inspect || battle) ? 'covered' : ''}`}>
+      <div className={`top-stack ${ui.layout === 'phone' && (ui.sheet || ui.questHelp || ui.riddle != null || ui.pendingAttack || ui.pendingClear || ui.inspect || battle) ? 'covered' : ''}`}>
         {mirror.self?.chronicle ? <ChronicleTracker /> : <Guide />}
         <Alerts />
         {ui.layout === 'phone' && <Toasts />}
@@ -503,7 +503,7 @@ function Help() {
       <p className="muted">Every rule of the game. Open a rule for its fine print (every number and exception) and tactics. The Chronicle teaches these as you go; they're all here if you'd rather read ahead.</p>
       <div className="rulebook">
         {Object.entries(LESSONS).map(([id, l]) => (
-          <details key={id} className="lesson-row"><summary>{l.title}</summary><LessonView l={l} /></details>
+          <details key={id} className="lesson-row"><summary>{l.title}</summary><LessonView l={l} bare /></details>
         ))}
       </div>
       <p className="muted">{ui.layout === 'phone' ? 'Phone: tap to select · tap the ground to move (tap the marker again to go) · drag from a piece to move or attack · long-press and draw to select many · pinch to zoom · twist with two fingers to rotate.' : 'Desktop: click to select · right-click to move or attack · drag a box to select · Ctrl/Space + drag or two-finger swipe to pan · wheel or pinch to zoom · Q/E rotate · Esc deselect.'}</p>

@@ -211,16 +211,16 @@ export function QuestHelp() {
         <SheetGrab onClose={close} />
         <h3><Icon name="help" size={18} /> {h.title}</h3>
         <ol className="help-steps">{h.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
-        {why.length > 0 && (
-          <div className="help-why">
-            <span className="kicker">Why it works this way</span>
-            {why.map((l) => <LessonView key={l.title} l={l} />)}
-          </div>
-        )}
         {h.look.length > 0 && (
           <div className="help-look">
             <span className="kicker">What to look for</span>
             <div className="looks">{h.look.map((l) => <figure key={l.label}><img src={l.img} alt="" /><figcaption>{l.label}</figcaption></figure>)}</div>
+          </div>
+        )}
+        {why.length > 0 && (
+          <div className="help-why">
+            <span className="kicker">Why it works this way</span>
+            {why.map((l) => <LessonView key={l.title} l={l} />)}
           </div>
         )}
         <div className="row-actions help-actions">

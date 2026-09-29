@@ -84,7 +84,7 @@ export function ChronicleTracker() {
           <b>{line}</b>
           {need > 1 && <span className="prog"><span style={{ width: `${(100 * have) / need}%` }} /><em>{have}/{need}</em></span>}
           {t && <span className="tip">{t}</span>}
-          {!focused && step?.teach?.length ? <button className="learn-chip" onClick={() => ui.set({ questHelp: {} })}><Icon name="book" size={12} /> Learn: {step.teach.map((id) => LESSONS[id]?.title).filter(Boolean).join(' · ')}</button> : null}
+          {!focused && step?.teach?.length ? <button className="learn-chip" onClick={() => ui.set({ questHelp: {} })}><Icon name="book" size={12} /> <span>Learn: {LESSONS[step.teach[0]]?.title}{step.teach.length > 1 ? ` +${step.teach.length - 1} more` : ''}</span></button> : null}
           {focused?.kind === 'pilgrimage' && <span className="tip keep">{PILGRIM_TIPS[focused.stage ?? 0]}</span>}
           {focused?.kind === 'shrine' && !focused.puzzle && <span className="tip keep">Walk any of your pieces onto the shrine (Show finds it).</span>}
           {focused?.puzzle && <button className="btn small gold riddle-go" onClick={() => ui.set({ riddle: focused.id })}>Answer the riddle</button>}
@@ -207,7 +207,7 @@ export function ChronicleBook() {
         const ids: string[] = [];
         CHAPTERS.forEach((ch) => ch.steps.forEach((s, i) => { if (ch.n < c.chapter || (ch.n === c.chapter && i <= c.step)) for (const id of s.teach ?? []) if (!ids.includes(id)) ids.push(id); }));
         return ids.length ? (
-          <div className="lessons"><h4>What you've learned</h4>{ids.map((id) => LESSONS[id] && <details key={id} className="lesson-row"><summary>{LESSONS[id].title}</summary><LessonView l={LESSONS[id]} /></details>)}</div>
+          <div className="lessons"><h4>What you've learned</h4>{ids.map((id) => LESSONS[id] && <details key={id} className="lesson-row"><summary>{LESSONS[id].title}</summary><LessonView l={LESSONS[id]} bare /></details>)}</div>
         ) : null;
       })()}
       {c.relics.length > 0 && (

@@ -568,10 +568,11 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .help-why { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; padding: 10px 12px; background: rgba(243, 210, 122, 0.08); border-radius: 12px; border: 1px solid rgba(243, 210, 122, 0.25); }
 .help-why .kicker { font-size: 11px; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; color: #f3d27a; }
 .help-why p { margin: 0; line-height: 1.45; font-size: 13.5px; }
-.tracker .learn-chip { align-self: flex-start; margin-top: 4px; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 800; color: #f3d27a; background: rgba(243, 210, 122, 0.1); border: 1px solid rgba(243, 210, 122, 0.3); border-radius: 99px; padding: 4px 10px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chronicle-book .lessons details { border-top: 1px solid var(--line); padding: 8px 0; }
-.chronicle-book .lessons summary { font-weight: 800; cursor: pointer; }
-.chronicle-book .lessons p { margin: 6px 0 0; line-height: 1.45; color: var(--dim); }
+.tracker .learn-chip { align-self: flex-start; margin-top: 4px; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 800; color: #f3d27a; background: rgba(243, 210, 122, 0.1); border: 1px solid rgba(243, 210, 122, 0.3); border-radius: 99px; padding: 4px 10px; cursor: pointer; max-width: 100%; text-align: left; line-height: 1.3; min-height: 30px; }
+.tracker .learn-chip svg { flex: none; }
+.chronicle-book .lessons > details { border-top: 1px solid var(--line); padding: 8px 0; }
+.chronicle-book .lessons > details > summary { font-weight: 800; cursor: pointer; }
+.chronicle-book .lessons p { margin: 6px 0 0; line-height: 1.45; }
 /* The win (campaign.md §5.5): flash, fireworks, a slammed title and Renown rolling up. */
 .celebrate { position: fixed; inset: 0; pointer-events: none; z-index: 60; display: grid; place-items: center; }
 .celebrate-flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 42%, rgba(255, 233, 160, 0.85), rgba(227, 178, 60, 0.35) 35%, transparent 70%); animation: cel-flash 0.9s ease-out forwards; }
@@ -605,3 +606,31 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .lesson-row { border-top: 1px solid var(--line); padding: 6px 0; }
 .lesson-row > summary { font-weight: 800; cursor: pointer; min-height: 36px; display: flex; align-items: center; }
 .rulebook { margin: 8px 0 12px; }
+
+/* Quest-help and lesson layout (mobile + desktop audit). */
+.sheet-backdrop { z-index: 30; }
+.quest-help h3 { margin-bottom: 10px; }
+.help-why { gap: 0; padding: 4px 12px 6px; }
+.help-why > .kicker { padding: 8px 0 4px; }
+.help-why .lesson + .lesson { border-top: 1px solid rgba(243, 210, 122, 0.18); }
+.lesson { gap: 0; padding: 8px 0 4px; }
+.lesson p, .sheet.confirm .lesson p { color: var(--ink); font-size: 14px; }
+.lesson p b { color: #f6e7c1; }
+.lesson details { margin: 0; }
+.lesson summary, .lesson-row > summary { list-style: none; gap: 6px; }
+.lesson summary::-webkit-details-marker, .lesson-row > summary::-webkit-details-marker { display: none; }
+.lesson summary::before, .lesson-row > summary::before { content: ''; flex: none; width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.15s; }
+.lesson details[open] > summary::before, .lesson-row[open] > summary::before { transform: rotate(90deg); }
+.lesson summary { min-height: 32px; font-size: 13px; }
+.lesson-row > .lesson { padding-top: 0; padding-left: 12px; }
+.lesson ul { color: var(--ink); }
+.help-actions { position: sticky; bottom: 0; margin: 4px -16px calc(-16px - var(--safe-bottom)); padding: 10px 16px calc(12px + var(--safe-bottom)); background: var(--panel-2); border-top: 1px solid var(--line); }
+.help-actions .btn { flex: 1 1 auto; white-space: nowrap; }
+.help-look .looks figure { flex: 0 0 84px; }
+.side-quests .sq { text-align: left; align-items: stretch; }
+.side-quests .sq .kicker { align-self: flex-start; }
+.side-quests .sq-actions { justify-content: stretch; gap: 6px; }
+.side-quests .sq-actions .btn { flex: 1 0 auto; padding: 8px 12px; }
+.side-quests .sq-actions .link { flex: none; padding: 0 6px 0 0; }
+.riddle .riddle-board { width: min(100%, 420px, calc(100dvh - 190px)); min-width: 240px; }
+.side-quests .sq .line, .side-quests .sq > span, .side-quests .sq > small { text-align: left; }
