@@ -1,7 +1,7 @@
 // The wilds (docs/specs/wilds.md): camps appear by players, grow, raid troops in
 // the field, and scatter when their king falls. Creatures never change sides.
 import { afterAll, describe, expect, it } from 'vitest';
-import { FACTIONS, cheb, setWorth, type Building } from '@owc/shared';
+import { CHAPTERS, FACTIONS, cheb, setWorth, type Building } from '@owc/shared';
 import { Game, type PlayerRec } from '../src/game.ts';
 import { CAMP_CELL } from '../src/wilds.ts';
 
@@ -260,6 +260,43 @@ describe('wilds', () => {
     expect(at).toBeTruthy();
     expect(away(at![0], at![1])).toBeLessThanOrEqual(40);
     expect(game.wilds.camps().some((c) => c.wild!.quarryFor === p.id && cheb(c.wild!.x, c.wild!.y, at![0], at![1]) <= 1)).toBe(true);
+  });
+
+  it('a bounty is offered on a camp the player could beat, not on a nearer full army', () => {
+    const p = join('Bountyhunter');
+    const st = game.chronicle.of(p);
+    st.ch = 2; st.step = 0; st.chBase = { ...st.tallies };
+    const from = game.kingsOf(p.id)[0];
+    // A grown army (more material than headcount), so a camp's size alone says nothing.
+    for (const kind of ['N', 'N', 'B', 'B', 'R'] as const) {
+      const at = game.world.nearestFree(from.x, from.y + 2, 6)!;
+      game.addPiece({ id: game.world.id(), owner: p.id, kind, x: at[0], y: at[1], facing: 2, state: 'idle' });
+    }
+    for (const c of game.wilds.camps()) {
+      if (c.wild!.awake !== false) { if (cheb(c.wild!.x, c.wild!.y, from.x, from.y) <= 200) game.wilds.remove(c); continue; }
+      c.wild!.roster = ['K', 'Q', 'R', 'R', 'B', 'B', 'N', 'N', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'];
+    }
+    const weak = game.wilds.quarry('decoy-bounty', [from.x + 90, from.y], setWorth(['K', 'P', 'P']), now)!;
+    const strong = game.wilds.quarry('decoy-strong', [from.x - 20, from.y], 200, now)!;
+    const army = setWorth(game.world.piecesNear(from.x, from.y, 12).filter((x) => x.owner === p.id).map((x) => x.kind));
+    expect(setWorth(game.wilds.piecesOf(strong).map((x) => x.kind))).toBeGreaterThan(army);
+    expect(setWorth(game.wilds.piecesOf(strong).map((x) => x.kind))).toBeGreaterThan(setWorth(game.wilds.piecesOf(weak).map((x) => x.kind)));
+    (game.chronicle as unknown as { writeSide(p: PlayerRec): void }).writeSide(p);
+    const q = st.sides.find((x) => x.kind === 'bounty');
+    expect(q?.camp).toBe(weak.id);
+  });
+
+  it('a fight with an empire points at a rival near your rating, not the nearest one', () => {
+    const p = join('Challenger');
+    const even = join('EvenMatch'), pro = join('Veteran');
+    for (const x of game.players.values()) if (!x.wild && x.id !== p.id) x.rating = 2000;
+    p.rating = 1000; even.rating = 1100; pro.rating = 1900;
+    const st = game.chronicle.of(p);
+    st.ch = CHAPTERS.findIndex((c) => c.steps.some((s) => s.verb === 'win')) + 1; st.step = 0; st.chBase = { ...st.tallies };
+    tick();
+    const at = game.chronicle.view(p).target;
+    const k = game.kingsOf(even.id).find((x) => !x.emperor)!;
+    expect(at).toEqual([k.x, k.y]);
   });
 
   it("chapter 1's scouting: a king (not the Emperor) goes to look at the camp the Chronicle marks", () => {

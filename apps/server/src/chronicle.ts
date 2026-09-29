@@ -443,17 +443,18 @@ export class Chronicle {
         return { x: c.wild!.x, y: c.wild!.y, f, size: ks.length, might: worth(ks) };
       });
       const plain = (s.verb === 'hunt' || s.verb === 'scout') && !h.temper && !h.rare && !h.minSize && !h.inRareLand;
-      const camps = all.filter(({ f, size, might, x, y }) => {
+      const camps = all.filter(({ f, size, x, y }) => {
         if (s.verb === 'free') return RAIDERS.has(f.id);
         if (h.temper && f.temper !== h.temper) return false;
         if (h.rare && f.rarity === 'common') return false;
         if (h.minSize && size < h.minSize) return false;
         if (h.inRareLand && !RARE_BIOMES.includes(biomeAt(w.seed, x, y))) return false;
-        // Plain hunts point at something the player's army can beat.
-        if (!h.temper && !h.rare && !h.minSize && !h.inRareLand && might > army) return false;
         return Math.min(...kings.map((k) => cheb(k.x, k.y, x, y))) <= 600;
       });
-      const c = nearest(camps);
+      // Every hunt is scaled to the player: a camp they could beat, nearest first. Special
+      // hunts (a lair, a rare land, a horde) with nothing beatable mark the weakest that fits.
+      const fit = camps.filter((x) => x.might <= army);
+      const c = nearest(fit) ?? (plain ? undefined : camps.sort((a, b) => a.might - b.might)[0]);
       const away = (t: { x: number; y: number }) => Math.min(...kings.map((k) => cheb(k.x, k.y, t.x, t.y)));
       if (c && (!plain || away(c) <= HUNT_NEAR)) return [c.x + 1, c.y + 1];
       if (!plain) return undefined;
@@ -477,7 +478,7 @@ export class Chronicle {
     }
     if (s.verb === 'win') {
       const rivals = [...w.pieces.values()].filter((k) => k.kind === 'K' && k.owner && k.owner !== p.id && !k.emperor && !g.players.get(k.owner)?.wild && (g.players.get(k.owner)?.shieldUntil ?? 0) < g.now);
-      const t = nearest(rivals.filter((k) => cheb(k.x, k.y, from.x, from.y) <= 800));
+      const t = this.fairRival(p, rivals.filter((k) => cheb(k.x, k.y, from.x, from.y) <= 800), army, nearest);
       return t ? [t.x, t.y] : undefined;
     }
     if (s.verb === 'grow') {
@@ -485,6 +486,18 @@ export class Chronicle {
       return best ? [best.cx, best.cy] : undefined;
     }
     return undefined;
+  }
+
+  /**
+   * The rival king to point a fight at, scaled to the player: nearest among those rated
+   * within 300 of them whose troop there isn't more than a quarter stronger; failing that,
+   * the nearest near their rating; failing that, the nearest.
+   */
+  private fairRival<T extends Piece>(p: PlayerRec, rivals: T[], army: number, nearest: (xs: T[]) => T | undefined): T | undefined {
+    const g = this.game, w = this.w;
+    const close = rivals.filter((k) => Math.abs((g.players.get(k.owner!)?.rating ?? 1000) - p.rating) <= 300);
+    const even = close.filter((k) => setWorth(w.piecesNear(k.x, k.y, REACH).filter((q) => q.owner === k.owner).map((q) => q.kind)) <= army * 1.25);
+    return nearest(even) ?? nearest(close) ?? nearest(rivals);
   }
 
   /** 40-square tiles within 200 squares, nearest first (the palace-site search walks them in order). */
@@ -628,13 +641,14 @@ export class Chronicle {
     const army = Math.max(...kings.map((k) => worth(w.piecesNear(k.x, k.y, REACH).filter((q) => q.owner === p.id).map((q) => q.kind))));
     const id = (st.nextSideId = (st.nextSideId ?? 0) + 1);
     const last = st.sides.at(-1)?.kind;
-    const camps = g.wilds.camps().map((c) => ({ c, f: FACTIONS[c.wild!.faction], size: c.wild!.awake === false ? c.wild!.roster?.length ?? 2 : g.wilds.piecesOf(c).length }))
+    // (might: the camp's material, compared with the player's army like any hunt.)
+    const camps = g.wilds.camps().map((c) => ({ c, f: FACTIONS[c.wild!.faction], might: worth(c.wild!.awake === false ? c.wild!.roster ?? ['K', 'P'] : g.wilds.piecesOf(c).map((q) => q.kind)) }))
       .filter(({ c }) => !st.sides.some((q) => q.camp === c.id) && cheb(c.wild!.x, c.wild!.y, from.x, from.y) <= 200)
       .sort((a, b) => cheb(a.c.wild!.x, a.c.wild!.y, from.x, from.y) - cheb(b.c.wild!.x, b.c.wild!.y, from.x, from.y));
     // Each kind opens at a chapter (campaign.md §5.3), and some need what you've built.
     const setts = this.settlementsOf(p.id);
     const makers: { kind: SideQuest['kind']; ch: number; make: () => SideQuest | null }[] = [
-      { kind: 'bounty', ch: 2, make: () => { const t = camps.find(({ size }) => size <= army + 2); return t ? { id, kind: 'bounty', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `A bounty on the ${t.f.name} (${t.f.camp}).`, renown: Math.round(RENOWN[t.f.rarity] * 1.5) } : null; } },
+      { kind: 'bounty', ch: 2, make: () => { const t = camps.find(({ might }) => might <= army); return t ? { id, kind: 'bounty', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `A bounty on the ${t.f.name} (${t.f.camp}).`, renown: Math.round(RENOWN[t.f.rarity] * 1.5) } : null; } },
       { kind: 'grow', ch: 3, make: () => { const s = setts.find((x) => x.tier < 4 && [3, 6, 10].includes(x.buildings.length + 1)); return s ? { id, kind: 'grow', at: [s.cx, s.cy], tier: s.tier + 1, line: 'One more building and this settlement rises a tier.', renown: 30, pieces: ['N'] } : null; } },
       { kind: 'shrine', ch: 3, make: () => this.shrine(p, id, from) },
       { kind: 'feat', ch: 4, make: () => {
@@ -642,7 +656,7 @@ export class Chronicle {
         const f = ids[Math.floor(Math.random() * ids.length)];
         return f ? { id, kind: 'feat', challenge: f, line: `${FEATS[f]}.`, renown: 60, pieces: ['N'] } : null;
       } },
-      { kind: 'rescue', ch: 5, make: () => { const t = camps.find(({ f, size }) => RAIDERS.has(f.id) && size <= army + 2); return t ? { id, kind: 'rescue', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `The ${t.f.name} hold prisoners. Free them.`, renown: 40, pieces: ['P'] } : null; } },
+      { kind: 'rescue', ch: 5, make: () => { const t = camps.find(({ f, might }) => RAIDERS.has(f.id) && might <= army); return t ? { id, kind: 'rescue', camp: t.c.id, at: [t.c.wild!.x + 1, t.c.wild!.y + 1], line: `The ${t.f.name} hold prisoners. Free them.`, renown: 40, pieces: ['P'] } : null; } },
       { kind: 'opening', ch: 5, make: () => {
         const done = new Set(st.sides.filter((q) => q.kind === 'opening').map((q) => q.challenge));
         const ids = Object.keys(OPENINGS).filter((o) => !done.has(o));
@@ -651,7 +665,7 @@ export class Chronicle {
       } },
       { kind: 'pilgrimage', ch: 5, make: () => (setts.some((x) => x.tier >= 2) ? this.pilgrimage(p, id) : null) },
       { kind: 'scout', ch: 7, make: () => { const at = this.searchRing(from.x, from.y, 500, 30, (x, y) => RARE_BIOMES.includes(biomeAt(w.seed, x, y))); return at && !st.discovered ? { id, kind: 'scout', at, line: 'Travelers speak of a strange land nearby. See it for yourself.', renown: 50 } : null; } },
-      { kind: 'skirmish', ch: 10, make: () => { const rival = [...w.pieces.values()].find((k) => k.kind === 'K' && k.owner && k.owner !== p.id && !k.emperor && !g.players.get(k.owner)?.wild && cheb(k.x, k.y, from.x, from.y) <= 200 && (g.players.get(k.owner)?.shieldUntil ?? 0) < g.now); return rival ? { id, kind: 'skirmish', at: [rival.x, rival.y], line: `${g.players.get(rival.owner!)?.name ?? 'A rival'} has troops nearby. Win a battle against an empire.`, renown: RENOWN.empireWin * 2 } : null; } },
+      { kind: 'skirmish', ch: 10, make: () => { const rival = this.fairRival(p, [...w.pieces.values()].filter((k) => k.kind === 'K' && k.owner && k.owner !== p.id && !k.emperor && !g.players.get(k.owner)?.wild && cheb(k.x, k.y, from.x, from.y) <= 200 && (g.players.get(k.owner)?.shieldUntil ?? 0) < g.now), army, (xs) => xs.sort((a, b) => cheb(a.x, a.y, from.x, from.y) - cheb(b.x, b.y, from.x, from.y))[0]); return rival ? { id, kind: 'skirmish', at: [rival.x, rival.y], line: `${g.players.get(rival.owner!)?.name ?? 'A rival'} has troops nearby. Win a battle against an empire.`, renown: RENOWN.empireWin * 2 } : null; } },
     ];
     // The story comes first: kinds that suit what the current chapter is asking for.
     const verb = CHAPTERS[st.ch - 1]?.steps[st.step]?.verb;
