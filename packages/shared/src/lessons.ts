@@ -16,7 +16,7 @@ import {
   PAVE_TURNS, PLAYER_BUILDING_CAP, PLAYER_KING_CAP, PLAYER_PIECE_CAP, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, RUIN_LIFETIME_MS,
   SPAWN_SHIELD_MS, TURN_MS, WORK_AREA, type BuildingType,
 } from './constants.ts';
-import { HOLD_MS, TITLES, RENOWN } from './chronicle.ts';
+import { HOLD_MS, KING_OF_NEED_MIN, TITLES, RENOWN } from './chronicle.ts';
 
 export interface Lesson {
   title: string;
@@ -59,6 +59,7 @@ export const LESSONS: Record<string, Lesson> = {
       'A battle is always king against king: to attack another empire, the troop must include a king. (Raiding a wild camp is the one exception: see Raids.)',
       'A king holds the land around it (see Reach). Buildings with no king near stop working.',
       'If your king is checkmated, it dies. The pieces that fought beside it flee home; your other pieces standing near it (its reserves) join the winner. Buildings it alone held go to the winner too.',
+      `If your Emperor is ever your only king and you have no palace to crown another, the Chronicle crowns a king beside your Emperor after ${KING_OF_NEED_MIN} minutes. Every empire needs a king it can send out.`,
       `You can hold only so many kings: your title sets the limit (${TITLES.map((t) => `${t.name} ${t.kingCap}`).join(', ')}), and never more than ${PLAYER_KING_CAP}.`,
     ],
     tips: ['A king alone is a target. Walk kings with their army, and keep a spare king at home to hold your town while another is away.'],

@@ -300,6 +300,26 @@ describe('the Chronicle', () => {
     expect(st.sides.length).toBeGreaterThan(0);
   });
 
+  it('an empire left with only its Emperor gets a king from the Chronicle: no mistake strands the campaign (campaign.md §5.8)', () => {
+    const p = join('Kingless');
+    const k = game.kingsOf(p.id).find((x) => !x.emperor)!;
+    game.removePiece(k.id);
+    tick();
+    expect(game.kingsOf(p.id).filter((x) => !x.emperor)).toHaveLength(0);
+    tick(4 * 60_000);
+    expect(game.kingsOf(p.id).filter((x) => !x.emperor)).toHaveLength(0);
+    tick(2 * 60_000);
+    tick();
+    expect(game.kingsOf(p.id).filter((x) => !x.emperor)).toHaveLength(1);
+  });
+
+  it('the early chapters never ask a king to fight: the first hunt is a raid, and the king founds the second town', () => {
+    const early = CHAPTERS.slice(0, 3).flatMap((c) => c.steps);
+    expect(early.find((s) => s.verb === 'hunt')).toMatchObject({ raid: true });
+    expect(early.some((s) => s.verb === 'settle')).toBe(true);
+    expect(early.some((s) => s.verb === 'win')).toBe(false);
+  });
+
   it("a player's king cap follows their title", () => {
     const p = join('Capped');
     const st = game.chronicle.of(p);

@@ -28,16 +28,16 @@ Five acts, 15 chapters. Times are for a player of middling pace; fast players go
 
 **The story (as rewritten on 2026-09-28).** Long ago the **First Empire** covered the whole Board, until the wilds swallowed it and its crowns were scattered. The player carries one of those crowns. The campaign is the tale of rebuilding: guard the Emperor (Act I), win back crowns and make new ones (Act II), push into the frontier the First Empire lost (Act III), meet the other crown-bearers (Act IV), and finally face the Dragon that ended the First Empire and build what will outlast you (Act V). Each chapter opens with a short **story card** (`story` in `CHAPTERS`), and each step's line is written in the Chronicle's voice.
 
-**Teaching through the story.** Every step names the rules it teaches (`teach`, §5.7), so the player learns each mechanic at the moment they first need it: the Emperor, reach and resources with the first house; production, room and bubbles with the first pawns; kings, leading a king away, and moving pieces when chapter 1 sends the king (never the Emperor) to scout the camp that chapter 2 then hunts.
+**Teaching through the story.** Every step names the rules it teaches (`teach`, §5.7), so the player learns each mechanic at the moment they first need it: the Emperor, reach and resources with the first house; production, room and bubbles with the first pawns; moving pieces and the wilds when chapter 1 sends a pawn (never the Emperor) to scout the camp that chapter 2 then raids; raids, battles and their stakes with that raid, which a pawn leads so no king is risked; kings, leading a king away and the building cap when chapter 3 sends the king out to found a hamlet while the Emperor holds the village.
 
 | # | Time | Chapter | What you do | What opens up (new) | Power |
 |---|---|---|---|---|---|
 | **Act I: Hearth** | | | | | |
-| 1 | 0:00–0:20 | **Hearth** | Build a house, raise 3 pawns, send your king (not the Emperor) to scout the camp the Chronicle marks | **Stables**: knights and their L-hops | Title *Chieftain* |
-| 2 | 0:20–0:45 | **First Hunt** | Clear the herd the Chronicle marks | **Spoils** (§4.2): camps now leave a **Hoard** and **Renown** | A free knight from the hunt |
-| 3 | 0:45–1:30 | **Village** | Grow a settlement to 3 buildings | **Temples**, bishops; **settlements hold themselves** (§4.3) | Title *Warden*; pop +6 |
+| 1 | 0:00–0:20 | **Hearth** | Build a house, raise 3 pawns, send a pawn (never the Emperor) to scout the camp the Chronicle marks | **Stables**: knights and their L-hops | Title *Chieftain* |
+| 2 | 0:20–0:45 | **First Hunt** | Raise a knight, then raid the camp you scouted with pawns and the knight: no king, a pawn commands | **Spoils** (§4.2): camps now leave a **Hoard** and **Renown** | A free knight from the hunt |
+| 3 | 0:45–1:30 | **Village** | Grow a settlement to 3 buildings, raise 2 knights, then lead your king 25+ squares out to found a hamlet while the Emperor holds the village | **Temples**, bishops; **settlements hold themselves** (§4.3) | Title *Warden*; pop +6 |
 | **Act II: Realm** | | | | | |
-| 4 | 1:30–2:30 | **The Second Crown** | Take the king you're given and found a second settlement 25+ squares away | **Coronation** (§4.1): a king is crowned at your Emperor; **Barracks** (war elephants) | Kings 2→3; title *Lord* |
+| 4 | 1:30–2:30 | **The Second Crown** | A crowned king arrives (each town can keep one); build a temple beside ore and raise a bishop | **Coronation** (§4.1): a king is crowned at your Emperor; **Barracks** (war elephants) | Kings 2→3; title *Lord* |
 | 5 | 2:30–3:30 | **Crown of Stone** | Build a palace (the Chronicle marks the nearest site, and ore hoards count) | **Palaces**; your first palace king comes in 10 min; **Regents**: queens hold a city like a king (§4.3) | Title *Baron* |
 | 6 | 3:30–4:30 | **Trade Winds** | Let merchants run a road between two of your towns; raise an elephant; clear 8 trees with elephants | **Trade** (§4.4): linked towns produce 15% faster | Coronation (king 4) |
 | **Act III: Frontier** | | | | | |
@@ -247,9 +247,20 @@ Numbers are read from the rules' own constants (reach, hold and decay times, roo
 - **A test** (`campaign.test.ts`) checks that every lesson is taught by some quest step or side quest (`SIDE_TEACH`), that every lesson a quest names exists, and that each has its plain line and fine print.
 - **Steps teach lessons:** a step lists the lessons it teaches (`teach: ['emperor', 'reach']`). The quest banner shows them as a *Learn:* chip; the step's help card (**How?**) explains them under *Why it works this way*; and the Chronicle's book keeps every lesson met so far under *What you've learned*.
 - **Changing or adding a rule** is a data change: edit the lesson (or add one) and name it in the `teach` of the step where a player first meets it. Side quests have their own lesson lists in the help card.
-- **New step kinds** for teaching by doing: `scout` (a king, not the Emperor, looks upon the marked camp), `clear` (trees felled by your elephants), `pave` (squares paved by your knights).
+- **New step kinds** for teaching by doing: `scout` (any piece but the Emperor looks upon the marked camp), `clear` (trees felled by your elephants), `pave` (squares paved by your knights).
 
 **Winning feels like winning.** A finished step or side quest plays a jackpot: a gold flash, fireworks of coins, gems and confetti, a slammed "QUEST COMPLETE" with a shine, the Renown counting up, and a slot-machine run of notes into a chord of bells (a chapter adds a gong and the choir, then the ceremony). Code: `apps/client/src/ui/Celebrate.tsx`, `Audio.jackpot`.
+
+### 5.8 No mistake strands a player (as of 2026-09-29)
+
+The campaign never assumes the player kept what an earlier step gave them. Every step can still be finished from any state the player can reach:
+
+- **A king is always available.** An empire whose Emperor is its only king, with no palace to crown another, gets a king from the Chronicle after `KING_OF_NEED_MIN` (5) minutes (`Chronicle.kingOfNeed`). The steps that need a king who isn't the Emperor are founding towns, marching and fighting rivals.
+- **No early step asks a king to fight.** Chapter 1 scouts with any piece but the Emperor. Chapter 2's first hunt is a raid (`raid: true`), led by a pawn; any win counts. Through chapter 3, a king beaten by a wild camp is spared anyway (§7).
+- **Targets are recomputed** every 30 seconds from the current state (§7). A hunt with nothing beatable raises a young band. A bounty or rescue whose camp is gone expires.
+- **Buildings and pieces can be rebuilt.** Unlocked buildings stay unlocked. The Emperor holds the home town, so a house, stable or temple can always be rebuilt there.
+- **A fallen Emperor keeps its chapter.** The empire begins again with a new kit (the Emperor, a king and four pawns) and a young band nearby; the steps ahead still apply.
+- **Side quests can be dropped** at any time; they come back later.
 
 ### 5.6 Data and rules (server)
 

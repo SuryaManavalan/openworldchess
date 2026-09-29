@@ -33,7 +33,8 @@ type StepGoal =
   | { verb: 'grow'; tier: 2 | 3 | 4; line: string }
   | { verb: 'raise'; kind: PieceKind; count: number; line: string }
   | { verb: 'march'; dist: number; line: string }
-  | { verb: 'hunt'; count: number; temper?: 'herd' | 'lair' | 'horde'; minSize?: number; rare?: boolean; inRareLand?: boolean; line: string }
+  /** `raid`: the lesson is a raid without a king (any win counts; the help teaches the raid). */
+  | { verb: 'hunt'; count: number; temper?: 'herd' | 'lair' | 'horde'; minSize?: number; rare?: boolean; inRareLand?: boolean; raid?: boolean; line: string }
   | { verb: 'free'; count: number; line: string }
   | { verb: 'settle'; minDist?: number; eloAbove?: number; line: string }
   | { verb: 'link'; count: number; line: string }
@@ -41,7 +42,7 @@ type StepGoal =
   | { verb: 'win'; count: number; vsEmpire?: boolean; siege?: boolean; line: string }
   | { verb: 'promote'; count: number; line: string }
   | { verb: 'crown'; count: number; line: string }
-  /** Look upon the camp the Chronicle marks, with a king (not the Emperor). */
+  /** Look upon the camp the Chronicle marks, with any piece but the Emperor. */
   | { verb: 'scout'; line: string }
   /** Trees felled by your elephants' Clear land. */
   | { verb: 'clear'; count: number; line: string }
@@ -73,36 +74,37 @@ export const CHAPTERS: Chapter[] = [
     steps: [
       { verb: 'build', type: 'house', count: 1, line: 'Raise a house beside the crops. Your Emperor and your king hold this ground together.', teach: ['emperor', 'reach', 'resources', 'construction'] },
       { verb: 'raise', kind: 'P', count: 3, line: 'The house raises pawns on its own. Three pawns, and your people are a people.', teach: ['production', 'population', 'bubbles'] },
-      { verb: 'scout', line: 'Smoke rises from the wilds nearby. Send your king (never your Emperor) to see who camps there.', teach: ['kings', 'away', 'pieces'] },
+      { verb: 'scout', line: 'Smoke rises from the wilds nearby. Send a pawn to see who camps there (just look: the fight comes next).', teach: ['pieces', 'wilds'] },
     ],
     reward: { title: 1, buildings: ['stable'] }, opens: 'Stables: knights, who leap in L-shapes',
   },
   {
     n: 2, act: 'Hearth', name: 'First Hunt', intro: 'The camp is young and hungry. Strike before it grows.',
-    story: 'The wilds that swallowed the First Empire are waking. Their camps grow as your empire grows, so the time to strike is now, while they are small.',
+    story: 'The wilds that swallowed the First Empire are waking. Their camps grow as your empire grows, so the time to strike is now, while they are small. Kings are too precious to risk on a raid: a brave pawn can lead one.',
     steps: [
       { verb: 'raise', kind: 'N', count: 1, line: 'A knight rides where pawns cannot. Raise one in your stable.' , teach: ['army', 'titles'] },
-      { verb: 'hunt', count: 1, line: "Lead your king's army against the camp you found, and win the game." , teach: ['battle', 'stakes', 'wilds'] },
+      { verb: 'hunt', count: 1, raid: true, line: 'Raid the camp you found with your pawns and your knight. No king needed: a pawn commands. Win the game.', teach: ['raids', 'battle', 'stakes'] },
     ],
     reward: { pieces: ['N'] }, opens: 'Spoils: every camp you clear leaves a hoard behind',
   },
   {
     n: 3, act: 'Hearth', name: 'Village', intro: 'Three roofs make a village, and a village remembers its king.',
-    story: 'A hamlet dies the day its king walks away. A village can wait for him. Build until your hearth can stand on its own.',
+    story: 'A hamlet dies the day its king walks away. A village can wait for him. Build until your hearth can stand on its own; then your Emperor can hold it while your king rides out to found a second.',
     steps: [
       { verb: 'grow', tier: 2, line: 'Build until your hearth is a village: three buildings close together.', teach: ['settlements', 'hold'] },
       { verb: 'raise', kind: 'N', count: 2, line: 'Raise two more knights to ride the village bounds.' , teach: ['cooldown', 'ratings'] },
+      { verb: 'settle', minDist: 25, line: 'Your Emperor holds the village. Lead your king 25 squares out and build there: a hamlet of his own.', teach: ['kings', 'away', 'buildcap'] },
     ],
     reward: { title: 2, buildings: ['temple'] }, opens: 'Temples: bishops. And villages now hold themselves for an hour without a king',
   },
   // ---- Act II: Realm. More crowns, more towns: kings are scarce, ore is precious. ----
   {
-    n: 4, act: 'Realm', name: 'The Second Crown', intro: 'A crown without land is only metal.',
+    n: 4, act: 'Realm', name: 'The Second Crown', intro: 'Two towns, and only one king to go between them.',
     gift: { coronation: true },
-    story: 'In the ruins of the First Empire, the Chronicle has found a second crown, and it has chosen a king. A king holds only the land around him: give him land of his own.',
+    story: 'In the ruins of the First Empire, the Chronicle has found a second crown, and it has chosen a king. Now each of your towns can keep a king of its own. Deeper in the ruins lies ore, the stuff crowns are made of.',
     steps: [
-      { verb: 'settle', minDist: 25, line: 'Lead your new king 25 squares out and found a second settlement. Its buildings will need him.' , teach: ['buildcap'] },
-      { verb: 'raise', kind: 'B', count: 1, line: 'Temples work ore. Raise a bishop, who sees along the diagonals.', teach: ['ore'] },
+      { verb: 'build', type: 'temple', count: 1, line: 'Temples work ore. Build one within 3 squares of an ore vein.', teach: ['ore'] },
+      { verb: 'raise', kind: 'B', count: 1, line: 'Raise a bishop in your temple: he sees along the diagonals.' },
     ],
     reward: { title: 3, buildings: ['barracks', 'palace'] }, opens: 'Barracks and palaces: war elephants, and a seat to crown kings',
   },
@@ -132,7 +134,7 @@ export const CHAPTERS: Chapter[] = [
     steps: [
       { verb: 'pave', count: 12, line: 'Knights lay stone. Pave twelve squares of road out from your town.', teach: ['paving'] },
       { verb: 'march', dist: 150, line: 'Send an expedition 150 squares out, down your road and beyond.' },
-      { verb: 'hunt', count: 2, line: 'Clear two camps on the frontier.' , teach: ['raids'] },
+      { verb: 'hunt', count: 2, line: 'Clear two camps on the frontier.' },
     ],
     reward: { title: 5, abilities: ['roads', 'cartography'] }, opens: 'Roads speed marches, and your map remembers camps and rivals',
   },
@@ -280,6 +282,8 @@ export const RAIDERS = new Set(['bandits', 'orcs', 'goblins', 'gnolls', 'sahuagi
 /** Settlement tiers by number of buildings (matches the client's). */
 export const tierOfCount = (n: number) => (n >= 10 ? 4 : n >= 6 ? 3 : n >= 3 ? 2 : 1);
 /** How long a settlement keeps producing with no king in reach, by tier (campaign.md §4.3). */
+/** Minutes an empire can be left with only its Emperor (and no palace) before the Chronicle crowns a king. */
+export const KING_OF_NEED_MIN = 5;
 export const HOLD_MS: Record<number, number> = { 1: 10 * 60_000, 2: 60 * 60_000, 3: 4 * 60 * 60_000, 4: 12 * 60 * 60_000 };
 
 /**

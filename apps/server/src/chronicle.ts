@@ -5,7 +5,7 @@
 import { Chess } from 'chess.js';
 import { readFileSync } from 'node:fs';
 import {
-  CHAPTERS, FACTIONS, FEATS, OPENINGS, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
+  CHAPTERS, FACTIONS, FEATS, KING_OF_NEED_MIN, OPENINGS, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
   type Ability, type BuildingType, type ChronicleView, type Piece, type PieceKind, type SettlementInfo, type SideQuest, type Step,
 } from '@owc/shared';
 import { biomeAt, RARE_BIOMES, resourcesInRect } from '@owc/worldgen';
@@ -37,6 +37,8 @@ export interface ChronState {
   /** Played time when each chapter was completed. */
   doneAt: number[];
   discovered?: boolean;
+  /** When the Emperor became the empire's only king (the Chronicle crowns one after a while). */
+  kinglessSince?: number;
   /** The first king from the first palace comes quickly (campaign.md §7). */
   firstKingDone?: boolean;
   marchBest?: number;
@@ -286,6 +288,19 @@ export class Chronicle {
     const step = CHAPTERS[st.ch - 1]?.steps[st.step];
     const key = step ? keyOf(step) : null;
     st.base = key && SINCE_STEP(key) ? st.tallies[key] ?? 0 : 0;
+  }
+
+  /**
+   * Mistakes never strand a player (campaign.md §5.8): an empire whose Emperor is its only
+   * king, with no palace to crown another, gets a king from the Chronicle after a few
+   * minutes. Scouting, settling and fighting rivals all need a king that isn't the Emperor.
+   */
+  private kingOfNeed(p: PlayerRec, st: ChronState, kings: Piece[]) {
+    if (p.isBot || kings.some((k) => !k.emperor) || !kings.length || [...this.w.buildings.values()].some((b) => b.owner === p.id && b.type === 'palace' && b.built >= 1)) { st.kinglessSince = undefined; return; }
+    st.kinglessSince ??= this.game.now;
+    if (this.game.now - st.kinglessSince < KING_OF_NEED_MIN * 60_000) return;
+    st.kinglessSince = undefined;
+    if (this.coronation(p)) this.game.onAlert(p.id, { kind: 'info', text: 'The Chronicle crowns a new king: every empire needs a king it can send out' });
   }
 
   /** A chapter is done: its rewards, the ceremony, and the next chapter's gift. */
@@ -570,14 +585,16 @@ export class Chronicle {
       const kings = this.game.kingsOf(p.id);
       // Farthest a king has marched from home.
       for (const k of kings) { const d = cheb(k.x, k.y, p.home[0], p.home[1]); if (d > (st.marchBest ?? 0)) st.marchBest = d; }
-      // Scouting: a king (not the Emperor: that's the lesson) comes within sight of the marked camp.
+      // Scouting: any piece but the Emperor (that's the lesson) comes within sight of the marked camp.
       const cur = CHAPTERS[st.ch - 1]?.steps[st.step];
       if (cur?.verb === 'scout') {
         const at = this.peekTarget(p, cur);
-        if (at && kings.some((k) => !k.emperor && cheb(k.x, k.y, at[0], at[1]) <= 8)) this.note(p.id, 'scout');
-        // No wilds at all (tests, some simulations): leading a king 10 squares out stands in for it.
-        if (!this.game.wilds.enabled && kings.some((k) => !k.emperor && cheb(k.x, k.y, p.home[0], p.home[1]) >= 10)) this.note(p.id, 'scout');
+        const scout = (q: Piece) => q.owner === p.id && !q.emperor && q.state !== 'battle';
+        if (at && this.w.piecesNear(at[0], at[1], 8).some(scout)) this.note(p.id, 'scout');
+        // No wilds at all (tests, some simulations): a piece 10 squares out stands in for it.
+        if (!this.game.wilds.enabled && this.w.piecesNear(p.home[0], p.home[1], 40).some((q) => scout(q) && cheb(q.x, q.y, p.home[0], p.home[1]) >= 10)) this.note(p.id, 'scout');
       }
+      this.kingOfNeed(p, st, kings);
       // Rare lands seen: any of your kings within 12 squares of one.
       if (!st.discovered && p.online)
         for (const k of kings) {

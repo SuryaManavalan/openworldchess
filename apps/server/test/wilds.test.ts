@@ -314,10 +314,10 @@ describe('wilds', () => {
     tick();
     expect(st.ch).toBe(1);
     game.world.movePiece(emp, home[0], home[1]);
-    // ...a king does.
-    const k = game.kingsOf(p.id).find((x) => !x.emperor)!;
+    // ...a pawn does (no king needs to risk the trip).
+    const pawn = [...game.world.pieces.values()].find((x) => x.owner === p.id && x.kind === 'P')!;
     const by = game.world.nearestFree(at![0] - 3, at![1], 6)!;
-    game.world.movePiece(k, by[0], by[1]);
+    game.world.movePiece(pawn, by[0], by[1]);
     tick();
     expect(st.ch).toBe(2);
   });

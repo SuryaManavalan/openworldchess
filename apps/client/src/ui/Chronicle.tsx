@@ -15,13 +15,15 @@ function tip(s: Step, phone: boolean): string | null {
     case 'build': return `${tap} the hammer, pick ${s.type[0].toUpperCase() + s.type.slice(1)}, and place it near what it needs.`;
     case 'raise': return 'Buildings make pieces on their own while one of your kings is near.';
     case 'march': return phone ? 'Double-tap your king to select its troop, then drag to where it should go.' : 'Double-click your king to select its troop, then right-click where it should go.';
-    case 'hunt': case 'free': return phone ? "Select a king's troop and drag it onto the camp's king to attack." : "Select a king's troop and right-click the camp's king to attack.";
+    case 'hunt': if (s.raid) return phone ? "Select pawns and your knight (no king), then drag onto the camp's king: a pawn commands." : "Select pawns and your knight (no king), then right-click the camp's king: a pawn commands.";
+    // falls through
+    case 'free': return phone ? "Select a king's troop and drag it onto the camp's king to attack." : "Select a king's troop and right-click the camp's king to attack.";
     case 'win': return 'Attack a rival king with a troop led by one of yours.';
     case 'settle': return 'March a king to open land and build there: a new settlement.';
     case 'grow': return 'Build more in one place: 3 buildings make a village, 6 a town, 10 a city.';
     case 'link': return 'Towns close enough to trade send merchants on their own.';
     case 'discover': return 'Rare lands look different: silver woods, fungi, crystal, ash. Explore.';
-    case 'scout': return phone ? 'Tap your king (not the gold-crowned Emperor), then tap near the marked camp.' : 'Click your king (not the gold-crowned Emperor), then right-click near the marked camp.';
+    case 'scout': return phone ? 'Tap a pawn, then tap near the marked camp. Just look: no fight yet.' : 'Click a pawn, then right-click near the marked camp. Just look: no fight yet.';
     default: return null;
   }
 }

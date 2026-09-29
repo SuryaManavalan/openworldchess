@@ -71,6 +71,17 @@ function selectArmy() {
   scene.flyTo(k.x, k.y, Math.max(scene.cam.zoom, 0.7));
   ui.set({ questHelp: null });
 }
+/** Select pieces of these kinds near home (a scout: one pawn; a raid: the pawns and knights). */
+function selectKinds(kinds: PieceKind[], max = 16) {
+  const k = homeKing(), ui = useUI.getState();
+  if (!k || !scene) return;
+  const mine = mirror.myPieces().filter((q) => kinds.includes(q.kind) && q.state !== 'battle')
+    .sort((a, b) => Math.max(Math.abs(a.x - k.x), Math.abs(a.y - k.y)) - Math.max(Math.abs(b.x - k.x), Math.abs(b.y - k.y))).slice(0, max);
+  if (!mine.length) return;
+  ui.select(mine.map((q) => q.id));
+  scene.flyTo(mine[0].x, mine[0].y, Math.max(scene.cam.zoom, 0.7));
+  ui.set({ questHelp: null });
+}
 const fly = (at?: [number, number]) => () => { if (at && scene) { scene.flyTo(at[0], at[1], Math.max(scene.cam.zoom, 0.7)); useUI.getState().set({ questHelp: null }); } };
 
 /** Which building makes a piece. */
@@ -118,7 +129,19 @@ function helpForStep(s: Step, target: [number, number] | undefined, phone: boole
       steps: [`${tap} one of your kings: its army is selected.`, phone ? `Tap a square far away (${s.dist}+ squares), then Move here. Or drag from a selected piece to the spot.` : `Right-click a square ${s.dist}+ squares away.`, 'Your troop marches in a column; elephants clear trees in the way.'],
       look: [{ img: pieceUrl('K', 'light', color, false, mirror.self?.civ), label: 'your king' }], actions: [{ label: 'Select my army', run: selectArmy }],
     };
-    case 'hunt': case 'free': return {
+    case 'hunt': if (s.raid) return {
+      title: 'Raid the camp',
+      steps: [
+        `Select your pawns and your knight, but no king: ${tap.toLowerCase()} a pawn, then + Add for the others (or use Select my raiders).`,
+        phone ? "Tap the camp's king (the biggest creature), then Attack." : "Right-click the camp's king, then Attack.",
+        'With no king in the troop, the pawn nearest the camp commands: it plays as your king in the battle (a gold ghost king).',
+        'The battle is a real game of chess. Win it, and the camp scatters and leaves a hoard. Lose, and only the commanding pawn falls: the rest walk home.',
+      ],
+      look: [{ img: pieceUrl('P', 'light', color, false, mirror.self?.civ), label: 'pawns: they raid' }, { img: pieceUrl('N', 'light', color, false, mirror.self?.civ), label: 'your knight' }, { img: pieceUrl('K', 'light', color, false, mirror.self?.civ), label: 'kings: stay home' }],
+      actions: [...(target ? [{ label: 'Show me the camp', run: fly(target) }] : []), { label: 'Select my raiders', run: () => selectKinds(['P', 'N']) }],
+    };
+    // falls through
+    case 'free': return {
       title: s.verb === 'free' ? 'Free the captives' : 'Hunt a camp of the wilds',
       steps: [
         s.verb === 'free' ? 'Raider camps hold captive pieces. Beat the camp and they come home to you.' : 'Wild camps (creatures in the wild) can be hunted. Beating one gives Renown and loot.',
@@ -130,7 +153,7 @@ function helpForStep(s: Step, target: [number, number] | undefined, phone: boole
     };
     case 'settle': return {
       title: 'Found a new settlement',
-      steps: [`March a king ${s.minDist ?? 25}+ squares from your first town${s.eloAbove ? ', into richer land' : ''}.`, 'Build anything there near its king: that starts a settlement.', 'A king must stay near a settlement to keep it working.'],
+      steps: [`Select your king (the one without the gold crown) and march him ${s.minDist ?? 25}+ squares from your town${s.eloAbove ? ', into richer land' : ''}. Your Emperor stays home: he holds the town.`, 'Pick a spot with trees and crops close by, and build a house next to your king: that starts a settlement.', 'Keep that king there: its buildings only work while a king is near.'],
       look: [], actions: [{ label: 'Select my army', run: selectArmy }],
     };
     case 'grow': return {
@@ -149,9 +172,9 @@ function helpForStep(s: Step, target: [number, number] | undefined, phone: boole
     case 'crown': return building('palace');
     case 'scout': return {
       title: 'Scout the camp',
-      steps: [`${tap} your king (the one without the gold crown) to select its army.`, phone ? 'Tap near the marked camp, then Move here.' : 'Right-click near the marked camp.', 'Your king only needs to come within 8 squares: close enough to see who camps there.', 'Your Emperor stays home, holding your house while the king is away.'],
-      look: [{ img: pieceUrl('K', 'light', color, false, mirror.self?.civ), label: 'your king: send him' }, { img: pieceUrl('K', 'light', color, true, mirror.self?.civ), label: 'your Emperor: keep him home' }],
-      actions: [...(target ? [{ label: 'Show me the camp', run: fly(target) }] : []), { label: 'Select my king', run: selectArmy }],
+      steps: [`${tap} one of your pawns to select it (any piece but your gold-crowned Emperor will do).`, phone ? 'Tap near the marked camp, then Move here.' : 'Right-click near the marked camp.', 'It only needs to come within 8 squares: close enough to see who camps there. No fight yet.', 'You fight them in the next chapter, with a raid your pawns can lead.'],
+      look: [{ img: pieceUrl('P', 'light', color, false, mirror.self?.civ), label: 'a pawn: send it' }, { img: pieceUrl('K', 'light', color, true, mirror.self?.civ), label: 'your Emperor: keep him home' }],
+      actions: [...(target ? [{ label: 'Show me the camp', run: fly(target) }] : []), { label: 'Select a pawn', run: () => selectKinds(['P'], 1) }],
     };
     case 'clear': return {
       title: 'Clear land with elephants',
