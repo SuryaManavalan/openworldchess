@@ -458,17 +458,19 @@ function StartOver() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   if (!self) return null;
+  // One reset an hour: say how long before you can, instead of refusing after you've typed.
+  const wait = self.resetAt ? Math.ceil((self.resetAt + 60 * 60_000 - Date.now()) / 60_000) : 0;
   const pieces = mirror.myPieces().length, buildings = mirror.myBuildings().filter((b) => b.type !== 'ruin').length;
   const go = async () => {
     setBusy(true); setErr(null);
     const e = await commands.resetEmpire(typed);
-    if (e) { setErr(e); setBusy(false); return; }
+    if (e) { setErr(e); setBusy(false); ui.toast(e, 'error'); return; }
     ui.toast('A new beginning', 'good');
     setTimeout(() => location.reload(), 600);
   };
   return (
     <div className="start-over">
-      {step === 0 && <label className="row"><span>Start over from scratch</span><button className="btn ghost danger-text" onClick={() => setStep(1)}>Start over…</button></label>}
+      {step === 0 && <label className="row"><span>Start over from scratch{wait > 0 && <small className="muted"> · once an hour, again in {wait} min</small>}</span><button className="btn ghost danger-text" disabled={wait > 0} onClick={() => setStep(1)}>Start over…</button></label>}
       {step === 1 && <div className="confirm-box">
         <b>Start your empire over?</b>
         <p>Your {pieces} pieces and {buildings} buildings will be gone for good, and the Chronicle begins again at chapter 1 somewhere new. You keep your name, your sign-in, your Crowns and your civilizations.</p>

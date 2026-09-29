@@ -32,6 +32,9 @@ const LAND_EASE = 0.35;
 /** A player's population this economy tick: pieces by kind and room by kind (safeguards.md §1). */
 type Pop = { count: number; by: Record<PieceKind, number>; caps: Record<PieceKind, number> };
 
+/** How often an empire may start over. */
+const RESET_EVERY = 60 * 60_000;
+
 export interface PlayerRec {
   id: string;
   name: string;
@@ -259,7 +262,7 @@ export class Game {
     return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), provisional: !p.wild && rdAfter(p.rd, p.ratedAt ? (this.now - p.ratedAt) / 86_400_000 : 0) > RD_PROVISIONAL ? true : undefined, online: p.online, wild: p.wild?.faction, civ: p.civ, title: p.chron?.title, relics: p.chron?.relics.length ? p.chron.relics : undefined, capital: cap ? [cap.cx, cap.cy] : undefined };
   }
   selfPlayer(p: PlayerRec): PlayerSelf {
-    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), pop: this.popView(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen(), chronicle: p.wild ? undefined : perf.time('self.chronicle', () => this.chronicle.view(p)), tiktok: p.tiktok ? { name: p.tiktok.name } : undefined };
+    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), pop: this.popView(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, resetAt: p.resetAt, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen(), chronicle: p.wild ? undefined : perf.time('self.chronicle', () => this.chronicle.view(p)), tiktok: p.tiktok ? { name: p.tiktok.name } : undefined };
   }
 
   isGuest(p: PlayerRec) { return !p.googleSub && !p.tiktokId && !p.isBot; }
@@ -318,7 +321,7 @@ export class Game {
   resetEmpire(p: PlayerRec, confirm: string): string | null {
     if (p.isBot || p.wild) return 'Not available';
     if (confirm.trim().toLowerCase() !== p.name.toLowerCase()) return 'Type your empire’s name to confirm';
-    if (p.resetAt && this.now - p.resetAt < 60 * 60_000) return 'You can start over once an hour';
+    if (p.resetAt && this.now - p.resetAt < RESET_EVERY) return `You can start over once an hour: again in ${Math.ceil((p.resetAt + RESET_EVERY - this.now) / 60_000)} min`;
     if ([...this.battles.recs.values()].some((r) => r.pub.phase !== 'over' && (r.white.player === p.id || r.black.player === p.id))) return 'Finish your battles first';
     for (const pc of [...this.world.pieces.values()]) if (pc.owner === p.id) this.removePiece(pc.id);
     for (const b of [...this.world.buildings.values()]) if (b.owner === p.id) this.world.removeBuilding(b.id);

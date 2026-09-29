@@ -121,10 +121,12 @@ export class Connection {
   /** Send a message that expects an ack or an error. */
   request(m: ClientMsg & { rid?: number }): Promise<string | null> {
     const rid = this.rid++;
+    // Not connected, or no answer: say so. (A lost request must never look like it worked.)
+    if (!this.ws || this.ws.readyState !== 1) return Promise.resolve('Not connected. Try again in a moment.');
     return new Promise((resolve) => {
       this.pending.set(rid, resolve);
       this.sendRaw({ ...m, rid } as ClientMsg);
-      setTimeout(() => { if (this.pending.has(rid)) { this.pending.delete(rid); resolve(null); } }, 8000);
+      setTimeout(() => { if (this.pending.has(rid)) { this.pending.delete(rid); resolve('No answer from the server. Try again.'); } }, 8000);
     });
   }
 

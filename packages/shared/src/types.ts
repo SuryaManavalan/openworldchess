@@ -122,6 +122,8 @@ export interface PlayerSelf extends PlayerPublic {
   pop?: Partial<Record<PieceKind, [number, number]>>;
   emperorId: number | null;
   shieldUntil: number;
+  /** When this empire last started over (one reset an hour). */
+  resetAt?: number;
   home: [number, number];
   /** Cosmetic civilizations this account owns, and its Crowns (the shop currency). */
   civsOwned?: string[];
