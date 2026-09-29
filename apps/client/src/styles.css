@@ -596,3 +596,12 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .story-card .story-text { margin: 4px 0; line-height: 1.55; font-size: 15.5px; }
 .story-card .story-intro { margin: 0 0 8px; color: var(--dim); }
 .story-card .btn.gold { align-self: center; background: linear-gradient(180deg, #f7d774, #e3b23c); color: #23211f; font-weight: 900; padding: 10px 34px; border-radius: 99px; box-shadow: 0 4px 0 #a97f1f; border: 0; cursor: pointer; }
+/* Lessons (campaign.md §5.7): the rule, then fine print and tactics to open. */
+.lesson { display: flex; flex-direction: column; gap: 4px; }
+.lesson p { margin: 0; line-height: 1.45; font-size: 13.5px; }
+.lesson details { margin-left: 2px; }
+.lesson summary { cursor: pointer; font-size: 12.5px; font-weight: 800; color: #f3d27a; min-height: 30px; display: flex; align-items: center; }
+.lesson ul { margin: 4px 0 6px; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.lesson-row { border-top: 1px solid var(--line); padding: 6px 0; }
+.lesson-row > summary { font-weight: 800; cursor: pointer; min-height: 36px; display: flex; align-items: center; }
+.rulebook { margin: 8px 0 12px; }

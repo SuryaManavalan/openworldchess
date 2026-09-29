@@ -1,7 +1,7 @@
 // Help for every quest (campaign.md §5.5): what to do, step by step; what to look for, drawn in
 // this land's own art (crops are berry bushes in a taiga, pumpkins in an autumn wood); and
 // buttons that do the fiddly part for you (show me the crops, place the house, select the army).
-import { BUILDINGS, CHAPTERS, FEATS, LESSONS, OPENINGS, PIECE_NAME, REACH, cheb, type BuildingType, type PieceKind, type SideQuest, type Step } from '@owc/shared';
+import { BUILDINGS, CHAPTERS, FEATS, LESSONS, SIDE_TEACH, OPENINGS, PIECE_NAME, REACH, cheb, type BuildingType, type PieceKind, type SideQuest, type Step } from '@owc/shared';
 import { biomeAt } from '@owc/worldgen';
 import { mirror } from '../net.ts';
 import { useUI } from '../store.ts';
@@ -10,6 +10,7 @@ import { buildingUrl, nodeUrl, pieceUrl } from '../game/textures.ts';
 import { localName, nodeArt } from '../game/biomeArt.ts';
 import { checkPlacement } from '../game/placement.ts';
 import { SheetGrab } from './SheetGrab.tsx';
+import { LessonView } from './LessonView.tsx';
 import { Icon } from './Icon.tsx';
 
 type Kind = 'tree' | 'rock' | 'ore' | 'wheat';
@@ -201,8 +202,7 @@ export function QuestHelp() {
   const step = CHAPTERS[c.chapter - 1]?.steps[c.step];
   const h = side ? helpForSide(side, phone) : step ? helpForStep(step, c.target, phone) : null;
   // Why it works this way: the rules this quest teaches (lessons.ts).
-  const SIDE_LESSONS: Record<string, string[]> = { bounty: ['battle', 'army', 'wilds'], rescue: ['battle', 'stakes'], skirmish: ['rivals', 'stakes'], pilgrimage: ['clearing', 'altars', 'paving'], opening: ['battle'], feat: ['army'], grow: ['settlements'], scout: ['pieces'], shrine: [] };
-  const why = (side ? SIDE_LESSONS[side.kind] ?? [] : step?.teach ?? []).map((id) => LESSONS[id]).filter(Boolean);
+  const why = (side ? SIDE_TEACH[side.kind] ?? [] : step?.teach ?? []).map((id) => LESSONS[id]).filter(Boolean);
   const close = () => ui.set({ questHelp: null });
   if (!h) return null;
   return (
@@ -214,7 +214,7 @@ export function QuestHelp() {
         {why.length > 0 && (
           <div className="help-why">
             <span className="kicker">Why it works this way</span>
-            {why.map((l) => <p key={l.title}><b>{l.title}.</b> {l.text}</p>)}
+            {why.map((l) => <LessonView key={l.title} l={l} />)}
           </div>
         )}
         {h.look.length > 0 && (

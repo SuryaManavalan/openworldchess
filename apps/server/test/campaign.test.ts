@@ -1,7 +1,7 @@
 // The Chronicle (docs/specs/campaign.md): chapters, unlocks, titles, coronations,
 // holding the realm, side quests.
 import { afterAll, describe, expect, it } from 'vitest';
-import { CHAPTERS, TITLES, cheb, setWorth, type Building, type SideQuest } from '@owc/shared';
+import { CHAPTERS, LESSONS, SIDE_TEACH, TITLES, cheb, setWorth, type Building, type SideQuest } from '@owc/shared';
 import { findPath } from '@owc/rules';
 import { Chess } from 'chess.js';
 import { Game, type PlayerRec } from '../src/game.ts';
@@ -307,6 +307,15 @@ describe('the Chronicle', () => {
     expect(game.chronicle.kingCap(p)).toBe(2);
     st.title = 9;
     expect(game.chronicle.kingCap(p)).toBe(20);
+  });
+
+  it('every rule is taught somewhere, and every lesson a quest names exists (campaign.md §5.7)', () => {
+    const taught = new Set<string>();
+    for (const ch of CHAPTERS) for (const s of ch.steps) for (const id of s.teach ?? []) { expect(LESSONS[id], `chapter ${ch.n} names "${id}"`).toBeTruthy(); taught.add(id); }
+    for (const ids of Object.values(SIDE_TEACH)) for (const id of ids) { expect(LESSONS[id], `side quests name "${id}"`).toBeTruthy(); taught.add(id); }
+    for (const id of Object.keys(LESSONS)) expect(taught.has(id), `lesson "${id}" isn't taught by any quest`).toBe(true);
+    // Every lesson has its plain line and its fine print.
+    for (const [id, l] of Object.entries(LESSONS)) { expect(l.text.length, id).toBeGreaterThan(10); expect(l.fine.length, id).toBeGreaterThan(0); }
   });
 
   it('every chapter is reachable: each has steps, and each unlock is used by a later goal or play', () => {

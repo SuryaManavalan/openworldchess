@@ -6,6 +6,7 @@ import { commands, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
 import { scene } from './GameView.tsx';
 import { Icon } from './Icon.tsx';
+import { LessonView } from './LessonView.tsx';
 
 /** How to do a step with the controls (for players new to them). */
 function tip(s: Step, phone: boolean): string | null {
@@ -176,6 +177,7 @@ export function ChronicleBook() {
   return (
     <div className="chronicle-book">
       <h3>The Chronicle</h3>
+      <button className="btn ghost small rulebook-go" onClick={() => useUI.getState().set({ sheet: 'help' })}><Icon name="book" size={14} /> Read the full rulebook</button>
       <h4>Side quests</h4>
       <SideQuests />
       <div className="standing">
@@ -205,7 +207,7 @@ export function ChronicleBook() {
         const ids: string[] = [];
         CHAPTERS.forEach((ch) => ch.steps.forEach((s, i) => { if (ch.n < c.chapter || (ch.n === c.chapter && i <= c.step)) for (const id of s.teach ?? []) if (!ids.includes(id)) ids.push(id); }));
         return ids.length ? (
-          <div className="lessons"><h4>What you've learned</h4>{ids.map((id) => LESSONS[id] && <details key={id}><summary>{LESSONS[id].title}</summary><p>{LESSONS[id].text}</p></details>)}</div>
+          <div className="lessons"><h4>What you've learned</h4>{ids.map((id) => LESSONS[id] && <details key={id} className="lesson-row"><summary>{LESSONS[id].title}</summary><LessonView l={LESSONS[id]} /></details>)}</div>
         ) : null;
       })()}
       {c.relics.length > 0 && (

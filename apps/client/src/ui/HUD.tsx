@@ -1,7 +1,7 @@
 // The HUD (ux.md §4–5). Phone: information on top, actions in the thumb zone,
 // detail in bottom sheets. Desktop: side panels and hotkeys. Same features.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, BUILDINGS, CLEAR_TURNS, TURN_MS, CHAPTERS, PIECE_NAME, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, TITLES, cheb, setWorth, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
+import { ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, LESSONS, BUILDINGS, CLEAR_TURNS, TURN_MS, CHAPTERS, PIECE_NAME, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, TITLES, cheb, setWorth, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
 import { terrainAt } from '@owc/worldgen';
 import { commands, conn, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
@@ -19,6 +19,7 @@ import { PerfOverlay, perfOn } from './PerfOverlay.tsx';
 import { Markers } from './Markers.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { SheetGrab } from './SheetGrab.tsx';
+import { LessonView } from './LessonView.tsx';
 import { Riddle } from './Riddle.tsx';
 import { QuestHelp } from './QuestHelp.tsx';
 import { Celebrate } from './Celebrate.tsx';
@@ -490,18 +491,22 @@ function StartOver() {
   );
 }
 
+/**
+ * Help: the whole rulebook (lessons.ts), every rule with its fine print and tactics, taught
+ * by the Chronicle or not. Nothing about the game is a secret (campaign.md §5.7).
+ */
 function Help() {
+  const ui = useUI();
   return (
     <div className="help">
-      <h3>How to play</h3>
-      <ul>
-        <li><b>Everything stays near a king.</b> Pieces and buildings must be within 10 squares of one of your kings. Walk kings forward and your pieces follow.</li>
-        <li><b>Build next to resources.</b> Each building draws from nodes within 3 squares: houses and stables from wheat, barracks from rock, temples from ore, the palace from ore and rock. Construction takes wood and stone from within 10 squares.</li>
-        <li><b>Battles are chess.</b> Take a group with a king to an enemy king. After a countdown, both sides fight with up to one chess set. Lose your king and your survivors flee; the pieces it held go to the winner.</li>
-        <li><b>Protect your Emperor</b> (the gold crown). If it falls, you start again somewhere new.</li>
-        <li><b>Higher elo lands are richer:</b> buildings there produce faster and ore is common. The players there are stronger too.</li>
-      </ul>
-      <p className="muted">Phone: drag from your pieces to command · long-press and draw to select many · double-tap a piece for its king's group · pinch to zoom · twist with two fingers to rotate.</p>
+      <h3>The rulebook</h3>
+      <p className="muted">Every rule of the game. Open a rule for its fine print (every number and exception) and tactics. The Chronicle teaches these as you go; they're all here if you'd rather read ahead.</p>
+      <div className="rulebook">
+        {Object.entries(LESSONS).map(([id, l]) => (
+          <details key={id} className="lesson-row"><summary>{l.title}</summary><LessonView l={l} /></details>
+        ))}
+      </div>
+      <p className="muted">{ui.layout === 'phone' ? 'Phone: tap to select · tap the ground to move (tap the marker again to go) · drag from a piece to move or attack · long-press and draw to select many · pinch to zoom · twist with two fingers to rotate.' : 'Desktop: click to select · right-click to move or attack · drag a box to select · Ctrl/Space + drag or two-finger swipe to pan · wheel or pinch to zoom · Q/E rotate · Esc deselect.'}</p>
     </div>
   );
 }

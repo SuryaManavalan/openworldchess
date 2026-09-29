@@ -81,8 +81,8 @@ export const CHAPTERS: Chapter[] = [
     n: 2, act: 'Hearth', name: 'First Hunt', intro: 'The camp is young and hungry. Strike before it grows.',
     story: 'The wilds that swallowed the First Empire are waking. Their camps grow as your empire grows, so the time to strike is now, while they are small.',
     steps: [
-      { verb: 'raise', kind: 'N', count: 1, line: 'A knight rides where pawns cannot. Raise one in your stable.', teach: ['army'] },
-      { verb: 'hunt', count: 1, line: "Lead your king's army against the camp you found, and win the game.", teach: ['battle', 'stakes', 'wilds'] },
+      { verb: 'raise', kind: 'N', count: 1, line: 'A knight rides where pawns cannot. Raise one in your stable.' , teach: ['army', 'titles'] },
+      { verb: 'hunt', count: 1, line: "Lead your king's army against the camp you found, and win the game." , teach: ['battle', 'stakes', 'wilds'] },
     ],
     reward: { pieces: ['N'] }, opens: 'Spoils: every camp you clear leaves a hoard behind',
   },
@@ -91,7 +91,7 @@ export const CHAPTERS: Chapter[] = [
     story: 'A hamlet dies the day its king walks away. A village can wait for him. Build until your hearth can stand on its own.',
     steps: [
       { verb: 'grow', tier: 2, line: 'Build until your hearth is a village: three buildings close together.', teach: ['settlements', 'hold'] },
-      { verb: 'raise', kind: 'N', count: 2, line: 'Raise two more knights to ride the village bounds.', teach: ['cooldown', 'buildcap'] },
+      { verb: 'raise', kind: 'N', count: 2, line: 'Raise two more knights to ride the village bounds.' , teach: ['cooldown', 'ratings'] },
     ],
     reward: { title: 2, buildings: ['temple'] }, opens: 'Temples: bishops. And villages now hold themselves for an hour without a king',
   },
@@ -101,7 +101,7 @@ export const CHAPTERS: Chapter[] = [
     gift: { coronation: true },
     story: 'In the ruins of the First Empire, the Chronicle has found a second crown, and it has chosen a king. A king holds only the land around him: give him land of his own.',
     steps: [
-      { verb: 'settle', minDist: 25, line: 'Lead your new king 25 squares out and found a second settlement. Its buildings will need him.' },
+      { verb: 'settle', minDist: 25, line: 'Lead your new king 25 squares out and found a second settlement. Its buildings will need him.' , teach: ['buildcap'] },
       { verb: 'raise', kind: 'B', count: 1, line: 'Temples work ore. Raise a bishop, who sees along the diagonals.', teach: ['ore'] },
     ],
     reward: { title: 3, buildings: ['barracks', 'palace'] }, opens: 'Barracks and palaces: war elephants, and a seat to crown kings',
@@ -132,7 +132,7 @@ export const CHAPTERS: Chapter[] = [
     steps: [
       { verb: 'pave', count: 12, line: 'Knights lay stone. Pave twelve squares of road out from your town.', teach: ['paving'] },
       { verb: 'march', dist: 150, line: 'Send an expedition 150 squares out, down your road and beyond.' },
-      { verb: 'hunt', count: 2, line: 'Clear two camps on the frontier.' },
+      { verb: 'hunt', count: 2, line: 'Clear two camps on the frontier.' , teach: ['raids'] },
     ],
     reward: { title: 5, abilities: ['roads', 'cartography'] }, opens: 'Roads speed marches, and your map remembers camps and rivals',
   },
@@ -141,7 +141,7 @@ export const CHAPTERS: Chapter[] = [
     story: 'The old lairs never moved when the First Empire fell; they only grew. And the raiders keep what they take, prisoners too.',
     steps: [
       { verb: 'hunt', count: 1, temper: 'lair', line: 'Clear a lair: wolves, kobolds, owlbears.' },
-      { verb: 'free', count: 1, line: 'Free prisoners from a raider camp.' },
+      { verb: 'free', count: 1, line: 'Free prisoners from a raider camp.' , teach: ['hoards'] },
     ],
     reward: { coronation: true }, opens: 'Captives: raiders hold prisoners who will join you',
   },
@@ -150,7 +150,7 @@ export const CHAPTERS: Chapter[] = [
     story: 'Where the First Empire fell hardest, the land itself changed. Its strange places hold the rarest beasts, and room for an outpost no king could hold.',
     steps: [
       { verb: 'discover', line: 'Find a rare land: blossom, mushroom, blight, fey, crystal or ash.' },
-      { verb: 'hunt', count: 1, inRareLand: true, line: 'Clear a camp in a rare land.' },
+      { verb: 'hunt', count: 1, inRareLand: true, line: 'Clear a camp in a rare land.' , teach: ['relics'] },
       { verb: 'build', type: 'altar', count: 1, line: 'Raise an altar: a bishop keeps an outpost far from any king.', teach: ['altars'] },
     ],
     reward: {}, opens: 'Relics: rare camps leave trophies for your capital',
@@ -159,7 +159,7 @@ export const CHAPTERS: Chapter[] = [
   {
     n: 10, act: 'Dominion', name: 'Rivals', intro: 'You are not the only crown on this board.',
     story: 'Other crowns survived the fall, and other hands carry them. Every one of them wants the whole Board back.',
-    steps: [{ verb: 'win', count: 1, vsEmpire: true, line: 'Win a battle against another empire.', teach: ['rivals'] }],
+    steps: [{ verb: 'win', count: 1, vsEmpire: true, line: 'Win a battle against another empire.' , teach: ['rivals', 'ratings', 'masterless'] }],
     reward: { title: 6, coronation: true, abilities: ['walls'] }, opens: 'Walls muster: a walled town defends with its whole garrison',
   },
   {
@@ -200,6 +200,13 @@ export const CHAPTERS: Chapter[] = [
     reward: { title: 9 }, opens: 'The Epilogue: the world keeps offering quests',
   },
 ];
+
+/** The lessons each kind of side quest teaches (lessons.ts), shown in its help card. */
+export const SIDE_TEACH: Record<string, string[]> = {
+  bounty: ['battle', 'army', 'wilds', 'hoards'], rescue: ['hoards', 'stakes'], skirmish: ['rivals', 'stakes', 'siege'],
+  pilgrimage: ['clearing', 'altars', 'paving'], opening: ['battle'], feat: ['army', 'cooldown', 'promotion'],
+  grow: ['settlements', 'hold'], scout: ['land', 'pieces'], shrine: ['battle'],
+};
 
 /** Side quests (campaign.md §5.3): short errands written from the world around you. */
 export type SideKind = 'bounty' | 'rescue' | 'scout' | 'grow' | 'skirmish' | 'pilgrimage' | 'shrine' | 'opening' | 'feat';

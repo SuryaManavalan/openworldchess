@@ -237,7 +237,14 @@ Rewards stay small and **never outgrow the main quest**. Side quests give variet
 
 ### 5.7 Lessons: how the rules are taught (as built 2026-09-28)
 
-Every rule a player must understand is a **lesson** in `packages/shared/src/lessons.ts`: a short title and a sentence or two giving the rule and why it's so. Its numbers are read from the rules' own constants (reach, hold times, room per building, king caps, battle countdowns), so a changed constant changes the lesson with it.
+Every rule a player must understand is a **lesson** in `packages/shared/src/lessons.ts`, in three layers:
+- **text:** the one thing to know, said plainly ("Send your king, never your Emperor").
+- **fine print:** the complete rule, with every number, exception and interaction, so a player who reads it all has no doubts. Nothing about the game is a secret.
+- **tactics:** how to play it well, including the strategy that emerges from the rules (when to attack, what to bring, where to build).
+
+Numbers are read from the rules' own constants (reach, hold and decay times, room per building, king caps, countdowns, clocks, production speed), so a changed constant changes the lesson with it. There are 36 lessons, covering the Emperor, kings, reach, leading a king away, resources, building (with every building's cost, needs and speed), production, room, bubbles, the building cap, moving pieces, battles, the army you bring, what battles cost, rest, the wilds, raids and troops without a king, masterless pieces and ruins, settlements, holding a town, making kings, ore, trade, clearing, paving, altars, rivals, the land's rating, your rating, promotion, sieges and walls, hoards and captives, relics, the capital, the Wonder, and Renown and titles.
+- **The rulebook** (Help, and *Read the full rulebook* in the Chronicle) lists every lesson, taught yet or not.
+- **A test** (`campaign.test.ts`) checks that every lesson is taught by some quest step or side quest (`SIDE_TEACH`), that every lesson a quest names exists, and that each has its plain line and fine print.
 - **Steps teach lessons:** a step lists the lessons it teaches (`teach: ['emperor', 'reach']`). The quest banner shows them as a *Learn:* chip; the step's help card (**How?**) explains them under *Why it works this way*; and the Chronicle's book keeps every lesson met so far under *What you've learned*.
 - **Changing or adding a rule** is a data change: edit the lesson (or add one) and name it in the `teach` of the step where a player first meets it. Side quests have their own lesson lists in the help card.
 - **New step kinds** for teaching by doing: `scout` (a king, not the Emperor, looks upon the marked camp), `clear` (trees felled by your elephants), `pave` (squares paved by your knights).
