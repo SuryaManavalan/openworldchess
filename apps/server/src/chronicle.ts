@@ -44,6 +44,8 @@ export interface ChronState {
 }
 
 /** Keys counted only since their chapter began (the rest count from whenever they happened). */
+/** How far a plain hunt or scout may point before the Chronicle raises a band closer instead. */
+const HUNT_NEAR = 40;
 const SINCE_STEP = (k: string) => k === 'hunt' || k === 'scout' || k === 'clear' || k === 'pave' || k.startsWith('raise:');
 /** A new side quest is offered every so often while you play (campaign.md §5.3). */
 const SIDE_FIRST_MS = 10 * 60_000;
@@ -452,13 +454,18 @@ export class Chronicle {
         return Math.min(...kings.map((k) => cheb(k.x, k.y, x, y))) <= 600;
       });
       const c = nearest(camps);
-      if (c) return [c.x + 1, c.y + 1];
+      const away = (t: { x: number; y: number }) => Math.min(...kings.map((k) => cheb(k.x, k.y, t.x, t.y)));
+      if (c && (!plain || away(c) <= HUNT_NEAR)) return [c.x + 1, c.y + 1];
       if (!plain) return undefined;
-      // Nothing beatable in reach: the Chronicle raises a young band near the strongest king,
-      // or failing that marks the weakest camp in range.
+      // Nothing beatable close by: the Chronicle raises a young band near the strongest king
+      // (a new empire shouldn't march hundreds of squares for its first hunt), or failing
+      // that marks the nearest beatable camp further out, or the weakest camp in range.
       const lead = kings.reduce((a, k) => (worth(w.piecesNear(k.x, k.y, REACH).filter((q) => q.owner === p.id).map((q) => q.kind)) > worth(w.piecesNear(a.x, a.y, REACH).filter((q) => q.owner === p.id).map((q) => q.kind)) ? k : a));
       const q = g.wilds.enabled ? g.wilds.quarry(p.id, [lead.x, lead.y], army, g.now) : null;
       if (q) return [q.wild!.x + 1, q.wild!.y + 1];
+      const mine = g.wilds.camps().find((x) => x.wild!.quarryFor === p.id);
+      if (mine && away(mine.wild!) <= HUNT_NEAR * 2) return [mine.wild!.x + 1, mine.wild!.y + 1];
+      if (c) return [c.x + 1, c.y + 1];
       const weak = all.filter((x) => Math.min(...kings.map((k) => cheb(k.x, k.y, x.x, x.y))) <= 600).sort((a, b) => a.might - b.might)[0];
       return weak ? [weak.x + 1, weak.y + 1] : undefined;
     }

@@ -241,6 +241,27 @@ describe('wilds', () => {
     }
   });
 
+  it("a new empire's first scouting and hunt point close to home, not at a beatable camp far away", () => {
+    const p = join('Faraway');
+    const st = game.chronicle.of(p);
+    st.ch = 1; st.step = 2; st.chBase = { ...st.tallies };
+    const away = (x: number, y: number) => Math.min(...game.kingsOf(p.id).map((k) => cheb(k.x, k.y, x, y)));
+    // Everything near home is too strong; a weak camp waits far off.
+    let far = 0;
+    for (const c of game.wilds.camps()) {
+      const d = away(c.wild!.x, c.wild!.y);
+      if (c.wild!.awake !== false) { if (d <= 40) game.wilds.remove(c); continue; }
+      if (d <= 40) c.wild!.roster = ['K', 'Q', 'R', 'R', 'B', 'B', 'N', 'N', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'];
+      else if (d <= 600) { c.wild!.roster = ['K', 'P']; far++; }
+    }
+    if (!far) expect(game.wilds.quarry('decoy', [p.home[0] + 150, p.home[1]], setWorth(['K', 'P', 'P']), now)).toBeTruthy();
+    tick();
+    const at = game.chronicle.view(p).target;
+    expect(at).toBeTruthy();
+    expect(away(at![0], at![1])).toBeLessThanOrEqual(40);
+    expect(game.wilds.camps().some((c) => c.wild!.quarryFor === p.id && cheb(c.wild!.x, c.wild!.y, at![0], at![1]) <= 1)).toBe(true);
+  });
+
   it("chapter 1's scouting: a king (not the Emperor) goes to look at the camp the Chronicle marks", () => {
     const p = join('Lookout');
     const st = game.chronicle.of(p);
