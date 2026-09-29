@@ -1,7 +1,7 @@
 // The Chronicle on screen (docs/specs/campaign.md §5.5): the quest tracker, the
 // unlock ceremony when a chapter ends, and the book with the whole campaign.
 import { useState } from 'react';
-import { CHAPTERS, RELIC_NAME, TITLES, type Step } from '@owc/shared';
+import { CHAPTERS, LESSONS, RELIC_NAME, TITLES, type Step } from '@owc/shared';
 import { commands, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
 import { scene } from './GameView.tsx';
@@ -20,6 +20,7 @@ function tip(s: Step, phone: boolean): string | null {
     case 'grow': return 'Build more in one place: 3 buildings make a village, 6 a town, 10 a city.';
     case 'link': return 'Towns close enough to trade send merchants on their own.';
     case 'discover': return 'Rare lands look different: silver woods, fungi, crystal, ash. Explore.';
+    case 'scout': return phone ? 'Tap your king (not the gold-crowned Emperor), then tap near the marked camp.' : 'Click your king (not the gold-crowned Emperor), then right-click near the marked camp.';
     default: return null;
   }
 }
@@ -82,6 +83,7 @@ export function ChronicleTracker() {
           <b>{line}</b>
           {need > 1 && <span className="prog"><span style={{ width: `${(100 * have) / need}%` }} /><em>{have}/{need}</em></span>}
           {t && <span className="tip">{t}</span>}
+          {!focused && step?.teach?.length ? <button className="learn-chip" onClick={() => ui.set({ questHelp: {} })}><Icon name="book" size={12} /> Learn: {step.teach.map((id) => LESSONS[id]?.title).filter(Boolean).join(' · ')}</button> : null}
           {focused?.kind === 'pilgrimage' && <span className="tip keep">{PILGRIM_TIPS[focused.stage ?? 0]}</span>}
           {focused?.kind === 'shrine' && !focused.puzzle && <span className="tip keep">Walk any of your pieces onto the shrine (Show finds it).</span>}
           {focused?.puzzle && <button className="btn small gold riddle-go" onClick={() => ui.set({ riddle: focused.id })}>Answer the riddle</button>}
@@ -159,7 +161,7 @@ export function ChapterCeremony() {
         {c.title && <p className="title-won"><Icon name="crown" size={18} /> You are now a <b>{c.title}</b></p>}
         <p className="opens"><span className="new">New</span> {c.opens}</p>
         {c.coronation && <p className="crowned">A new king has been crowned in your court.</p>}
-        {next && <p className="muted">Next: Chapter {next.n}, {next.name}. <i>{next.intro}</i></p>}
+        {next && <p className="muted">Next: Chapter {next.n}, {next.name}. <i>{next.story ?? next.intro}</i></p>}
         <button className="btn gold" onClick={() => ui.set({ ceremony: null })}>Onward</button>
       </div>
     </div>
@@ -198,6 +200,14 @@ export function ChronicleBook() {
           })}
         </div>
       ))}
+      {/* Every rule the Chronicle has taught so far (lessons.ts), in the order you met them. */}
+      {(() => {
+        const ids: string[] = [];
+        CHAPTERS.forEach((ch) => ch.steps.forEach((s, i) => { if (ch.n < c.chapter || (ch.n === c.chapter && i <= c.step)) for (const id of s.teach ?? []) if (!ids.includes(id)) ids.push(id); }));
+        return ids.length ? (
+          <div className="lessons"><h4>What you've learned</h4>{ids.map((id) => LESSONS[id] && <details key={id}><summary>{LESSONS[id].title}</summary><p>{LESSONS[id].text}</p></details>)}</div>
+        ) : null;
+      })()}
       {c.relics.length > 0 && (
         <div className="relics"><h4>Relics</h4>{c.relics.map((r) => <span key={r} className="badge">{RELIC_NAME[r] ?? r}</span>)}</div>
       )}

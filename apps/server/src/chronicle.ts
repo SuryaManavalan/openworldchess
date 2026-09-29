@@ -44,7 +44,7 @@ export interface ChronState {
 }
 
 /** Keys counted only since their chapter began (the rest count from whenever they happened). */
-const SINCE_STEP = (k: string) => k === 'hunt' || k.startsWith('raise:');
+const SINCE_STEP = (k: string) => k === 'hunt' || k === 'scout' || k === 'clear' || k === 'pave' || k.startsWith('raise:');
 /** A new side quest is offered every so often while you play (campaign.md §5.3). */
 const SIDE_FIRST_MS = 10 * 60_000;
 const SIDE_EVERY_MS = 12 * 60_000;
@@ -54,6 +54,8 @@ const MAX_OFFERS = 1;
 /** A declined quest comes back as an offer after this much play. */
 const SHELF_MS = 20 * 60_000;
 const active = (q: SideQuest) => q.state !== 'offered';
+/** Renown for a finished quest step: more in later chapters. */
+const STEP_RENOWN = (ch: number) => 10 + ch * 5;
 
 /** Shrine riddles, generated and proved by tools/puzzles/gen.mjs. */
 const PUZZLES: { fen: string; n: number; move: string; rating: number }[] = (() => {
@@ -85,6 +87,9 @@ const keyOf = (s: Step): string | null => {
     case 'win': return s.siege ? 'win:siege' : s.vsEmpire ? 'win:empire' : 'win';
     case 'promote': return 'promote';
     case 'crown': return 'crown';
+    case 'scout': return 'scout';
+    case 'clear': return 'clear';
+    case 'pave': return 'pave';
     default: return null;
   }
 };
@@ -265,6 +270,8 @@ export class Chronicle {
       const step = ch.steps[st.step];
       const [have, need] = this.progress(p, step);
       if (have < need) return;
+      // Every step pays a little Renown: a win should come with a number going up (campaign.md §5.5).
+      st.renown += STEP_RENOWN(st.ch);
       st.step++;
       this.targets.delete(p.id);
       if (st.step >= ch.steps.length) this.complete(p);
@@ -425,21 +432,23 @@ export class Chronicle {
     const worth = (ks: PieceKind[]) => setWorth(ks); // only a legal set takes the field
     const army = Math.max(...kings.map((k) => worth(w.piecesNear(k.x, k.y, REACH).filter((q) => q.owner === p.id).map((q) => q.kind))));
     const nearest = <T extends { x: number; y: number }>(xs: T[]) => xs.reduce<T | undefined>((a, b) => (!a || Math.min(...kings.map((k) => cheb(k.x, k.y, b.x, b.y))) < Math.min(...kings.map((k) => cheb(k.x, k.y, a.x, a.y))) ? b : a), undefined);
-    if (s.verb === 'hunt' || s.verb === 'free') {
+    // Scouting points where the first hunt will: the nearest camp you could beat (or a young band).
+    if (s.verb === 'hunt' || s.verb === 'free' || s.verb === 'scout') {
+      const h: { temper?: string; rare?: boolean; minSize?: number; inRareLand?: boolean } = s.verb === 'hunt' ? s : {};
       const all = g.wilds.camps().map((c) => {
         const f = FACTIONS[c.wild!.faction];
         const ks = c.wild!.awake === false ? c.wild!.roster ?? ['K', 'P'] as PieceKind[] : g.wilds.piecesOf(c).map((q) => q.kind);
         return { x: c.wild!.x, y: c.wild!.y, f, size: ks.length, might: worth(ks) };
       });
-      const plain = s.verb === 'hunt' && !s.temper && !s.rare && !s.minSize && !s.inRareLand;
+      const plain = (s.verb === 'hunt' || s.verb === 'scout') && !h.temper && !h.rare && !h.minSize && !h.inRareLand;
       const camps = all.filter(({ f, size, might, x, y }) => {
         if (s.verb === 'free') return RAIDERS.has(f.id);
-        if (s.temper && f.temper !== s.temper) return false;
-        if (s.rare && f.rarity === 'common') return false;
-        if (s.minSize && size < s.minSize) return false;
-        if (s.inRareLand && !RARE_BIOMES.includes(biomeAt(w.seed, x, y))) return false;
+        if (h.temper && f.temper !== h.temper) return false;
+        if (h.rare && f.rarity === 'common') return false;
+        if (h.minSize && size < h.minSize) return false;
+        if (h.inRareLand && !RARE_BIOMES.includes(biomeAt(w.seed, x, y))) return false;
         // Plain hunts point at something the player's army can beat.
-        if (!s.temper && !s.rare && !s.minSize && !s.inRareLand && might > army) return false;
+        if (!h.temper && !h.rare && !h.minSize && !h.inRareLand && might > army) return false;
         return Math.min(...kings.map((k) => cheb(k.x, k.y, x, y))) <= 600;
       });
       const c = nearest(camps);
@@ -541,6 +550,14 @@ export class Chronicle {
       const kings = this.game.kingsOf(p.id);
       // Farthest a king has marched from home.
       for (const k of kings) { const d = cheb(k.x, k.y, p.home[0], p.home[1]); if (d > (st.marchBest ?? 0)) st.marchBest = d; }
+      // Scouting: a king (not the Emperor: that's the lesson) comes within sight of the marked camp.
+      const cur = CHAPTERS[st.ch - 1]?.steps[st.step];
+      if (cur?.verb === 'scout') {
+        const at = this.peekTarget(p, cur);
+        if (at && kings.some((k) => !k.emperor && cheb(k.x, k.y, at[0], at[1]) <= 8)) this.note(p.id, 'scout');
+        // No wilds at all (tests, some simulations): leading a king 10 squares out stands in for it.
+        if (!this.game.wilds.enabled && kings.some((k) => !k.emperor && cheb(k.x, k.y, p.home[0], p.home[1]) >= 10)) this.note(p.id, 'scout');
+      }
       // Rare lands seen: any of your kings within 12 squares of one.
       if (!st.discovered && p.online)
         for (const k of kings) {

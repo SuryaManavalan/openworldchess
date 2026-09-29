@@ -1,7 +1,7 @@
 // Help for every quest (campaign.md §5.5): what to do, step by step; what to look for, drawn in
 // this land's own art (crops are berry bushes in a taiga, pumpkins in an autumn wood); and
 // buttons that do the fiddly part for you (show me the crops, place the house, select the army).
-import { BUILDINGS, CHAPTERS, FEATS, OPENINGS, PIECE_NAME, REACH, cheb, type BuildingType, type PieceKind, type SideQuest, type Step } from '@owc/shared';
+import { BUILDINGS, CHAPTERS, FEATS, LESSONS, OPENINGS, PIECE_NAME, REACH, cheb, type BuildingType, type PieceKind, type SideQuest, type Step } from '@owc/shared';
 import { biomeAt } from '@owc/worldgen';
 import { mirror } from '../net.ts';
 import { useUI } from '../store.ts';
@@ -146,6 +146,23 @@ function helpForStep(s: Step, target: [number, number] | undefined, phone: boole
     };
     case 'promote': return { title: 'Promote a pawn', steps: ['In any battle, walk a pawn to the far side of the board.', 'It fights as a queen for that battle.'], look: [], actions: [] };
     case 'crown': return building('palace');
+    case 'scout': return {
+      title: 'Scout the camp',
+      steps: [`${tap} your king (the one without the gold crown) to select its army.`, phone ? 'Tap near the marked camp, then Move here.' : 'Right-click near the marked camp.', 'Your king only needs to come within 8 squares: close enough to see who camps there.', 'Your Emperor stays home, holding your house while the king is away.'],
+      look: [{ img: pieceUrl('K', 'light', color, false, mirror.self?.civ), label: 'your king: send him' }, { img: pieceUrl('K', 'light', color, true, mirror.self?.civ), label: 'your Emperor: keep him home' }],
+      actions: [...(target ? [{ label: 'Show me the camp', run: fly(target) }] : []), { label: 'Select my king', run: selectArmy }],
+    };
+    case 'clear': return {
+      title: 'Clear land with elephants',
+      steps: ['Select only war elephants (tap one, then + Add for more).', `${tap} Clear land, then drag over trees near your town.`, 'Each elephant fells trees one after another; more elephants work faster.'],
+      look: [{ img: pieceUrl('R', 'light', color, false, mirror.self?.civ), label: 'war elephant' }, { img: art('tree'), label: 'trees' }],
+      actions: [{ label: 'Show me trees', run: () => showResource('tree') }],
+    };
+    case 'pave': return {
+      title: 'Pave a road with knights',
+      steps: ['Select only knights (tap one, then + Add for more).', `${tap} Pave, then ${phone ? 'tap' : 'click'} where the road should go.`, 'They pave from where they stand; more knights pave faster. Troops march faster on paved roads.'],
+      look: [{ img: pieceUrl('N', 'light', color, false, mirror.self?.civ), label: 'knight' }], actions: [],
+    };
   }
 }
 
@@ -183,6 +200,9 @@ export function QuestHelp() {
   const side = ui.questHelp.side != null ? c.sides.find((q) => q.id === ui.questHelp!.side) : undefined;
   const step = CHAPTERS[c.chapter - 1]?.steps[c.step];
   const h = side ? helpForSide(side, phone) : step ? helpForStep(step, c.target, phone) : null;
+  // Why it works this way: the rules this quest teaches (lessons.ts).
+  const SIDE_LESSONS: Record<string, string[]> = { bounty: ['battle', 'army', 'wilds'], rescue: ['battle', 'stakes'], skirmish: ['rivals', 'stakes'], pilgrimage: ['clearing', 'altars', 'paving'], opening: ['battle'], feat: ['army'], grow: ['settlements'], scout: ['pieces'], shrine: [] };
+  const why = (side ? SIDE_LESSONS[side.kind] ?? [] : step?.teach ?? []).map((id) => LESSONS[id]).filter(Boolean);
   const close = () => ui.set({ questHelp: null });
   if (!h) return null;
   return (
@@ -191,6 +211,12 @@ export function QuestHelp() {
         <SheetGrab onClose={close} />
         <h3><Icon name="help" size={18} /> {h.title}</h3>
         <ol className="help-steps">{h.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+        {why.length > 0 && (
+          <div className="help-why">
+            <span className="kicker">Why it works this way</span>
+            {why.map((l) => <p key={l.title}><b>{l.title}.</b> {l.text}</p>)}
+          </div>
+        )}
         {h.look.length > 0 && (
           <div className="help-look">
             <span className="kicker">What to look for</span>

@@ -26,20 +26,24 @@ Nothing new to *do* opens up after the first hour: all five buildings are availa
 
 Five acts, 15 chapters. Times are for a player of middling pace; fast players go quicker and are never held back.
 
+**The story (as rewritten on 2026-09-28).** Long ago the **First Empire** covered the whole Board, until the wilds swallowed it and its crowns were scattered. The player carries one of those crowns. The campaign is the tale of rebuilding: guard the Emperor (Act I), win back crowns and make new ones (Act II), push into the frontier the First Empire lost (Act III), meet the other crown-bearers (Act IV), and finally face the Dragon that ended the First Empire and build what will outlast you (Act V). Each chapter opens with a short **story card** (`story` in `CHAPTERS`), and each step's line is written in the Chronicle's voice.
+
+**Teaching through the story.** Every step names the rules it teaches (`teach`, §5.7), so the player learns each mechanic at the moment they first need it: the Emperor, reach and resources with the first house; production, room and bubbles with the first pawns; kings, leading a king away, and moving pieces when chapter 1 sends the king (never the Emperor) to scout the camp that chapter 2 then hunts.
+
 | # | Time | Chapter | What you do | What opens up (new) | Power |
 |---|---|---|---|---|---|
 | **Act I: Hearth** | | | | | |
-| 1 | 0:00–0:20 | **Hearth** | Build a house, raise 3 pawns, march a troop | **Stables**: knights and their L-hops | Title *Chieftain* |
+| 1 | 0:00–0:20 | **Hearth** | Build a house, raise 3 pawns, send your king (not the Emperor) to scout the camp the Chronicle marks | **Stables**: knights and their L-hops | Title *Chieftain* |
 | 2 | 0:20–0:45 | **First Hunt** | Clear the herd the Chronicle marks | **Spoils** (§4.2): camps now leave a **Hoard** and **Renown** | A free knight from the hunt |
 | 3 | 0:45–1:30 | **Village** | Grow a settlement to 3 buildings | **Temples**, bishops; **settlements hold themselves** (§4.3) | Title *Warden*; pop +6 |
 | **Act II: Realm** | | | | | |
 | 4 | 1:30–2:30 | **The Second Crown** | Take the king you're given and found a second settlement 25+ squares away | **Coronation** (§4.1): a king is crowned at your Emperor; **Barracks** (war elephants) | Kings 2→3; title *Lord* |
 | 5 | 2:30–3:30 | **Crown of Stone** | Build a palace (the Chronicle marks the nearest site, and ore hoards count) | **Palaces**; your first palace king comes in 10 min; **Regents**: queens hold a city like a king (§4.3) | Title *Baron* |
-| 6 | 3:30–4:30 | **Trade Winds** | Let merchants run a road between two of your towns | **Trade** (§4.4): linked towns produce 15% faster | Coronation (king 4) |
+| 6 | 3:30–4:30 | **Trade Winds** | Let merchants run a road between two of your towns; raise an elephant; clear 8 trees with elephants | **Trade** (§4.4): linked towns produce 15% faster | Coronation (king 4) |
 | **Act III: Frontier** | | | | | |
-| 7 | 4:30–5:30 | **Roads Beyond** | Send an expedition 150+ squares out and back | **Roads speed marches** (§4.4); **Cartography**: the map shows camps, rival empires and rare lands you've seen | Title *Count* |
+| 7 | 4:30–5:30 | **Roads Beyond** | Pave 12 squares of road with knights; send an expedition 150+ squares out; clear two camps | **Roads speed marches** (§4.4); **Cartography**: the map shows camps, rival empires and rare lands you've seen | Title *Count* |
 | 8 | 5:30–6:30 | **The Lairs** | Clear a lair (wolves, kobolds, owlbears: they fight back) | **Captives** (§4.2): raider camps hold prisoners who join you when freed | Coronation (king 5) |
-| 9 | 6:30–7:30 | **Strange Lands** | Find a rare biome and clear a camp there | **Relics** (§4.2): rare camps leave a relic to raise in your capital | Relic: +10% production in its town |
+| 9 | 6:30–7:30 | **Strange Lands** | Find a rare biome, clear a camp there, and raise an altar with a bishop | **Relics** (§4.2): rare camps leave a relic to raise in your capital | Relic: +10% production in its town |
 | **Act IV: Dominion** | | | | | |
 | 10 | 7:30–8:30 | **Rivals** | Win a battle against another empire (a bot or a person) | **Walls muster** (§4.3): a walled town defends with pieces from 14 squares, not 10 | Title *Duke*; coronation (king 6) |
 | 11 | 8:30–9:30 | **The Rich Lands** | Found a town in land rated 1300+ | **Capital** (§4.3): name one town your capital; it holds itself forever and crowns kings 25% faster | Richer nodes (existing migration pull) |
@@ -230,6 +234,15 @@ Rewards stay small and **never outgrow the main quest**. Side quests give variet
   - A finished chapter gets the **unlock ceremony**: a full-width card with the new building or ability in art, the bell, and "New: …".
   - A coronation shows the crown descending on the new king in the world.
 - **Phone:** the tracker collapses to one line above the troop bar; tapping it expands the steps.
+
+### 5.7 Lessons: how the rules are taught (as built 2026-09-28)
+
+Every rule a player must understand is a **lesson** in `packages/shared/src/lessons.ts`: a short title and a sentence or two giving the rule and why it's so. Its numbers are read from the rules' own constants (reach, hold times, room per building, king caps, battle countdowns), so a changed constant changes the lesson with it.
+- **Steps teach lessons:** a step lists the lessons it teaches (`teach: ['emperor', 'reach']`). The quest banner shows them as a *Learn:* chip; the step's help card (**How?**) explains them under *Why it works this way*; and the Chronicle's book keeps every lesson met so far under *What you've learned*.
+- **Changing or adding a rule** is a data change: edit the lesson (or add one) and name it in the `teach` of the step where a player first meets it. Side quests have their own lesson lists in the help card.
+- **New step kinds** for teaching by doing: `scout` (a king, not the Emperor, looks upon the marked camp), `clear` (trees felled by your elephants), `pave` (squares paved by your knights).
+
+**Winning feels like winning.** A finished step or side quest plays a jackpot: a gold flash, fireworks of coins, gems and confetti, a slammed "QUEST COMPLETE" with a shine, the Renown counting up, and a slot-machine run of notes into a chord of bells (a chapter adds a gong and the choir, then the ceremony). Code: `apps/client/src/ui/Celebrate.tsx`, `Audio.jackpot`.
 
 ### 5.6 Data and rules (server)
 

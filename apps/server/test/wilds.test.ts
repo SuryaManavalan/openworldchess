@@ -241,6 +241,29 @@ describe('wilds', () => {
     }
   });
 
+  it("chapter 1's scouting: a king (not the Emperor) goes to look at the camp the Chronicle marks", () => {
+    const p = join('Lookout');
+    const st = game.chronicle.of(p);
+    st.ch = 1; st.step = 2; st.chBase = { ...st.tallies };
+    tick();
+    const at = game.chronicle.view(p).target ?? game.chronicle.view(p).target;
+    expect(at).toBeTruthy();
+    // The Emperor going doesn't count...
+    const emp = game.kingsOf(p.id).find((k) => k.emperor)!;
+    const near = game.world.nearestFree(at![0], at![1] + 3, 6)!;
+    const home: [number, number] = [emp.x, emp.y];
+    game.world.movePiece(emp, near[0], near[1]);
+    tick();
+    expect(st.ch).toBe(1);
+    game.world.movePiece(emp, home[0], home[1]);
+    // ...a king does.
+    const k = game.kingsOf(p.id).find((x) => !x.emperor)!;
+    const by = game.world.nearestFree(at![0] - 3, at![1], 6)!;
+    game.world.movePiece(k, by[0], by[1]);
+    tick();
+    expect(st.ch).toBe(2);
+  });
+
   it('an empire still needs a king to attack another empire', () => {
     const a = join('NoKingA'), b = join('NoKingB');
     const bk = game.kingsOf(b.id)[0];

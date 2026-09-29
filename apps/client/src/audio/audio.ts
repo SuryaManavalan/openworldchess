@@ -52,6 +52,8 @@ class Audio {
    * zoom, which isn't a gesture, the context never started and the game stayed silent.)
    */
   async unlock() {
+    // iPhones: play like a media app, so the ring/silent switch doesn't mute the game (Safari 17+).
+    try { const s = (navigator as Navigator & { audioSession?: { type: string } }).audioSession; if (s && s.type !== 'playback') s.type = 'playback'; } catch { /* not supported */ }
     if (!this.started) {
       this.started = true;
       this.setup();
@@ -255,6 +257,20 @@ class Audio {
       this.pluck.triggerAttackRelease(chord.map((d) => note(d + 7, 4)), '8n', t + 0.04, 0.6);
     }
   }
+  /**
+   * A win (a quest done): a slot-machine run climbing two octaves, a shower of coin clinks,
+   * then a bright chord on the beat. `big` (a chapter) adds a gong and the choir.
+   */
+  jackpot(big: boolean) {
+    if (!this.ready) return;
+    const t = Tone.now() + 0.02;
+    for (let i = 0; i < 14; i++) this.pluck.triggerAttackRelease(note(i, 4), '32n', t + i * 0.045, 0.55);
+    for (let i = 0; i < (big ? 18 : 10); i++) this.bell.triggerAttackRelease(note(9 + ((i * 3) % 7), 5), '32n', t + 0.3 + i * 0.06 + Math.random() * 0.03, 0.35);
+    const chord = [note(0, 4), note(2, 4), note(4, 4), note(7, 4)];
+    this.pluck.triggerAttackRelease(chord, '4n', t + 0.7, 0.9);
+    this.bell.triggerAttackRelease([note(7, 5), note(11, 5)], '4n', t + 0.72, 0.6);
+    if (big) { this.gong.triggerAttackRelease('4n', t + 0.7); this.choir.triggerAttackRelease([note(0, 3), note(4, 3), note(2, 4), note(7, 4)], '1m', t + 0.75); }
+  }
   lowClock() { if (this.ready) this.clickS.triggerAttackRelease('64n', Tone.now()); }
   /** One strike of a town bell; alternates between two pitches, lower at dusk. */
   townBell(i: number, pan: number, dusk: boolean) {
@@ -278,7 +294,7 @@ class Audio {
 }
 
 // Sound must never break the game: swallow scheduling errors from any cue.
-for (const name of ['select', 'commit', 'error', 'attack', 'build', 'birth', 'cascade', 'clack', 'mate', 'lowClock', 'birds', 'townBell', 'bubble'] as const) {
+for (const name of ['select', 'commit', 'error', 'attack', 'build', 'birth', 'cascade', 'clack', 'mate', 'lowClock', 'birds', 'townBell', 'bubble', 'jackpot'] as const) {
   const proto = Audio.prototype as unknown as Record<string, (...a: unknown[]) => unknown>;
   const fn = proto[name];
   proto[name] = function (this: unknown, ...args: unknown[]) { try { return fn.apply(this, args); } catch { return undefined; } };

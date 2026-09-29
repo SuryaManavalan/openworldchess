@@ -34,7 +34,8 @@ describe('the Chronicle', () => {
   it('finishing a chapter grants its title and unlocks, and counts goals done early', () => {
     const p = join('Climber');
     const k = game.kingsOf(p.id).find((x) => !x.emperor)!;
-    // Chapter 1: a house, three pawns raised, a march of 10.
+    // Chapter 1: a house, three pawns raised, and the king (not the Emperor) scouting out
+    // (with the wilds off, as here, there's no camp to scout: a march of 10 stands in for it).
     place(p.id, 'house', k.x + 3, k.y + 3);
     for (let i = 0; i < 3; i++) game.chronicle.note(p.id, 'raise:P');
     const spot = game.world.nearestFree(p.home[0] + 14, p.home[1], 6)!;
@@ -317,7 +318,7 @@ describe('the Chronicle', () => {
         const need = { N: 'stable', B: 'temple', R: 'barracks', Q: 'palace', K: 'palace' }[s.kind];
         expect(unlocked.has(need)).toBe(true);
       }
-      for (const b of ch.reward.buildings ?? []) unlocked.add(b);
+      for (const b of ch.reward.buildings ?? []) { unlocked.add(b); if (b === 'temple') unlocked.add('altar'); } // altars open with temples
       if (ch.reward.abilities?.includes('wonder')) unlocked.add('wonder');
     }
     void cheb;

@@ -21,6 +21,7 @@ import { Icon, type IconName } from './Icon.tsx';
 import { SheetGrab } from './SheetGrab.tsx';
 import { Riddle } from './Riddle.tsx';
 import { QuestHelp } from './QuestHelp.tsx';
+import { Celebrate } from './Celebrate.tsx';
 import { checkPlacement } from '../game/placement.ts';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
@@ -54,6 +55,7 @@ export function HUD() {
       {ui.pendingClear && <ClearConfirm />}
       {ui.riddle != null && <Riddle />}
       <QuestHelp />
+      <Celebrate />
       {battle && <BattleView battle={battle} />}
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
       <AwayReport />

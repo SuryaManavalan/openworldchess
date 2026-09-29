@@ -39,7 +39,9 @@ export class Input {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     // Any real gesture anywhere (buttons and sheets included) can start the sound.
     const unlockAudio = () => audio.unlock().then(() => audio.setVolumes(useUI.getState().settings));
-    window.addEventListener('pointerdown', unlockAudio, true);
+    // Phones only let a page start sound on some events: for a touch, the lift (pointerup,
+    // touchend, click), not the press. Listen on all of them, so the first tap anywhere works.
+    for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click'] as const) window.addEventListener(ev, unlockAudio, true);
     // Any touch anywhere (menus and bars too, not just the map) counts as being here: it ends watch mode.
     window.addEventListener('pointerdown', () => this.touched(), true);
     window.addEventListener('keydown', unlockAudio, true);

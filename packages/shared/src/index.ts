@@ -7,3 +7,4 @@ export * from './wilds.ts';
 export * from './civs.ts';
 export * from './chronicle.ts';
 export * from './settle.ts';
+export * from './lessons.ts';

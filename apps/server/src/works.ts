@@ -180,7 +180,7 @@ export class Works {
     if (job.going) return;
     const [x, y] = job.squares[job.i];
     if (cheb(p.x, p.y, x, y) <= 2 && ++job.work >= PAVE_TURNS) {
-      w.pave(x, y);
+      if (w.pave(x, y)) this.game.chronicle.note(p.owner, 'pave'); // quests count paved squares
       job.i++;
       job.work = 0;
       job.stuck = 0;
@@ -226,6 +226,7 @@ export class Works {
       // Working it: a turn toward it, and it falls when the work is done.
       if (++job.work >= CLEAR_TURNS[n.kind as 'tree' | 'rock' | 'ore']) {
         w.drawNode(n, n.remaining, this.game.now);
+        if (n.kind === 'tree') this.game.chronicle.note(p.owner, 'clear'); // quests count felled trees
         if (n.kind === 'tree') { n.dig = true; n.regrowAt = this.game.now + 60_000; } // the stump is dug out, not regrown
         j.claimed.delete(job.target!); job.target = undefined;
       }
