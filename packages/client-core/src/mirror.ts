@@ -43,6 +43,10 @@ export class Mirror {
   /** A node forgotten because its chunk left the view (not depleted: no effects). */
   onNodeDropped: (k: number) => void = () => {};
   onBattle: (b: BattlePublic) => void = () => {};
+  /** The server now serves a newer client than this page was loaded with. */
+  onNewBuild: () => void = () => {};
+  /** The client build the server served when this page first connected. */
+  build?: string;
   onBattleEnd: (id: number, s: BattleSummary, result: string, termination: string) => void = () => {};
   onAlert: (m: Extract<ServerMsg, { t: 'alert' }>) => void = () => {};
   onEmote: (m: Extract<ServerMsg, { t: 'emote' }>) => void = () => {};
@@ -96,6 +100,7 @@ export class Mirror {
         this.self = m.self; this.seed = m.seed; this.turn = m.turn; this.turnMs = m.turnMs;
         if (this.land.seed !== m.seed) this.land = new LandField(m.seed);
         this.clockOffset = m.serverTime - Date.now(); this.nextTurnAt = m.nextTurnAt;
+        if (m.build) { if (this.build && this.build !== m.build) this.onNewBuild(); this.build ??= m.build; }
         this.onSelf();
         break;
       case 'self': this.self = m.self; this.onSelf(); break;

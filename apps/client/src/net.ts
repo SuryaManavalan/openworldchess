@@ -31,6 +31,13 @@ export const mirror = conn.mirror;
 mirror.onChapter = (c) => useUI.getState().set({ ceremony: c });
 // Off to Stripe's secure checkout page.
 mirror.onShopUrl = (url) => { location.href = url; };
+// A deploy happened while this tab was open: reload to get the new quests and rules. Never
+// in the middle of a battle: then the update waits, with a Reload button, until you're done.
+mirror.onNewBuild = () => {
+  const ui = useUI.getState();
+  if (ui.battleFocus == null) { ui.toast('Updating to the new version…', 'info'); setTimeout(() => location.reload(), 1200); }
+  else ui.set({ updateReady: true });
+};
 
 /** The commands (ux.md §9): everything input produces goes through these. */
 export const commands = {

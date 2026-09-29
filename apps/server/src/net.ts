@@ -37,6 +37,8 @@ export class Net {
   private newAccounts = new Map<string, number[]>();
   private renamedAt = new Map<string, number>();
   nextTurnAt = 0;
+  /** The client build being served (a hash of its index.html). */
+  build = '';
 
   turnMs: number;
 
@@ -110,7 +112,7 @@ export class Net {
         if ([...this.sessions].filter((o) => o.watcher).length >= 10) return this.send(s, { t: 'err', msg: 'Too many watchers right now', code: 'bad-name' });
         s.watcher = true;
         const self = { id: 'watcher', name: 'Watcher', color: '#8a8a8a', emblem: 0, rating: 0, online: true, guest: false, guestGraceMs: 0, popCap: 0, emperorId: null, shieldUntil: 0, home: [0, 0] } as unknown as PlayerSelf;
-        this.send(s, { t: 'welcome', v: PROTOCOL_VERSION, token: '', self, seed: g.world.seed, turn: g.turn, turnMs: this.turnMs, serverTime: now, nextTurnAt: this.nextTurnAt });
+        this.send(s, { t: 'welcome', v: PROTOCOL_VERSION, token: '', self, seed: g.world.seed, turn: g.turn, turnMs: this.turnMs, serverTime: now, nextTurnAt: this.nextTurnAt, build: this.build });
         this.send(s, { t: 'battles', battles: g.battles.active() });
         this.send(s, { t: 'players', players: [...g.players.values()].filter((x) => !x.wild || x.wild.awake !== false).map((x) => g.publicPlayer(x)) });
         return;
@@ -134,7 +136,7 @@ export class Net {
       p.online = true; p.lastSeen = now;
       g.battles.offlineSince.delete(p.id);
       const self = perf.time('hello.self', () => g.selfPlayer(p));
-      this.send(s, { t: 'welcome', v: PROTOCOL_VERSION, token: p.token, self, seed: g.world.seed, turn: g.turn, turnMs: this.turnMs, serverTime: now, nextTurnAt: this.nextTurnAt });
+      this.send(s, { t: 'welcome', v: PROTOCOL_VERSION, token: p.token, self, seed: g.world.seed, turn: g.turn, turnMs: this.turnMs, serverTime: now, nextTurnAt: this.nextTurnAt, build: this.build });
       this.send(s, { t: 'battles', battles: g.battles.active() });
       perf.time('hello.mine', () => this.sendMine(s));
       perf.time('hello.land', () => this.sendLand(s));

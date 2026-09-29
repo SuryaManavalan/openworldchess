@@ -34,6 +34,12 @@ export class Input {
     el.addEventListener('pointerdown', (e) => this.down(e));
     window.addEventListener('pointermove', (e) => this.move(e));
     window.addEventListener('pointerup', (e) => this.up(e));
+    // A touch tap on the map can open a sheet under the finger; the browser's click that follows
+    // the tap would then land on that sheet's backdrop and close it at once. Swallow it.
+    window.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement | null;
+      if (performance.now() - this.lastTouchTap < 450 && t?.classList.contains('sheet-backdrop')) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
     window.addEventListener('pointercancel', (e) => this.up(e, true));
     el.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -207,7 +213,7 @@ export class Input {
         if (moved <= TAP_MOVE) {
           if (p.type === 'mouse' && p.button === 2) this.rightClick(at);
           else if (this.longFired) this.longPress(at);
-          else this.tap(at, p.type);
+          else { if (p.type !== 'mouse') this.lastTouchTap = performance.now(); this.tap(at, p.type); }
         }
     }
     this.reset();
@@ -227,6 +233,9 @@ export class Input {
   }
 
   // ---------- gestures → commands ----------
+
+  /** When the last touch tap on the map happened (to swallow the click that follows it). */
+  private lastTouchTap = 0;
 
   private myPiece(x: number, y: number) {
     const p = this.scene.pickPiece(x, y, 0.75);
@@ -300,7 +309,9 @@ export class Input {
     // Someone else's piece or camp: show what it is (ux.md §3).
     if (other) { ui.set({ inspect: { piece: other.id } }); haptic(8); return; }
     const b = sc.pickBuilding(at[0], at[1]);
-    if (b && b.owner === mirror.me && !ui.selection.length) { ui.set({ sheet: 'details', selection: [] }); useUI.getState().set({ hint: `building:${b.id}` }); return; }
+    // Your own building opens its details. With a mouse it does even while pieces are selected
+    // (moving is a right-click); on touch, a tap with pieces selected is still a place to move to.
+    if (b && b.owner === mirror.me && (!ui.selection.length || type === 'mouse')) { ui.set({ sheet: 'details', selection: [] }); useUI.getState().set({ hint: `building:${b.id}` }); return; }
     if (b && b.owner !== mirror.me && (!ui.selection.length || type === 'mouse')) { ui.set({ inspect: { building: b.id } }); return; }
     if (ui.inspect) ui.set({ inspect: null });
     if (ui.selection.length) {

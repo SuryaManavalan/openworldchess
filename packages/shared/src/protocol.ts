@@ -49,7 +49,8 @@ export type ClientMsg = z.infer<typeof ClientMsg>;
 export type TurnMove = [number, number, number, number, number, number];
 
 export type ServerMsg =
-  | { t: 'welcome'; v: number; token: string; self: PlayerSelf; seed: number; turn: number; turnMs: number; serverTime: number; nextTurnAt: number }
+  /** `build`: which client build the server serves; a tab on an older one reloads to catch up. */
+  | { t: 'welcome'; v: number; token: string; self: PlayerSelf; seed: number; turn: number; turnMs: number; serverTime: number; nextTurnAt: number; build?: string }
   | { t: 'chunk'; cx: number; cy: number; pieces: Piece[]; buildings: Building[]; nodes: NodeState[]; traffic: number[] }
   | { t: 'turn'; n: number; at: number; moves: TurnMove[]; pieces: Piece[]; removed: number[]; buildings: Building[]; removedBuildings: number[]; nodes: NodeState[]; /** Newly paved squares, flat [x, y, ...]. */ paved?: number[] }
   | { t: 'mine'; pieces: Piece[]; buildings: Building[] }

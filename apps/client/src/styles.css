@@ -634,3 +634,4 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .side-quests .sq-actions .link { flex: none; padding: 0 6px 0 0; }
 .riddle .riddle-board { width: min(100%, 420px, calc(100dvh - 190px)); min-width: 240px; }
 .side-quests .sq .line, .side-quests .sq > span, .side-quests .sq > small { text-align: left; }
+.update-pill { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(96px + var(--safe-bottom)); z-index: 45; pointer-events: auto; background: linear-gradient(180deg, #f7d774, #e3b23c); color: #23211f; font: inherit; font-weight: 900; border: 0; border-radius: 99px; padding: 10px 18px; box-shadow: 0 4px 0 #a97f1f, 0 8px 24px rgba(0, 0, 0, 0.35); cursor: pointer; }

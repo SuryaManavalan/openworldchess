@@ -1,4 +1,5 @@
 // Server entry: the loop (TECH.md T7), persistence and networking.
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize } from 'node:path';
@@ -64,6 +65,8 @@ const server = createServer((req, res) => {
   res.end(readFileSync(file));
 });
 const net = new Net(game, server, TURN, originOk);
+// Tabs opened before a deploy notice the new build on reconnect and reload (quest data, rules text).
+try { net.build = createHash('sha1').update(readFileSync(join(STATIC, 'index.html'))).digest('hex').slice(0, 12); } catch { /* no client build (dev) */ }
 
 let nextTurnAt = Date.now() + TURN;
 let lastEconomy = 0, lastMine = 0, lastSave = Date.now(), lastFall = 0, lastMaintain = Date.now(), lastFade = Date.now(), lastRoll = Date.now(), lastSelf = 0;

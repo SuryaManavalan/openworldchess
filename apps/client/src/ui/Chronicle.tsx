@@ -61,6 +61,8 @@ export function ChronicleTracker() {
   const step = ch?.steps[c.step];
   const show = (at?: [number, number]) => { if (at) scene?.flyTo(at[0], at[1], Math.max(scene.cam.zoom, 0.7)); };
   const focused = c.sides.find((q) => q.state !== 'offered' && q.id === ui.questFocus);
+  // This page's quest data is older than the server's (a deploy since it loaded): say so.
+  if (!focused && ch && !step && c.step < 99) return <div className="tracker"><button className="mini" onClick={() => location.reload()}><Icon name="book" size={16} /><span className="mini-line">A new quest awaits: reload to see it</span></button></div>;
   if (!focused && !(ch && step)) return null;
   const line = focused ? focused.line : step!.line;
   const [have, need] = focused ? focused.progress ?? [0, 0] : c.progress;

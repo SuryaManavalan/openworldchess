@@ -52,6 +52,8 @@ interface UIState {
   pendingClear: { ids: number[]; a: [number, number]; b: [number, number] } | null;
   lassoMode: boolean;
   watching: boolean;
+  /** A new version was deployed during a battle: reload when ready. */
+  updateReady: boolean;
   needName: boolean;
   nameError: string | null;
   welcomeNote: string | null;
@@ -104,6 +106,7 @@ export const useUI = create<UIState>((set, get) => ({
   questFocus: (() => { try { const v = Number(localStorage.getItem('owc.questFocus')); return v > 0 ? v : null; } catch { return null; } })(),
   lassoMode: false,
   watching: false,
+  updateReady: false,
   needName: false,
   nameError: null,
   welcomeNote: null,

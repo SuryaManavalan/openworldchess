@@ -65,6 +65,7 @@ export function HUD() {
       <SignIn />
       <ShareTikTok />
       <Welcome />
+      {ui.updateReady && ui.battleFocus == null && <button className="update-pill" onClick={() => location.reload()}>A new version is ready · Reload</button>}
       {ui.watching && <div className="watch-pill">Watching your lands · touch to take over</div>}
     </div>
   );
