@@ -83,7 +83,7 @@ export const CHAPTERS: Chapter[] = [
     story: 'The wilds that swallowed the First Empire are waking. Their camps grow as your empire grows, so the time to strike is now, while they are small. Kings are too precious to risk on a raid: a brave pawn can lead one.',
     steps: [
       { verb: 'raise', kind: 'N', count: 1, line: 'A knight rides where pawns cannot. Raise one in your stable.' , teach: ['army', 'titles'] },
-      { verb: 'hunt', count: 1, raid: true, line: 'Raid the camp you found with your pawns and your knight. No king needed: a pawn commands. Win the game.', teach: ['raids', 'battle', 'stakes'] },
+      { verb: 'hunt', count: 1, raid: true, line: 'Raid the camp you found with your pawns and your knight. No king needed: a pawn commands. Win the game.', teach: ['raids', 'troops', 'battle', 'stakes'] },
     ],
     reward: { pieces: ['N'] }, opens: 'Spoils: every camp you clear leaves a hoard behind',
   },

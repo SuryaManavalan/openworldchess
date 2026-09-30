@@ -7,7 +7,7 @@ import type { ClipData } from './game/clip.ts';
 export interface AlertItem { id: number; kind: string; text: string; battleId?: number; at?: [number, number]; time: number }
 export interface Toast { id: number; text: string; tone: 'info' | 'error' | 'good'; icon?: string }
 
-export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help' | 'shop' | 'chronicle';
+export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help' | 'shop' | 'chronicle' | 'troops';
 
 interface Settings {
   sound: boolean;

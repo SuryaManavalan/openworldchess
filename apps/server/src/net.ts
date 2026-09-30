@@ -193,6 +193,9 @@ export class Net {
       case 'capital.set': reply(msg.rid, g.chronicle.setCapital(p, msg.buildingId)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'quest.accept': reply(msg.rid, g.chronicle.accept(p, msg.id)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'quest.solve': reply(msg.rid, g.chronicle.solve(p, msg.id, msg.uci)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
+      case 'troop.reinforce': reply(msg.rid, g.troops.reinforce(p.id, msg.troopId, msg.pieceId)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
+      case 'troop.home': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.troops.callHome(p.id, msg.troopId, msg.to)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
+      case 'troop.homeAll': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.troops.callAllHome(p.id, msg.to)); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'quest.decline': g.chronicle.decline(p, msg.id); this.send(s, { t: 'self', self: g.selfPlayer(p) }); break;
       case 'muster': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.muster(p.id, msg.kingId)); break;
       case 'civ.equip': {

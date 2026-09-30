@@ -16,7 +16,7 @@ export async function player(ctx, name) {
   const c = await ctx.browser.newContext({ viewport: { width: 540, height: 960 }, deviceScaleFactor: 1 });
   const p = await c.newPage();
   await p.goto(ctx.env.base + '/');
-  await p.evaluate((t) => { localStorage.setItem('owc.token', t); localStorage.setItem('owc.onboarded', '1'); }, ctx.env.tokens[name]);
+  await p.evaluate((t) => { localStorage.setItem('owc.token', t); localStorage.setItem('owc.onboarded', '1'); localStorage.setItem('owc.storySeen', '99'); }, ctx.env.tokens[name]);
   await p.goto(ctx.env.base + '/');
   await p.waitForFunction(() => window.__owc?.mirror?.self, null, { timeout: 30_000 });
   // Look at the staged spot (the Emperor is parked far away), so its pieces are loaded.
@@ -86,3 +86,55 @@ export async function mate(ctx, { as }) {
   if (!ctx.mate) throw new Error('no mate ready');
   await click(p, ctx.mate.uci, ctx.mate.white);
 }
+
+/** The live battle from `as`'s tab, opened on their screen (the board is clicked there). */
+async function openBattle(p, maxMs = 240_000) {
+  const until = Date.now() + maxMs;
+  let b;
+  while (Date.now() < until) { b = await battleOf(p); if (b?.phase === 'live') break; await p.waitForTimeout(400); }
+  if (b?.phase !== 'live') throw new Error('no live battle');
+  await p.evaluate((id) => window.__owc.ui.getState().set({ battleFocus: id }), b.id);
+  await p.waitForSelector('.battle .board');
+  return b;
+}
+
+/** Play one move from `as`'s tab and wait until the server has it. */
+async function play(p, uci) {
+  const b = await battleOf(p);
+  await click(p, uci, b.white);
+  await p.waitForFunction((fen) => { const m = window.__owc.mirror; return ![...m.battles.values()].some((x) => x.fen === fen && x.phase === 'live'); }, b.fen, { timeout: 20_000 });
+}
+
+/**
+ * A real en passant, set up from whatever position the battle starts in: `white` walks a pawn
+ * to its fifth rank while `black` makes a quiet move; then `doubleStep` (black's pawn beside it
+ * jumps two) and `passant` (white takes it in passing) are left for events to play on camera.
+ * The line is checked with chess.js first, so it's a legal game on the real server.
+ * `files`: the white pawn and the black pawn, in order of preference (e.g. ["ed", "de"]).
+ */
+export async function enPassantOpening(ctx, { white, black, files = ['ed', 'ef', 'de', 'dc', 'fe', 'cd'] }) {
+  const wp = await player(ctx, white), bp = await player(ctx, black);
+  const b = await openBattle(wp); await openBattle(bp);
+  let plan = null;
+  for (const [wf, bf] of files) {
+    const g = new Chess(b.fen);
+    const quiet = ['h7h6', 'a7a6', 'g8f6', 'b8c6', 'h7h5', 'a7a5'].filter((m) => m[0] !== bf && m[0] !== wf);
+    const tryLine = (q) => {
+      const t = new Chess(b.fen), line = [`${wf}2${wf}4`, q, `${wf}4${wf}5`, `${bf}7${bf}5`, `${wf}5${bf}6`];
+      for (const u of line) { try { t.move({ from: u.slice(0, 2), to: u.slice(2, 4) }); } catch { return null; } }
+      return t.history({ verbose: true }).at(-1).flags.includes('e') ? line : null;
+    };
+    for (const q of quiet) { plan = tryLine(q); if (plan) break; }
+    if (plan) break;
+  }
+  if (!plan) throw new Error('no en passant line from ' + b.fen);
+  console.log('en passant line:', plan.join(' '));
+  await play(wp, plan[0]); await play(bp, plan[1]); await play(wp, plan[2]);
+  ctx.passant = { doubleStep: plan[3], take: plan[4] };
+}
+
+/** Black's pawn jumps two squares, right beside white's (set up by enPassantOpening). */
+export async function doubleStep(ctx, { black }) { await play(await player(ctx, black), ctx.passant.doubleStep); }
+
+/** White takes it in passing. */
+export async function passant(ctx, { white }) { await play(await player(ctx, white), ctx.passant.take); }

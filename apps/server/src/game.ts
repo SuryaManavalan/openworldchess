@@ -3,7 +3,7 @@ import {
   setWorth, ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, ALTAR_TEND, ALTAR_TYPES, ALTARS_PER_PLAYER, BUILDINGS, PAVED, BUBBLE_GOLD_CHANCE, BUBBLE_MAX, bubbleEveryMs, bubbleWorth, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, HOLD_MS, ENGAGE_RANGE, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
   BUILDINGS_PER_KING, PLAYER_BUILDING_CAP, RUIN_LIFETIME_MS, MASTERLESS_MS, REACH, SPAWN_SHIELD_MS, TEAM_COLORS,
   ANCHOR_GRACE_MS, DECAY_EVERY_MS, BUILDING_MAX_HP, WORK_AREA, cheb, distToRect, isLight,
-  type Building, type BuildingType, type Facing, type NodeKind, type Piece, type PieceKind, type PlayerPublic, type PlayerSelf, type TurnMove,
+  type Building, type BuildingType, type Facing, type NodeKind, type Piece, type PieceKind, type PlayerPublic, type PlayerSelf, type Troop, type TurnMove,
 } from '@owc/shared';
 import { LAND_CELL, landKey, landUnkey } from '@owc/worldgen';
 import { rdAfter, RD_PROVISIONAL, findPath, findPathLong, newGroup, stepGroup, bestGaitMove, productionMs, richness, type GroupState } from '@owc/rules';
@@ -15,6 +15,7 @@ import { Wilds, type CampInfo } from './wilds.ts';
 import { perf } from './perf.ts';
 import { Chronicle, type ChronState } from './chronicle.ts';
 import { Works } from './works.ts';
+import { Troops } from './troops.ts';
 import { shopOpen } from './shop.ts';
 import type { TikTokLink } from './tiktok.ts';
 
@@ -72,6 +73,8 @@ export interface PlayerRec {
   ratedAt?: number;
   /** When the empire was last reset (a fresh start, at most once an hour). */
   resetAt?: number;
+  /** Pieces out on excursions, holding where they were sent (movement.md §10). */
+  troops?: Troop[];
   /** Stripe checkout sessions already credited (each pays out once). */
   receipts?: string[];
 }
@@ -120,6 +123,7 @@ export class Game {
   routines: Routines;
   /** Knights paving and elephants clearing (movement.md §9). */
   works: Works;
+  troops: Troops;
   wilds: Wilds;
   chronicle: Chronicle;
   turn = 0;
@@ -158,6 +162,7 @@ export class Game {
     this.battles = new Battles(this);
     this.routines = new Routines(this);
     this.works = new Works(this);
+    this.troops = new Troops(this);
     this.wilds = new Wilds(this);
     this.chronicle = new Chronicle(this);
     this.wilds.enabled = opts.wilds ?? true;
@@ -262,7 +267,7 @@ export class Game {
     return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), provisional: !p.wild && rdAfter(p.rd, p.ratedAt ? (this.now - p.ratedAt) / 86_400_000 : 0) > RD_PROVISIONAL ? true : undefined, online: p.online, wild: p.wild?.faction, civ: p.civ, title: p.chron?.title, relics: p.chron?.relics.length ? p.chron.relics : undefined, capital: cap ? [cap.cx, cap.cy] : undefined };
   }
   selfPlayer(p: PlayerRec): PlayerSelf {
-    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), pop: this.popView(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, resetAt: p.resetAt, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen(), chronicle: p.wild ? undefined : perf.time('self.chronicle', () => this.chronicle.view(p)), tiktok: p.tiktok ? { name: p.tiktok.name } : undefined };
+    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), pop: this.popView(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, resetAt: p.resetAt, troops: p.troops?.length ? p.troops : undefined, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen(), chronicle: p.wild ? undefined : perf.time('self.chronicle', () => this.chronicle.view(p)), tiktok: p.tiktok ? { name: p.tiktok.name } : undefined };
   }
 
   isGuest(p: PlayerRec) { return !p.googleSub && !p.tiktokId && !p.isBot; }
@@ -424,7 +429,7 @@ export class Game {
    * drift home (background walks home don't post). `work`: a worker riding to its job
    * (movement.md §9); any other order takes pieces off their jobs.
    */
-  orderMove(player: string, ids: number[], to: [number, number], attack?: number, planMs?: number, commander?: number, post = false, work = false): string | null {
+  orderMove(player: string, ids: number[], to: [number, number], attack?: number, planMs?: number, commander?: number, post = false, work = false, join = false): string | null {
     const pieces = this.orderable(player, ids);
     if (!pieces.length) return 'Nothing to move';
     if (!work) this.works.release(pieces.map((p) => p.id));
@@ -444,6 +449,10 @@ export class Game {
     const state = newGroup(gid, pieces, path, [leader.x, leader.y]);
     this.groups.set(gid, { state, owner: player, kingId: king?.id, raid: commander != null || undefined, attack: attack != null ? { targetKingId: attack, lastRepath: this.turn } : undefined, target: [tx, ty], legs: 0, homeward: !king && !post ? true : undefined });
     for (const p of pieces) { p.groupId = gid; p.state = 'moving'; p.routine = undefined; this.world.touch(p); }
+    // Troops (movement.md §10): what the player sends out of their cities holds there, together.
+    // Workers and background walks leave their troops; a reinforcement is already counted.
+    if (post) this.troops.assign(player, pieces, [tx, ty]);
+    else if (!join) this.troops.release(player, pieces.map((p) => p.id), true);
     return null;
   }
 
@@ -467,7 +476,10 @@ export class Game {
 
   orderStop(player: string, ids: number[]) {
     this.works.release(ids);
-    for (const p of this.orderable(player, ids)) this.leaveGroup(p);
+    const stopped = this.orderable(player, ids);
+    for (const p of stopped) this.leaveGroup(p);
+    // They hold where they stopped: out of a city, that's a troop's post (movement.md §10).
+    if (stopped.length) { const lead = stopped.find((p) => p.kind === 'K') ?? stopped[0]; this.troops.assign(player, stopped, [lead.x, lead.y]); }
   }
 
   orderAttack(player: string, ids: number[], targetId: number): string | null {
@@ -494,7 +506,7 @@ export class Game {
     if (me && !raid) me.shieldUntil = 0;
     // Already in range? Engage now. Otherwise march there.
     if (this.engaged(king, target)) return this.battles.engage(king, target);
-    return this.orderMove(player, pieces.map((p) => p.id), [target.x, target.y], target.id, undefined, raid ? king.id : undefined);
+    return this.orderMove(player, pieces.map((p) => p.id), [target.x, target.y], target.id, undefined, raid ? king.id : undefined, true);
   }
 
   /**
@@ -787,6 +799,7 @@ export class Game {
 
     // Idle life in settlements (visuals.md §2), and in the wilds' camps.
     perf.time('turn.works', () => this.works.step(record));
+    if (this.turn % 2 === 0) perf.time('turn.troops', () => this.troops.step());
     perf.time('turn.routines', () => this.routines.step(record));
     perf.time('turn.wilds', () => this.wilds.step(record));
   }

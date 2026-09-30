@@ -28,6 +28,7 @@ const game = new Game({ seed: SEED, speed: SPEED, wilds: process.env.WILDS !== '
 const MINE_EVERY_MS = 30_000;
 const SAVE_EVERY_MS = 60_000;
 game.battles.countdownScale = COUNTDOWN_SCALE;
+if (process.env.THINK_SCALE) game.battles.thinkScale = Number(process.env.THINK_SCALE);
 if (process.env.SHIELD_MS) game.shieldMs = Number(process.env.SHIELD_MS);
 if (process.env.GUEST_GRACE_MS) game.guestGraceMs = Number(process.env.GUEST_GRACE_MS);
 if (load(game, DATA)) console.log(`loaded ${game.world.pieces.size} pieces, ${game.players.size} players from ${DATA}`);

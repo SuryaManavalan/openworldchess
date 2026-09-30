@@ -90,6 +90,10 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-09-29: `battle.mjs` acts `enPassantOpening` / `doubleStep` / `passant`: a scripted, legal line
+  (checked with chess.js) played by both staged players, so a chosen moment happens on camera. Staged
+  players' tabs skip the chapter story card. First used for Day 3.
+
 - 2026-09-28: staged scenes: `scenario.ts`, acts (`acts/battle.mjs`), and `scenario` /
   `before` / `events` in shots. First used for Day 2 (a siege, filmed live).
 

@@ -22,6 +22,7 @@ import { SheetGrab } from './SheetGrab.tsx';
 import { LessonView } from './LessonView.tsx';
 import { Riddle } from './Riddle.tsx';
 import { QuestHelp } from './QuestHelp.tsx';
+import { TroopList, nearestOf, troopOfSelection, troopsOf } from './troops.tsx';
 import { Celebrate } from './Celebrate.tsx';
 import { checkPlacement } from '../game/placement.ts';
 
@@ -45,7 +46,6 @@ export function HUD() {
         {ui.layout === 'phone' && <Toasts />}
       </div>
       <ChapterCeremony />
-      {ui.layout !== 'phone' && <Toasts />}
       {ui.layout === 'desktop' && <SidePanel />}
       <BottomDock />
       <Sheet />
@@ -175,6 +175,18 @@ function KingChip({ k, compact }: { k: Piece; compact?: boolean }) {
   );
 }
 
+/** Your troops out on excursions (movement.md §10): opens the Troops panel. */
+function TroopsChip() {
+  const ui = useUI();
+  const n = troopsOf().length;
+  return (
+    <button className={`king-chip troops-chip ${ui.sheet === 'troops' ? 'on' : ''}`} aria-label={`${n} troop${n > 1 ? 's' : ''} out`} onClick={() => ui.set({ sheet: ui.sheet === 'troops' ? null : 'troops' })}>
+      <Icon name="troop" size={22} />
+      <span className="count">{n}</span>
+    </button>
+  );
+}
+
 /**
  * The selection bar (ux.md §3, reworked 2026-09-28). Top: what you have, kind by kind (tap a
  * kind to leave one behind), and a × that's always there. With a king: how much of its
@@ -198,33 +210,68 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
   const knights = sel.filter((p) => p.kind === 'N').length;
   // A piece's own work shows only when the selection is all that kind (a troop marches; a crew works).
   const only = (kind: PieceKind) => sel.every((p) => p.kind === kind);
+  // The selection is (part of) a troop out on an excursion (movement.md §10).
+  const troop = troopOfSelection(ui.selection);
+  const troopNo = troop ? troopsOf().indexOf(troop) + 1 : 0;
+  const joining = new Set(troop?.joining.map((j) => j.id) ?? []);
   const hint = ui.orderMode === 'pave' ? `Tap where the road should go: ${knights} knight${knights > 1 ? 's' : ''} will pave it`
     : ui.orderMode === 'clear' ? 'Drag over the land to clear, or tap its middle'
     : ui.lassoMode ? (phone ? 'Tap pieces to add or remove them · long-press and draw to add many' : 'Click pieces to add or remove them')
     : pending ? null
+    : troop ? (phone ? '+ calls the nearest piece of that kind out to the troop' : '+ calls the nearest piece of that kind out to the troop · right-click to move it')
     : phone ? 'Tap the ground to move · tap an enemy to attack' : 'Right-click to move · right-click an enemy to attack';
+  // Where "nearest" is measured from: the troop's post, or the selection's middle.
+  const from: [number, number] = troop ? troop.at : [Math.round(sel.reduce((s, p) => s + p.x, 0) / sel.length), Math.round(sel.reduce((s, p) => s + p.y, 0) / sel.length)];
+  const lead = sel.find((p) => p.kind === 'K') ?? sel[0];
+  const mine = mirror.myPieces();
+  // − lets the farthest of a kind go; + brings the nearest one in (with a troop: calls it out).
+  const minus = (kind: PieceKind) => {
+    const of = sel.filter((p) => p.kind === kind).sort((a, b) => cheb(b.x, b.y, lead.x, lead.y) - cheb(a.x, a.y, lead.x, lead.y));
+    if (of[0]) ui.select(ui.selection.filter((id) => id !== of[0].id));
+  };
+  const plus = async (kind: PieceKind) => {
+    const q = nearestOf(kind, from, new Set(ui.selection));
+    if (!q) return;
+    if (troop) {
+      const e = await commands.reinforce(troop.id, q.id);
+      if (e) { ui.toast(e, 'error'); return; }
+      ui.toast(`A ${PIECE_NAME[kind].toLowerCase()} is on its way to the troop`, 'info');
+    }
+    ui.select([...useUI.getState().selection, q.id]);
+    audio.select(ui.selection.length);
+  };
+  const kinds = KIND_ORDER.filter((kind) => mine.some((p) => p.kind === kind));
   return (
     <div className="action-row sel-bar">
       <div className="sel-top">
-        <span className="sel-summary">
-          <b className="sel-count">{sel.length}</b>
-          {KIND_ORDER.map((kind) => {
-            const n = sel.filter((p) => p.kind === kind).length;
-            if (!n) return null;
-            // Tap a kind to leave one behind (the one farthest from the king): easy to drop the queen from a raid.
-            const drop = () => {
-              const lead = sel.find((p) => p.kind === 'K') ?? sel[0];
-              const of = sel.filter((p) => p.kind === kind).sort((a, b) => cheb(b.x, b.y, lead.x, lead.y) - cheb(a.x, a.y, lead.x, lead.y));
-              ui.select(ui.selection.filter((id) => id !== of[0].id));
-            };
-            const img = <img src={pieceUrl(kind, 'light', mirror.self?.color ?? '#888', kind === 'K' && sel.some((p) => p.emperor), mirror.self?.civ)} alt="" />;
-            if (kind === 'K' || sel.length === 1) return <span key={kind} className="kc king">{img}{n > 1 && n}</span>;
-            return <button key={kind} className="kc" title={`Leave a ${PIECE_NAME[kind].toLowerCase()} behind`} onClick={drop}>{img}{n > 1 && n}<span className="minus">−</span></button>;
-          })}
+        <span className="sel-title">
+          {troop ? <><Icon name="troop" size={16} /> Troop {troopNo}</> : 'Selected'}
+          <b className="sel-count">{troop ? `· ${sel.length}` : sel.length}</b>
+          {joining.size > 0 && <span className="sel-otw">{joining.size} on the way</span>}
         </span>
         <button className="icon-btn sel-close" aria-label="Deselect" title="Deselect (Esc)" onClick={clear}><Icon name="close" size={18} stroke={2.6} /></button>
       </div>
-      {scopes.length > 0 && !pending && (
+      <div className="steppers">
+        {kinds.map((kind) => {
+          const n = sel.filter((p) => p.kind === kind).length;
+          const have = mine.filter((p) => p.kind === kind && p.state !== 'battle' && !p.emperor).length + (kind === 'K' && sel.some((p) => p.emperor) ? 1 : 0);
+          const more = !!nearestOf(kind, from, new Set(ui.selection));
+          const otw = sel.filter((p) => p.kind === kind && joining.has(p.id)).length;
+          const name = PIECE_NAME[kind].toLowerCase();
+          return (
+            <span key={kind} className={`stepper ${n ? 'on' : ''}`}>
+              <button className="st-btn" disabled={!n} aria-label={`One ${name} fewer`} title={`Leave a ${name} behind`} onClick={() => minus(kind)}>−</button>
+              <span className="st-mid" title={`${n} of your ${have} ${name}s selected`}>
+                <img src={pieceUrl(kind, 'light', mirror.self?.color ?? '#888', kind === 'K' && sel.some((p) => p.emperor && p.kind === 'K'), mirror.self?.civ)} alt="" />
+                <b>{n}</b><small>/{have}</small>
+                {otw > 0 && <em className="st-otw" title={`${otw} on the way`}>↗{otw}</em>}
+              </span>
+              <button className="st-btn" disabled={!more} aria-label={troop ? `Call a ${name} to the troop` : `One ${name} more`} title={troop ? `Call the nearest ${name} out to the troop` : `Add the nearest ${name}`} onClick={() => void plus(kind)}>+</button>
+            </span>
+          );
+        })}
+      </div>
+      {scopes.length > 0 && !pending && !troop && (
         <div className="seg sel-scope">
           {scopes.map((sc) => <button key={sc.label} className={same(sc.ids) ? 'on' : ''} title={sc.title} onClick={() => ui.select(sc.ids)}>{sc.label}{sc.ids.length > 1 ? ` ${sc.ids.length}` : ''}</button>)}
         </div>
@@ -234,6 +281,7 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
           <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>Move here</button>
           <button className="btn ghost" onClick={() => { if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; ui.bump(); }}>Cancel</button>
         </> : <>
+          {troop && !troop.home && <button className="btn ghost" title="March this troop back to the nearest city; it disbands there" onClick={() => commands.troopHome(troop.id).then((e) => e ? ui.toast(e, 'error') : ui.toast('The troop marches home', 'info'))}>Home</button>}
           <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
           <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} title="Add or remove pieces by tapping them (Shift-click on desktop)" onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>{ui.lassoMode ? 'Adding…' : '+ Add'}</button>
           {/* Works (movement.md §9): knights pave, elephants clear. */}
@@ -265,6 +313,8 @@ function BottomDock() {
   const pending = input?.pendingMove;
   return (
     <div className="dock">
+      {/* On a wide screen, toasts sit just above whatever the dock is showing (never under the selection bar). */}
+      {ui.layout !== 'phone' && <Toasts />}
       {ui.buildType && (
         <div className="action-row build-row">
           <span className={`ghost-state ${ui.ghost?.ok ? 'ok' : 'bad'}`}>{ui.ghost ? ui.ghost.reason : 'Drag on the map to place'}</span>
@@ -275,7 +325,10 @@ function BottomDock() {
       {!ui.buildType && sel.length > 0 && <SelectionBar sel={sel} pending={pending} />}
       {ui.layout === 'phone' && (
         <div className="troop-bar">
-          <div className="chips">{kings.map((k) => <KingChip key={k.id} k={k} compact />)}</div>
+          <div className="chips">
+            {kings.map((k) => <KingChip key={k.id} k={k} compact />)}
+            {troopsOf().length > 0 && <TroopsChip />}
+          </div>
           <button className="build-fab" aria-label="Build" onClick={() => ui.set({ sheet: ui.sheet === 'build' ? null : 'build' })}><Icon name="hammer" size={28} stroke={2.4} /></button>
         </div>
       )}
@@ -293,6 +346,12 @@ function SidePanel() {
         <div className="king-list">{kings.map((k) => <KingChip key={k.id} k={k} />)}</div>
         {!kings.length && <p className="muted">No kings. A new Emperor is on the way.</p>}
       </section>
+      {troopsOf().length > 0 && (
+        <section>
+          <h3>Troops out</h3>
+          <TroopList />
+        </section>
+      )}
       <section>
         <h3>Build <span className="muted kbd">B</span></h3>
         <BuildList />
@@ -404,6 +463,7 @@ function Sheet() {
         {ui.sheet === 'help' && <Help />}
         {ui.sheet === 'shop' && <Shop />}
         {ui.sheet === 'chronicle' && <ChronicleBook />}
+        {ui.sheet === 'troops' && <><h3>Troops out</h3><TroopList /></>}
         {ui.layout === 'phone' && ui.sheet === 'build' && <Minimap />}
       </div>
     </div>

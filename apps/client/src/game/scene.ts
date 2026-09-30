@@ -638,6 +638,20 @@ export class Scene {
       if (lead) { this.dashed(g, (lead.x + 0.5) * S, (lead.y + 0.5) * S, (t.to[0] + 0.5) * S, (t.to[1] + 0.5) * S, now); g.stroke({ width: lw(3.5), color: col, alpha: 0.55, cap: 'round' }); }
       this.target(g, t.to[0], t.to[1], col, now);
     }
+    // A selected troop (movement.md §10): its post, and a gold trail from each reinforcement
+    // still on its way to it.
+    const selIds = new Set(useUI.getState().selection);
+    for (const tr of m.self?.troops ?? []) {
+      if (![...tr.members, ...tr.joining.map((j) => j.id)].some((id) => selIds.has(id))) continue;
+      this.target(g, tr.at[0], tr.at[1], 0xf3d27a, now);
+      for (const j of tr.joining) {
+        const v = this.pieces.get(j.id);
+        if (!v) continue;
+        this.dashed(g, (v.x + 0.5) * S, (v.y + 0.5) * S, (tr.at[0] + 0.5) * S, (tr.at[1] + 0.5) * S, now);
+        g.stroke({ width: lw(3.5), color: 0xf3d27a, alpha: 0.75, cap: 'round' });
+        g.circle((v.x + 0.5) * S, (v.y + 0.5) * S, S * 0.47).stroke({ width: lw(3), color: 0xf3d27a, alpha: 0.9 });
+      }
+    }
     if (this.pendingMarker) this.target(g, this.pendingMarker[0], this.pendingMarker[1], 0xffffff, now);
     // Path preview while dragging a command (ux.md §3).
     if (this.pathPreview) {

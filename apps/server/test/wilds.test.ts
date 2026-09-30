@@ -10,6 +10,7 @@ let rs = 424242;
 Math.random = () => { rs = (rs * 1103515245 + 12345) % 2147483648; return rs / 2147483648; };
 const game = new Game({ seed: 5, speed: 1 });
 game.battles.countdownScale = 0;
+game.battles.thinkScale = 0;
 game.shieldMs = 0;
 afterAll(() => game.battles.ai.stop());
 const join = (name: string) => { const p = game.join(undefined, name) as PlayerRec; p.online = true; return p; };

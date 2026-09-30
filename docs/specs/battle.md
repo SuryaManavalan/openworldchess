@@ -152,6 +152,15 @@ Nobody should have to march a king out of its city to clear a camp. **Any troop 
 - Spectators can't enter the arena squares, can't join, and can't attack either side while the battle is running (both sides are "in battle" and not valid targets).
 - Nearby pieces idle and gather slightly toward the dome, so a battle draws a crowd on its own.
 
+## 10b. The AI takes a person's time (as built, 2026-09-29)
+
+When the server's AI plays a move (for a wild camp, or for a player who is away), it thinks for a short, fixed engine time. Then it waits as a person would before playing (`Battles.thinkMs`):
+- about 1 second in the opening (the first 6 plies);
+- about 0.7 s for a forced move, and about 1.3 s for most recaptures;
+- otherwise about 2.6 s, scaled by how many legal moves there are (×0.6–1.8), with a random spread, and now and then (6%) a long think of about 2.4× that.
+
+Camps are 15% quicker. The wait is capped at 12 s and at 1/25 of the clock left, and is never under 0.25 s. `thinkScale` (the `THINK_SCALE` environment variable) scales it for tests and filming. Bots (apps/bots) already pause like this on their own side.
+
 ## 11. Data
 
 A battle record is stored at the end, transactionally:

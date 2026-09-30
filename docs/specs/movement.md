@@ -176,3 +176,19 @@ Knights and elephants have jobs outside battle. Both work as **crews**: select s
   - Rock and ore are only broken when you tick *Also break rock and ore*. The sheet then says how many would be destroyed, and notes that palaces need ore.
   - Hoards are never cleared, and neither is anything within 10 squares of another empire's buildings.
 
+## 10. Troops (as built, 2026-09-29)
+
+Pieces you send out of your cities hold where you sent them, together, as a **troop**. The code is in `apps/server/src/troops.ts`, the constants are `TROOP_*` in `constants.ts`, and the lesson is `troops`.
+
+- **Forming.** A move, an attack or a Stop whose destination is more than `TROOP_CITY_R` (8) squares from all of your buildings makes the moving pieces a troop, with its **post** at that spot. Members are posted, so they don't drift home, with or without a king.
+- **Moving and splitting.** Moving exactly a troop's members (plus any of its reinforcements) moves the troop: the post follows, and the troop keeps its id. Any other selection leaves its old troops. Out of a city, that selection is a new troop; into a city, it is simply home. Troops left with no one in them are removed.
+- **Reinforcing.** `troop.reinforce` sends one piece (the client picks the nearest of the kind; never the Emperor) walking to the post. It is listed in `joining` with a deadline of `max(TROOP_JOIN_MIN_MS, distance × 4 turns)`, and becomes a member within `TROOP_JOIN_R` (4) squares. Past the deadline it is dropped and walks to the nearest city.
+- **Leash.** A member that is idle, not in a march and more than `TROOP_LEASH` (16) squares from the post is dropped and walks home. So is one that is routed after a lost battle, and the survivors of a lost raid.
+- **Home.** `troop.home` (to a named city, or the nearest) and `troop.homeAll` march troops to a city. They disband there once everyone has stopped. A troop whose post becomes part of a city (a town it took) disbands the same way.
+- **Crews aren't troops.** Pieces given a paving or clearing job leave their troops.
+- **Data.** Troops live on the player record (`PlayerRec.troops`, saved with the world) and are sent to the owner in `PlayerSelf.troops`.
+- **Interface** (ux.md §3):
+  - A Troops chip next to the king chips on phones, and a Troops section in the desktop side panel. Each row shows the makeup, its status (Holding, Marching, In battle, Heading home) and where it is relative to the nearest city, with Go and Home buttons, plus Call all to [city].
+  - Map pins at posts when zoomed out, and edge arrows when a post is off-screen.
+  - The selection bar's + on a kind calls reinforcements when the selection is a troop. A selected troop shows its post and gold trails from the pieces on their way.
+

@@ -116,6 +116,7 @@ export class Works {
     const g = this.game;
     // Leaving any march; posted where they work, so they don't drift home.
     g.orderStop(p.owner!, [p.id]);
+    g.troops.release(p.owner!, [p.id]); // a crew isn't a troop
     this.release([p.id]);
     this.workers.set(p.id, job);
     this.jobs.get(job.job)!.left++;

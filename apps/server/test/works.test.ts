@@ -189,6 +189,7 @@ describe('altars (economy.md §8)', () => {
     const near = game.world.nearestFree(site[0] + 3, site[1] + 3, 6)!;
     game.world.movePiece(fk, near[0], near[1]);
     game.battles.countdownScale = 0;
+    game.battles.thinkScale = 0;
     expect(game.orderAttack(foe.id, [fk.id], bishop.id)).toBeNull();
     t += 10; game.now = t; game.battles.tick(t);
     const rec = [...game.battles.recs.values()].find((r) => r.white.player === foe.id && r.pub.phase === 'live')!;

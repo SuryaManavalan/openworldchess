@@ -635,3 +635,39 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .riddle .riddle-board { width: min(100%, 420px, calc(100dvh - 190px)); min-width: 240px; }
 .side-quests .sq .line, .side-quests .sq > span, .side-quests .sq > small { text-align: left; }
 .update-pill { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(96px + var(--safe-bottom)); z-index: 45; pointer-events: auto; background: linear-gradient(180deg, #f7d774, #e3b23c); color: #23211f; font: inherit; font-weight: 900; border: 0; border-radius: 99px; padding: 10px 18px; box-shadow: 0 4px 0 #a97f1f, 0 8px 24px rgba(0, 0, 0, 0.35); cursor: pointer; }
+/* Selection steppers and troops (movement.md §10). */
+.sel-bar .sel-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-weight: 900; font-size: 15px; }
+.sel-bar .sel-title svg { color: var(--gold, #e3b23c); }
+.sel-bar .sel-title .sel-count { font-size: 15px; min-width: 0; color: var(--dim); }
+.sel-bar .sel-otw { font-size: 12px; font-weight: 800; color: #f3d27a; background: rgba(243, 210, 122, 0.12); border: 1px dashed rgba(243, 210, 122, 0.55); border-radius: 99px; padding: 2px 8px; white-space: nowrap; }
+.steppers { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); grid-auto-rows: 46px; gap: 6px; width: 100%; align-content: start; }
+.layout-desktop .steppers { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.stepper { display: flex; align-items: stretch; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 12px; height: 46px; overflow: hidden; }
+.stepper.on { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.28); }
+.stepper .st-btn { flex: none; width: 34px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 20px; font-weight: 900; cursor: pointer; display: grid; place-items: center; }
+.stepper .st-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.stepper .st-btn:disabled { opacity: 0.25; cursor: default; }
+.stepper .st-mid { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 1px; font-variant-numeric: tabular-nums; }
+.stepper .st-mid img { width: 28px; height: 28px; flex: none; }
+.stepper .st-mid b { font-size: 15px; font-weight: 900; }
+.stepper .st-mid small { font-size: 11px; font-weight: 700; color: var(--dim); }
+.stepper .st-otw { position: absolute; top: 1px; right: 0; font-style: normal; font-size: 10px; font-weight: 900; color: #f3d27a; }
+.troops-chip { color: #f3d27a; padding: 4px 12px 4px 10px; gap: 6px; }
+.troops-chip .count { color: var(--ink); }
+.troop-list { display: flex; flex-direction: column; gap: 8px; }
+.troop-row { display: flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 12px; padding: 8px 8px 8px 10px; }
+.troop-row .troop-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; background: none; border: 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; padding: 0; }
+.troop-row .troop-name { display: inline-flex; align-items: center; gap: 5px; font-weight: 900; font-size: 14px; }
+.troop-row .troop-name svg { color: #f3d27a; }
+.troop-row .troop-where { font-size: 12px; color: var(--dim); line-height: 1.3; }
+.troop-row .troop-acts { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.troop-row .troop-acts .btn { min-height: 34px; min-width: 64px; }
+.makeup { display: flex; flex-wrap: wrap; gap: 2px 6px; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; }
+.makeup .mk { display: inline-flex; align-items: center; }
+.makeup img { width: 22px; height: 22px; }
+.makeup em { font-style: normal; color: #f3d27a; font-size: 11px; margin-left: 1px; }
+.troop-all { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; font-weight: 800; padding-top: 4px; }
+.troop-all select { flex: 1; min-width: 150px; min-height: 36px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px; font: inherit; font-weight: 700; }
+
+.marker.troop { --c: #f3d27a; }
+.dock > .toasts { position: static; transform: none; align-self: center; pointer-events: none; }

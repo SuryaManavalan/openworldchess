@@ -22,6 +22,8 @@ export interface BattleRec {
   sealed: number[];
   moveBy: { white: { human: number; ai: number }; black: { human: number; ai: number } };
   aiThinking: boolean;
+  /** The AI's chosen move and when it plays it (it thinks like a person: battle.md §10). */
+  aiReady?: { uci: string; at: number; ply: number };
   /** Where the defending king stood (for building transfer). */
   defenderAt: [number, number];
   endedAt?: number;
@@ -40,6 +42,8 @@ export class Battles {
   offlineSince = new Map<string, number>();
   /** Scales countdowns (tests use a small value). */
   countdownScale = 1;
+  /** How long the AI takes over a move, × this (tests and filming use 0 or less). */
+  thinkScale = 1;
 
   constructor(game: Game) { this.game = game; }
 
@@ -301,6 +305,12 @@ export class Battles {
       const mover = gm.turn === 'white' ? r.white.player : r.black.player;
       const ai = this.isAI(mover);
       if (ai !== r.pub.aiControlled[gm.turn]) this.sync(r);
+      if (ai && r.aiReady) {
+        // Its move is chosen; play it when a person would have finished thinking.
+        if (r.aiReady.ply !== gm.moves.length) r.aiReady = undefined;
+        else if (now >= r.aiReady.at) { const mv = r.aiReady.uci; r.aiReady = undefined; this.move(mover, r.pub.id, mv, true); }
+        continue;
+      }
       if (ai && !r.aiThinking) this.aiMove(r, mover);
     }
   }
@@ -309,16 +319,39 @@ export class Battles {
     const gm = r.game!;
     const rating = this.game.players.get(player)?.rating ?? 1000;
     const left = gm.timeLeft(gm.turn, this.game.now);
-    // Camps think quickly: they play below the area's rating anyway, and share the engines.
-    const movetime = Math.max(100, Math.min(this.game.wilds.campOf(player) ? 350 : 1200, left / 60));
+    const camp = !!this.game.wilds.campOf(player);
+    // The engine's own time stays short (camps share the engines, and play below the area's
+    // rating anyway); the pause a person would take comes after, from thinkMs.
+    const movetime = Math.max(100, Math.min(camp ? 350 : 1200, left / 60));
     r.aiThinking = true;
-    const fen = gm.fen, ply = gm.moves.length;
+    const fen = gm.fen, ply = gm.moves.length, asked = this.game.now;
+    const think = this.thinkMs(gm, left, camp);
     this.ai.bestMove(fen, rating, movetime, r.pub.kind === 'practice' ? 0 : 1).then((uci) => {
       r.aiThinking = false;
       if (!r.game || r.pub.phase !== 'live' || r.game.moves.length !== ply) return;
       const mv = uci ?? r.game.legalMoves()[0];
-      if (mv) this.move(player, r.pub.id, mv, true);
+      if (mv) r.aiReady = { uci: mv, at: asked + think, ply };
     });
+  }
+
+  /**
+   * How long a person would take over this move (battle.md §10): quick in the opening and
+   * on forced moves and recaptures, longer when there's a lot to consider, now and then a
+   * long think; never more than the clock can spare.
+   */
+  private thinkMs(gm: NonNullable<BattleRec['game']>, left: number, camp: boolean): number {
+    if (this.thinkScale <= 0) return 0;
+    const legal = gm.legalMoves().length, ply = gm.moves.length;
+    const last = gm.moves.at(-1) ?? '';
+    const spread = (ms: number, s = 0.5) => ms * Math.exp(s * (Math.random() + Math.random() + Math.random() - 1.5) * 1.4);
+    let ms: number;
+    if (legal <= 1) ms = spread(700, 0.3);
+    else if (ply < 6) ms = spread(1100, 0.45);
+    else if (last.includes('x') && Math.random() < 0.6) ms = spread(1300, 0.4); // the obvious recapture
+    else ms = spread(2600 * Math.min(1.8, Math.max(0.6, legal / 28)), 0.55) * (Math.random() < 0.06 ? 2.4 : 1);
+    if (camp) ms *= 0.85;
+    ms = Math.min(ms, Math.max(300, left / 25), 12_000);
+    return Math.max(250, ms) * this.thinkScale / Math.max(1, this.game.speed);
   }
 
   /** Aftermath (battle.md §7), cooldowns (§8), ratings. */
@@ -402,7 +435,11 @@ export class Battles {
       // An altar's defenders beaten by an empire: the altar falls (economy.md §8).
       if (commanderLost && !wildWin) g.fallOfAltar(lose.player, kingAt);
       // A beaten raid's troop walks home (it was posted out there, movement.md §4).
-      if (raidLost) for (const p of [...reserves, ...loserSurvivors.map((id) => w.pieces.get(id)).filter((p): p is Piece => !!p)]) if (p.posted) { p.posted = undefined; w.touch(p); }
+      if (raidLost) {
+        const back = [...reserves, ...loserSurvivors.map((id) => w.pieces.get(id)).filter((p): p is Piece => !!p)];
+        g.troops.release(lose.player, back.map((p) => p.id));
+        for (const p of back) if (p.posted) { p.posted = undefined; w.touch(p); }
+      }
       if (emperor) {
         for (const id of loserSurvivors) { const p = w.pieces.get(id); if (p) convert(p); }
       } else {

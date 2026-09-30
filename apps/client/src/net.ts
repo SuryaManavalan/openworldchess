@@ -87,6 +87,10 @@ export const commands = {
     if (err) useUI.getState().toast(err, 'error');
   },
   muster(kingId: number) { return conn.request({ t: 'muster', kingId }); },
+  // Troops (movement.md §10).
+  reinforce(troopId: number, pieceId: number) { return conn.request({ t: 'troop.reinforce', troopId, pieceId }); },
+  troopHome(troopId: number, to?: [number, number]) { return conn.request({ t: 'troop.home', troopId, to }); },
+  troopsHome(to?: [number, number]) { return conn.request({ t: 'troop.homeAll', to }); },
   checkout(pack: string) { return conn.request({ t: 'shop.checkout', pack }); },
   buyCiv(civ: string) { return conn.request({ t: 'civ.buy', civ }); },
   equipCiv(civ: string | null) { conn.send({ t: 'civ.equip', civ }); },

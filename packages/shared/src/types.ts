@@ -111,7 +111,21 @@ export interface PlayerPublic {
   capital?: [number, number];
 }
 
+/** Pieces sent out of your cities hold where they were sent, together (movement.md §10). */
+export interface Troop {
+  id: number;
+  /** Where the troop holds (its post). */
+  at: [number, number];
+  members: number[];
+  /** Reinforcements on their way, dropped if they haven't arrived by `until`. */
+  joining: { id: number; until: number }[];
+  /** Called home to a city: it disbands once everyone is there. */
+  home?: boolean;
+}
+
 export interface PlayerSelf extends PlayerPublic {
+  /** Your troops out on excursions. */
+  troops?: Troop[];
   /** Not signed in: the empire falls this long after the player leaves. */
   guest: boolean;
   guestGraceMs: number;

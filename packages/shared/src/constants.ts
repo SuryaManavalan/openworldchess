@@ -8,6 +8,16 @@ export const TICK_HZ = 10;
 
 /** The one reach rule: buildings and pieces stay within this of a king (economy.md §2). */
 export const REACH = 10;
+
+// ---- Troops (movement.md §10) ----
+/** A destination this close to one of your buildings is inside your city: pieces sent there are home. */
+export const TROOP_CITY_R = 8;
+/** A member left farther than this from its troop's post (and not marching or fighting) is sent home. */
+export const TROOP_LEASH = 16;
+/** A reinforcement joins its troop once it's this close to the post. */
+export const TROOP_JOIN_R = 4;
+/** A reinforcement has at least this long to reach its troop (more for a longer walk), or it's dropped. */
+export const TROOP_JOIN_MIN_MS = 3 * 60_000;
 /** A building's work area: nodes within this many squares of its footprint (economy.md §1). */
 export const WORK_AREA = 3;
 /** Attack range: king within this of the target king or its holdings (battle.md §2). */

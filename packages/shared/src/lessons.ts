@@ -14,7 +14,7 @@ import {
   BUILD_SPACING, BUILDINGS, BUILDINGS_PER_KING, CANCEL_COOLDOWN_MS, CANCEL_PROTECT_MS, CLAIM_RANGE, CLEAR_CREW, CLEAR_MAX, CLEAR_TURNS, CLOCK_BASE_MS, CLOCK_INC_MS,
   COUNTDOWN_FIELD_MS, COUNTDOWN_SIEGE_MS, DECAY_EVERY_MS, ENGAGE_RANGE, FRESH_ACCOUNT_MS, KING_TIME_PER_KING, MASTERLESS_MS, MIN_BATTLE_COOLDOWN_MS, PAVE_CREW, PAVE_MAX,
   PAVE_TURNS, PLAYER_BUILDING_CAP, PLAYER_KING_CAP, PLAYER_PIECE_CAP, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, RUIN_LIFETIME_MS,
-  SPAWN_SHIELD_MS, TURN_MS, WORK_AREA, type BuildingType,
+  SPAWN_SHIELD_MS, TROOP_CITY_R, TROOP_JOIN_MIN_MS, TROOP_JOIN_R, TROOP_LEASH, TURN_MS, WORK_AREA, type BuildingType,
 } from './constants.ts';
 import { HOLD_MS, KING_OF_NEED_MIN, TITLES, RENOWN } from './chronicle.ts';
 
@@ -229,6 +229,19 @@ export const LESSONS: Record<string, Lesson> = {
       'Every new empire gets a small band of its own nearby (weaker than its starting pieces, and it never grows).',
     ],
     tips: ['Hunt camps a little weaker than your army, and hunt them young. A hoard of ore is a palace site ready-made.'],
+  },
+  troops: {
+    title: 'Troops',
+    text: 'Pieces you send out of your cities hold where you sent them, together, as a troop.',
+    fine: [
+      `A move, an attack or a Stop that leaves pieces more than ${TROOP_CITY_R} squares from any of your buildings makes them a troop. They stay at that spot (its post) instead of drifting home, with or without a king.`,
+      'Move the whole troop and the troop moves. Move only some of its pieces and they split off: out of your cities they form a new troop; into a city they are simply home.',
+      `With a troop selected, + on a kind calls the nearest piece of that kind out to it. It shows as on its way (a gold trail) and joins once it is within ${TROOP_JOIN_R} squares. If it hasn't arrived after ${dur(TROOP_JOIN_MIN_MS)} (longer for a longer walk), it is dropped and walks home. Your Emperor is never called out this way.`,
+      `A member left more than ${TROOP_LEASH} squares from its post while not marching or fighting (say, after a lost raid) leaves the troop and walks back to your nearest city. Pieces that flee a lost battle leave it too.`,
+      'Called home (a troop\'s Home button, or Call all home in the Troops panel), a troop marches to a city and disbands there. So does a troop whose post becomes part of your city, such as a town it just took.',
+      'Knights paving and elephants clearing leave their troops: a work crew is not a troop.',
+    ],
+    tips: ['Park a small troop near a camp you mean to hunt, then call a knight or two out to it when you are ready: the army is already in place.', 'Keep kings home to hold your towns; send troops out. A troop without a king can raid the wilds, but it can be attacked by other empires too.'],
   },
   raids: {
     title: 'Raids and troops without a king',
