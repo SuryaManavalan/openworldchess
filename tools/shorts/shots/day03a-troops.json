@@ -1,0 +1,90 @@
+{
+ "scenario": "out/day03a/scenario.env.json",
+ "as": "Aurelian",
+ "css": ".tracker, .alerts, .guide { display: none !important; }",
+ "out": "out/day03a/troops.mp4",
+ "seconds": 21,
+ "offset": [
+  -8,
+  0
+ ],
+ "path": [
+  {
+   "t": 0,
+   "zoom": 0.75,
+   "dx": 0,
+   "dy": 0
+  },
+  {
+   "t": 4.4,
+   "zoom": 0.6,
+   "dx": 17,
+   "dy": 0
+  },
+  {
+   "t": 5.6,
+   "zoom": 0.38,
+   "dx": 14,
+   "dy": 0
+  },
+  {
+   "t": 9.6,
+   "zoom": 0.38,
+   "dx": 15,
+   "dy": 0
+  },
+  {
+   "t": 10.8,
+   "zoom": 0.6,
+   "dx": 19,
+   "dy": 0
+  },
+  {
+   "t": 13.6,
+   "zoom": 0.6,
+   "dx": 19,
+   "dy": 0
+  },
+  {
+   "t": 15.8,
+   "zoom": 0.5,
+   "dx": 13,
+   "dy": 0
+  },
+  {
+   "t": 21,
+   "zoom": 0.5,
+   "dx": 3,
+   "dy": 0
+  }
+ ],
+ "ease": "inOut",
+ "before": [
+  {
+   "eval": "const o = window.__owc, k = o.mirror.myKings().find((q) => !q.emperor); const ids = o.mirror.myPieces().filter((q) => q.kind !== 'K' && Math.max(Math.abs(q.x - k.x), Math.abs(q.y - k.y)) <= 10).map((q) => q.id).filter((id, i, a) => { const q = o.mirror.pieces.get(id); return q.kind !== 'N' || a.filter((x) => o.mirror.pieces.get(x).kind === 'N').indexOf(id) < 1; }); o.ui.getState().select(ids);"
+  }
+ ],
+ "events": [
+  {
+   "t": 0.3,
+   "eval": "const o = window.__owc, k = o.mirror.myKings().find((q) => !q.emperor); o.input.issue([k.x + 22, k.y]);"
+  },
+  {
+   "t": 5.2,
+   "eval": "document.querySelector('button[aria-label^=\"Call a knight\"]')?.click();"
+  },
+  {
+   "t": 11.0,
+   "eval": "window.__owc.ui.getState().set({ sheet: 'troops' });"
+  },
+  {
+   "t": 13.6,
+   "eval": "[...document.querySelectorAll('.troop-row .btn')].find((b) => b.textContent === 'Home')?.click();"
+  },
+  {
+   "t": 14.6,
+   "eval": "window.__owc.ui.getState().set({ sheet: null });"
+  }
+ ],
+ "viewport": 405
+}

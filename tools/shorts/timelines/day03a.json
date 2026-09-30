@@ -1,0 +1,178 @@
+{
+ "out": "out/day03a/day03a.mp4",
+ "seconds": 21,
+ "base": {
+  "video": "out/day03a/troops.mp4"
+ },
+ "layers": [
+  {
+   "type": "vignette",
+   "t0": 0,
+   "t1": 21,
+   "strength": 0.35
+  },
+  {
+   "type": "label",
+   "t0": 0,
+   "t1": 16.5,
+   "text": "Sped up",
+   "y": 250
+  },
+  {
+   "type": "text",
+   "t0": 0,
+   "t1": 2.0,
+   "lines": [
+    "SEND",
+    "THEM OUT."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 560,
+   "size": 150,
+   "anim": "slam",
+   "glow": "rgba(227,178,60,0.35)"
+  },
+  {
+   "type": "text",
+   "t0": 2.1,
+   "t1": 4.6,
+   "lines": [
+    "They hold."
+   ],
+   "y": 520,
+   "size": 150,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "t0": 2.5,
+   "t1": 4.6,
+   "lines": [
+    "Quiet on the creek."
+   ],
+   "color": "#e3b23c",
+   "y": 660,
+   "size": 64,
+   "font": "bold",
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "t0": 4.8,
+   "t1": 8.0,
+   "lines": [
+    "Need a knight?",
+    "Tap +."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 560,
+   "size": 116,
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 8.1,
+   "t1": 10.8,
+   "lines": [
+    "It rides out",
+    "to join them."
+   ],
+   "y": 560,
+   "size": 112,
+   "font": "bold",
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 11.0,
+   "t1": 13.4,
+   "lines": [
+    "Every troop.",
+    "One list."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 470,
+   "size": 116,
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 13.6,
+   "t1": 15.9,
+   "lines": [
+    "Call them",
+    "home."
+   ],
+   "colors": [
+    "#ece6da",
+    "#7fa8ff"
+   ],
+   "y": 560,
+   "size": 140,
+   "anim": "slam",
+   "glow": "rgba(61,111,209,0.45)"
+  },
+  {
+   "type": "endcard",
+   "t0": 16.0,
+   "t1": 21,
+   "sub": "Your army, anywhere",
+   "url": "openworldchess.com",
+   "dim": 0.6,
+   "y": 560
+  }
+ ],
+ "audio": {
+  "bpm": 100,
+  "musicGain": 0.5,
+  "sfxGain": 0.8
+ },
+ "voice": [
+  {
+   "at": 0.15,
+   "voice": "caster",
+   "text": "Send them out."
+  },
+  {
+   "at": 2.2,
+   "voice": "caster",
+   "text": "They hold. Quiet on the creek."
+  },
+  {
+   "at": 4.9,
+   "voice": "caster",
+   "text": "Need a knight? Tap plus."
+  },
+  {
+   "at": 8.2,
+   "voice": "caster",
+   "text": "It rides out to join them."
+  },
+  {
+   "at": 11.1,
+   "voice": "caster",
+   "text": "Every troop, one list."
+  },
+  {
+   "at": 13.7,
+   "voice": "caster",
+   "text": "Call them home."
+  },
+  {
+   "at": 16.2,
+   "voice": "caster",
+   "text": "Open World Chess. Free in your browser."
+  }
+ ],
+ "voiceContext": true
+}

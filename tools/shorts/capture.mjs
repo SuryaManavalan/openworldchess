@@ -14,6 +14,10 @@
 //     "ease": "inOut" | "linear" | "out",
 //     "rotate": 0,                         // degrees over the whole shot (optional)
 //     "scenario": "out/day02/scenario.env.json",   // film a staged local world (scenario.ts) instead of base
+//     "as": "Aurelian",                    // (with a scenario) film as that player, interface and all,
+//                                          // on a phone-sized screen: for videos about the interface
+//     "css": ".tracker { display: none }", // extra CSS for the filmed page (hide what the shot doesn't need)
+//     "viewport": 405,                     // CSS width (default 540); output stays 1080×1920
 //     "before": [ { "act": "battle.mjs#attack", "args": {...} }, { "wait": 3000 } ],   // setup, not filmed
 //     "events": [ { "t": 1.8, "act": "battle.mjs#mate", "args": {...} },               // during the shot
 //                 { "t": 0, "eval": "window.__owc.ui.getState().set({ battleFocus: ... })" } ]
@@ -31,7 +35,9 @@ const spec = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const env = spec.scenario ? JSON.parse(readFileSync(resolve(spec.scenario), 'utf8')) : null;
 // A staged world: its server, and its spot (plus an optional "offset" in squares).
 if (env) { spec.base = env.base; spec.center ??= [env.center[0] + (spec.offset?.[0] ?? 0), env.center[1] + (spec.offset?.[1] ?? 0)]; }
-const FPS = 30, W = 540, H = 960; // CSS size; ×2 device pixels = 1080×1920
+// CSS size: 540×960 × 2 device pixels = 1080×1920. "viewport": a narrower CSS width (e.g. 405, a
+// phone's) keeps the output 1080×1920 but draws the interface at a phone's size.
+const FPS = 30, W = spec.viewport ?? 540, H = Math.round(W * 16 / 9), DPR = 1080 / W;
 const out = resolve(spec.out);
 mkdirSync(dirname(out), { recursive: true });
 
@@ -62,11 +68,20 @@ function camAt(t) {
 // Set "headless": true in the shot to film without a window.
 const headless = spec.headless ?? !process.env.DISPLAY;
 const browser = await chromium.launch({ headless, args: ['--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 2 });
+const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: DPR });
 page.on('pageerror', (e) => console.log('page error:', e.message));
-// ?watch: look at the world without an empire (no guest, no rate limit); ?cinema: no interface.
-await page.goto(`${spec.base.replace(/\/$/, '')}/?cinema&watch`);
-await page.waitForFunction(() => window.__owc?.scene && window.__owc.mirror.me === 'watcher', null, { timeout: 30_000 });
+if (spec.as) {
+  // Signed in as a staged player, with the interface: what a player sees on their phone.
+  await page.goto(`${spec.base.replace(/\/$/, '')}/`);
+  await page.evaluate((t) => { localStorage.clear(); localStorage.setItem('owc.token', t); localStorage.setItem('owc.onboarded', '1'); localStorage.setItem('owc.storySeen', '99'); }, env.tokens[spec.as]);
+  await page.goto(`${spec.base.replace(/\/$/, '')}/`);
+  await page.waitForFunction(() => window.__owc?.scene && window.__owc.mirror.self, null, { timeout: 30_000 });
+} else {
+  // ?watch: look at the world without an empire (no guest, no rate limit); ?cinema: no interface.
+  await page.goto(`${spec.base.replace(/\/$/, '')}/?cinema&watch`);
+  await page.waitForFunction(() => window.__owc?.scene && window.__owc.mirror.me === 'watcher', null, { timeout: 30_000 });
+}
+if (spec.css) await page.addStyleTag({ content: spec.css });
 await page.waitForTimeout(2500);
 
 // Acts: staged players doing things (setup before filming, or events during it).

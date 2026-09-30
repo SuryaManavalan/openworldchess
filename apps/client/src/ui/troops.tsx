@@ -2,7 +2,7 @@
 // Troops panel lists them (jump to one, select it, call it home, call everyone home), and
 // the selection bar reinforces the troop you have selected.
 import { useState } from 'react';
-import { PIECE_NAME, cheb, type Piece, type PieceKind, type Troop } from '@owc/shared';
+import { PIECE_NAME, TROOP_CITY_R, cheb, type Piece, type PieceKind, type Troop } from '@owc/shared';
 import { commands, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
 import { input, scene } from './GameView.tsx';
@@ -25,10 +25,11 @@ export function myCities() {
   return (scene?.settlements ?? []).filter((s) => s.owner === mirror.me).map((s) => ({ id: s.id, name: s.name, at: [s.cx, s.cy] as [number, number] }));
 }
 
-function where(at: [number, number]): string {
+function where(at: [number, number], home?: boolean): string {
   const c = myCities().sort((a, b) => cheb(a.at[0], a.at[1], at[0], at[1]) - cheb(b.at[0], b.at[1], at[0], at[1]))[0];
   if (!c) return '';
   const dx = at[0] - c.at[0], dy = at[1] - c.at[1], d = cheb(at[0], at[1], c.at[0], c.at[1]);
+  if (d <= TROOP_CITY_R) return home ? `to ${c.name}` : `at ${c.name}`;
   const dir = (dy < -d / 2 ? 'N' : dy > d / 2 ? 'S' : '') + (dx > d / 2 ? 'E' : dx < -d / 2 ? 'W' : '');
   return `${d} sq ${dir || 'from'} ${dir ? 'of ' : ''}${c.name}`;
 }
@@ -83,7 +84,7 @@ function TroopRow({ t, n }: { t: Troop; n: number }) {
       <button className="troop-main" onClick={() => selectTroop(t)} title="Select this troop and go to it">
         <span className="troop-name"><Icon name="troop" size={15} /> Troop {n}</span>
         <Makeup ids={t.members} joining={t.joining.map((j) => j.id)} />
-        <span className="troop-where">{status(t)}{where(t.at) ? ` · ${where(t.at)}` : ''}</span>
+        <span className="troop-where">{status(t)}{where(t.at, t.home) ? ` · ${where(t.at, t.home)}` : ''}</span>
       </button>
       <div className="troop-acts">
         <button className="btn ghost small" onClick={() => selectTroop(t)}>Go</button>

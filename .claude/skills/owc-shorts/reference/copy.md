@@ -91,6 +91,10 @@ same link is in the TikTok bio.
   - **The Caster**: energetic, esports/chess-streamer energy. For battles and fails.
 - Don't imitate any real person's voice.
 
+## Humor
+
+The subtle insider layer (one reference per ad at most, never explained) lives in `humor.md`. It is dated: check its freshness before using a line from it.
+
 ## Words to avoid
 
 "Revolutionary", "the best game ever", "download now" (there's nothing to

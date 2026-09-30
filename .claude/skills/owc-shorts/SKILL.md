@@ -16,6 +16,7 @@ Read these before your first video, and keep them open:
 | `reference/truth.md` | What the game really does. **Every claim in an ad must be in here.** |
 | `reference/audience.md` | Who we're talking to, how they think, and their lingo (chess, Twitch, RTS, history). |
 | `reference/copy.md` | Hook formulas, title bank, mantras, CTAs, words to avoid. |
+| `reference/humor.md` | The subtle insider layer: current Twitch and chess-community references, what's dead, and the rules (dated: re-check freshness before posting). |
 | `reference/production.md` | Specs, safe zones, the scene kit, capturing gameplay, voice, music, labels, posting. |
 | `calendar.md` | The 30-day plan: what each day's video is. |
 | `reference/research.md` | Why these rules (sources). |
@@ -93,6 +94,7 @@ are cached, so a reused line is never paid for twice. Keep scripts tight.
 - [ ] A new visual at least every 2 seconds (except mantra pieces, which move continuously).
 - [ ] The game's name and **openworldchess.com** appear on screen (at least on the end card), the CTA says it's **free in the browser**, and the caption points to the link in bio.
 - [ ] It loops: the ending leads back into the opening.
+- [ ] At most one insider reference (`reference/humor.md`), it reads straight without the joke, it isn't explained, and its freshness was checked this week.
 - [ ] Music is from TikTok's Commercial Music Library or our own/royalty-free; nothing else.
 - [ ] Post flags set: "Your brand" (promotional) on; AI-generated on if anything realistic is synthetic.
 

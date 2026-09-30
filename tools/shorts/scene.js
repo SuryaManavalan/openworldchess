@@ -4,7 +4,7 @@
 //
 // Layer types (all take t0/t1 in seconds):
 //   text     { lines, y, size, font: 'display'|'bold', color, stroke, anim: 'slam'|'pop'|'rise'|'fade'|'type', plate, spacing }
-//   label    { text }                                   small corner tag, e.g. "4× speed"
+//   label    { text, y }                                small corner tag, e.g. "4× speed" (y default 1400)
 //   vignette { strength }                               darkens the edges and top/bottom bands for legible text
 //   flash    { color }                                  a quick flash at t0
 //   endcard  { title, sub, url, dim }                   name + CTA

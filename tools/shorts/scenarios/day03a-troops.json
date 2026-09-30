@@ -1,0 +1,12 @@
+{
+ "name": "day03a",
+ "seed": 1,
+ "near": [300, 300],
+ "turnMs": 900,
+ "countdownScale": 0.1,
+ "players": [
+  { "name": "Aurelian", "color": "#3d6fd1", "at": [-10, 0], "facing": 1,
+    "buildings": ["house", "house", "stable", "house"],
+    "pieces": { "K": 1, "R": 1, "N": 3, "P": 6 } }
+ ]
+}

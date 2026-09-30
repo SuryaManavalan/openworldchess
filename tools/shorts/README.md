@@ -90,6 +90,10 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-09-30: capture films **as a staged player, with the interface** (`as`), with extra CSS
+  (`css`, to hide what the shot doesn't need) and a phone-sized CSS width (`viewport`: 405 keeps
+  1080×1920 but draws the interface at a phone's scale). `label` takes a `y`. First used for Day 3a.
+
 - 2026-09-29: `battle.mjs` acts `enPassantOpening` / `doubleStep` / `passant`: a scripted, legal line
   (checked with chess.js) played by both staged players, so a chosen moment happens on camera. Staged
   players' tabs skip the chapter story card. First used for Day 3.
