@@ -10,6 +10,7 @@
 //     "turnMs": 3000,                  // world turn length: slower turns keep footage near real speed,
 //                                      // because capture takes ~175 ms a frame (0.6 s turns look 5× fast)
 //     "countdownScale": 0.1,           // battle countdowns (a siege's 60 s × this)
+//     "needs": { "wheat": 6, "tree": 12 }, // resources within 12 squares of the spot (for building on camera)
 //     "players": [
 //       { "name": "Aurelian", "color": "#3d6fd1", "at": [0, 0],          // offset from the spot
 //         "pieces": { "K": 1, "Q": 1, "R": 2, "P": 6 },                   // around their king
@@ -43,7 +44,10 @@ for (let r = 0; r < 600 && !spot; r += 20)
     const x = Math.round(nx + Math.cos((a / 16) * Math.PI * 2) * r), y = Math.round(ny + Math.sin((a / 16) * Math.PI * 2) * r);
     let ok = 0;
     for (let dy = -15; dy <= 15; dy += 3) for (let dx = -15; dx <= 15; dx += 3) if (w.buildable(x + dx, y + dy) && !w.nodeAt(x + dx, y + dy)) ok++;
-    if (ok >= 110) spot = [x, y];
+    // A town to grow on camera needs crops and trees close by (and so a little less open ground).
+    const near = spec.needs ? w.nodesNear(x, y, 1, 12) : [];
+    const has = Object.entries(spec.needs ?? {}).every(([k, n]) => near.filter((q) => q.kind === k && q.remaining > 0).length >= (n as number));
+    if (ok >= (spec.needs ? 85 : 110) && has) spot = [x, y];
   }
 if (!spot) throw new Error('no open ground found');
 console.log('staging at', spot);

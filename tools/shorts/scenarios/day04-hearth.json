@@ -1,0 +1,13 @@
+{
+ "name": "day04",
+ "seed": 1,
+ "near": [300, 300],
+ "turnMs": 600,
+ "countdownScale": 1,
+ "needs": { "wheat": 8, "tree": 15 },
+ "players": [
+  { "name": "Aurelian", "color": "#3d6fd1", "at": [0, 0], "facing": 2,
+    "buildings": ["house"],
+    "pieces": { "K": 1, "P": 2 } }
+ ]
+}

@@ -90,6 +90,17 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-09-30: **flowing narration.** Voice lines can be `"timed": true` (ElevenLabs'
+  with-timestamps endpoint; the alignment is cached next to the MP3), and text layers can take
+  a `"cue"` (a phrase from the narration) instead of t0/t1: the card lands as the words are
+  spoken. The rule now is one or two continuous passages, not short lines with pauses (the
+  skill's production.md → Sound). Also:
+  - `acts/town.mjs#build`: a staged player builds through the real build flow, searching from
+    their king or first building;
+  - `needs` in scenarios: a spot with crops and trees close by.
+
+  First used for Day 4.
+
 - 2026-09-30: capture films **as a staged player, with the interface** (`as`), with extra CSS
   (`css`, to hide what the shot doesn't need) and a phone-sized CSS width (`viewport`: 405 keeps
   1080×1920 but draws the interface at a phone's scale). `label` takes a `y`. First used for Day 3a.

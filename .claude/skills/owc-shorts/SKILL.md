@@ -69,8 +69,9 @@ are cached, so a reused line is never paid for twice. Keep scripts tight.
 3. **Write three hooks** using `reference/copy.md`, pick the one a stranger
    would stop for. Write the on-screen text as a beat list with timestamps. Keep
    each card to 3–7 words.
-4. **Script the voice** (optional, see `production.md`): spoken lines match or
-   echo the text, never contradict it. 2.5 words per second, max.
+4. **Script the voice** (see `production.md` → Sound): one or two continuous, flowing passages
+   (never a string of short lines with pauses), about 2.5 words a second. Cards echo it in
+   3–7 words, cued to the phrases they match.
 5. **Get the footage**: write `tools/shorts/shots/dayNN-*.json` and run
    `capture.mjs`; or for battles, a replay clip (`production.md`); or none, for
    no-gameplay pieces (use the `board`, `image` and text layers on a background).

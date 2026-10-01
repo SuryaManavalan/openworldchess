@@ -13,12 +13,16 @@
 //     "voice": [ { "at": 0.3, "voice": "chronicler", "text": "The whole world is a chessboard.", "settings": {} } ],
 //     "voiceContext": true   // send each line's neighbours as context (steadier, script-like delivery)
 //   }
+// Flowing narration (preferred, 2026-09-30): one or two long voice lines with "timed": true, and
+// text layers with "cue": "a phrase from the line" instead of t0/t1. A cued card appears as the
+// phrase is spoken (a little before: "lead", default 0.1 s) and stays until the next cued card
+// (or its own "hold" seconds after the phrase ends).
 // Paths are relative to the repo root.
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { speak, duration } from './voice.mjs';
+import { speak, duration, words } from './voice.mjs';
 
 const tl = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const FPS = 30, W = 1080, H = 1920;
@@ -33,13 +37,32 @@ const lines = tl.voice ?? [];
 for (const [i, v] of lines.entries()) {
   // "voiceContext": each line hears its neighbours (same voice), for a script's natural cadence.
   const near = (j) => (tl.voiceContext && lines[j]?.voice === v.voice ? lines[j].text : undefined);
-  const file = await speak(v.voice, v.text, { settings: v.settings, prev: near(i - 1), next: near(i + 1) });
+  const file = await speak(v.voice, v.text, { settings: v.settings, prev: near(i - 1), next: near(i + 1), timed: v.timed });
   const d = duration(file);
-  voices.push({ ...v, file, d });
+  voices.push({ ...v, file, d, words: v.timed ? words(file) : null });
   console.log(`voice ${v.at.toFixed(1)}s +${d.toFixed(1)}s  ${v.voice}: ${v.text}`);
 }
 for (let i = 0; i + 1 < voices.length; i++) if (voices[i].at + voices[i].d > voices[i + 1].at) console.warn(`! voice line ${i} runs into line ${i + 1}`);
 if (voices.length && voices.at(-1).at + voices.at(-1).d > tl.seconds) console.warn('! the last voice line runs past the end');
+
+// Cards cued to the narration: find each phrase in the timed lines, in order.
+{
+  const norm = (s) => s.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+  const spoken = voices.filter((v) => v.words).flatMap((v) => v.words.map((w) => ({ ...w, s: w.s + v.at, e: w.e + v.at })));
+  let from = 0;
+  const cued = tl.layers.filter((l) => l.cue);
+  for (const l of cued) {
+    const want = norm(l.cue);
+    let hit = -1;
+    for (let i = from; i + want.length <= spoken.length && hit < 0; i++) if (want.every((w, j) => spoken[i + j].w === w)) hit = i;
+    if (hit < 0) throw new Error(`cue not found in the narration: "${l.cue}"`);
+    from = hit + want.length;
+    l.t0 = Math.max(0, spoken[hit].s - (l.lead ?? 0.1));
+    l.cueEnd = spoken[hit + want.length - 1].e;
+  }
+  cued.forEach((l, i) => { if (l.t1 == null) l.t1 = l.hold != null ? l.cueEnd + l.hold : (cued[i + 1] ? cued[i + 1].t0 - 0.05 : tl.seconds); });
+  for (const l of cued) console.log(`cue ${l.t0.toFixed(2)}–${l.t1.toFixed(2)}  "${l.cue}"`);
+}
 
 // 2. The overlay and the score, from scene.html.
 const browser = await chromium.launch();

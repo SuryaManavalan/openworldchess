@@ -121,6 +121,13 @@ Until it exists, assemble with ffmpeg (`drawtext`, `overlay`, `xfade`,
   see `copy.md`) and keep them for the whole series; consistency builds recognition.
   Never clone or imitate a real person. Export 44.1 or 48 kHz, normalized to about
   −16 LUFS, ducking music by 8–10 dB under speech.
+- **Narration flows (the rule since 2026-09-30).** Write the voice as one or two continuous
+  passages of full, flowing sentences, joined by commas and "and"/"then"/"until". Never a
+  string of two- or three-word lines with pauses between them: the voice gives lone short
+  lines a flat or questioning intonation, and the gaps sound like an answering machine. The
+  cards stay short (3–7 words) and ride the speech: give the line `"timed": true` and each
+  text layer a `"cue"` (a phrase from the narration) instead of t0/t1 (render.mjs). Aim for
+  about 2.5 words a second, ending with the name and CTA inside the same passage.
 - **Music:** only (a) tracks from TikTok's **Commercial Music Library** added in the
   app, (b) royalty-free tracks with a license that covers ads, or (c) our own game
   audio (`apps/client/src/audio`). Business accounts can't use the general library.

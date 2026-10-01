@@ -1,0 +1,118 @@
+{
+ "out": "out/day04/day04.mp4",
+ "seconds": 18,
+ "base": {
+  "video": "out/day04/hearth.mp4",
+  "speed": 1.2222
+ },
+ "layers": [
+  {
+   "type": "vignette",
+   "t0": 0,
+   "t1": 18,
+   "strength": 0.45
+  },
+  {
+   "type": "label",
+   "t0": 0,
+   "t1": 12,
+   "text": "Sped up",
+   "y": 250
+  },
+  {
+   "type": "text",
+   "cue": "every empire begins with one house",
+   "lead": 1,
+   "lines": [
+    "EVERY EMPIRE",
+    "BEGINS WITH",
+    "ONE HOUSE."
+   ],
+   "colors": [
+    "#ece6da",
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 400,
+   "size": 118,
+   "anim": "slam",
+   "glow": "rgba(227,178,60,0.3)"
+  },
+  {
+   "type": "text",
+   "cue": "a field to feed it",
+   "lines": [
+    "A field to feed it.",
+    "Pawns to work it."
+   ],
+   "y": 380,
+   "size": 96,
+   "font": "bold",
+   "anim": "fade"
+  },
+  {
+   "type": "text",
+   "cue": "another roof",
+   "lines": [
+    "Another roof.",
+    "And another."
+   ],
+   "y": 380,
+   "size": 110,
+   "font": "bold",
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "cue": "the house has neighbors",
+   "lines": [
+    "Until it has",
+    "a name."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 380,
+   "size": 110,
+   "anim": "fade"
+  },
+  {
+   "type": "text",
+   "cue": "one more house",
+   "lines": [
+    "ONE MORE",
+    "HOUSE."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 380,
+   "size": 150,
+   "anim": "slam",
+   "glow": "rgba(227,178,60,0.35)"
+  },
+  {
+   "type": "endcard",
+   "cue": "open world chess",
+   "sub": "Every empire begins with one house",
+   "url": "openworldchess.com",
+   "dim": 0.55,
+   "y": 560
+  }
+ ],
+ "audio": {
+  "bpm": 84,
+  "musicGain": 0.5,
+  "sfxGain": 0.55
+ },
+ "voice": [
+  {
+   "at": 0.3,
+   "voice": "chronicler",
+   "timed": true,
+   "text": "Every empire begins with one house. Then a field to feed it, and pawns to work it. Then another roof, and another, until the house has neighbors, and the neighbors have a name. One more house. Open World Chess, free in your browser."
+  }
+ ]
+}

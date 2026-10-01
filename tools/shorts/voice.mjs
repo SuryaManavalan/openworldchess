@@ -40,8 +40,21 @@ export async function speak(voice, text, opts = {}) {
   const settings = { ...v.settings, ...(opts.settings ?? {}) };
   const ctx = opts.prev || opts.next ? [opts.prev ?? '', opts.next ?? ''] : null;
   const key = createHash('sha1').update(JSON.stringify(ctx ? [v.id, MODEL, settings, text, ctx] : [v.id, MODEL, settings, text])).digest('hex').slice(0, 16);
-  const file = join(CACHE, `${voice}-${key}.mp3`);
+  const file = join(CACHE, `${voice}-${key}${opts.timed ? '-t' : ''}.mp3`);
   if (existsSync(file)) return file;
+  if (opts.timed) {
+    // The same speech, plus when each character is spoken (for cards that follow the words).
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${v.id}/with-timestamps?output_format=mp3_44100_128`, {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey(), 'content-type': 'application/json' },
+      body: JSON.stringify({ text, model_id: MODEL, voice_settings: settings, ...(ctx ? { previous_text: ctx[0] || undefined, next_text: ctx[1] || undefined } : {}) }),
+    });
+    if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const j = await r.json();
+    writeFileSync(file, Buffer.from(j.audio_base64, 'base64'));
+    writeFileSync(file.replace(/\.mp3$/, '.json'), JSON.stringify(j.alignment));
+    return file;
+  }
   const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${v.id}?output_format=mp3_44100_128`, {
     method: 'POST',
     headers: { 'xi-api-key': apiKey(), 'content-type': 'application/json', accept: 'audio/mpeg' },
@@ -50,6 +63,20 @@ export async function speak(voice, text, opts = {}) {
   if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
   writeFileSync(file, Buffer.from(await r.arrayBuffer()));
   return file;
+}
+
+/** The words of a timed line (speak with `timed`), each with when it starts and ends (seconds). */
+export function words(file) {
+  const a = JSON.parse(readFileSync(file.replace(/\.mp3$/, '.json'), 'utf8'));
+  const out = [];
+  let cur = null;
+  a.characters.forEach((ch, i) => {
+    if (/[\p{L}\p{N}']/u.test(ch)) {
+      if (!cur) { cur = { w: '', s: a.character_start_times_seconds[i], e: 0 }; out.push(cur); }
+      cur.w += ch.toLowerCase(); cur.e = a.character_end_times_seconds[i];
+    } else cur = null;
+  });
+  return out;
 }
 
 /** Length of an audio file in seconds. */
