@@ -60,7 +60,7 @@ export interface Building {
   /** Server: when the next bubble rises. */
   bubbleAt?: number;
   /** Why production is paused, if it is. */
-  blocked?: 'unanchored' | 'no-node' | 'pop-cap' | 'building' | 'paused' | null;
+  blocked?: 'unanchored' | 'no-node' | 'pop-cap' | 'king-cap' | 'building' | 'paused' | null;
   /** The owner paused production here. */
   paused?: boolean;
   palaceMode?: 'alt' | 'K' | 'Q';

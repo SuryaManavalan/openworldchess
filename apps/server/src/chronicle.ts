@@ -5,7 +5,7 @@
 import { Chess } from 'chess.js';
 import { readFileSync } from 'node:fs';
 import {
-  CHAPTERS, FACTIONS, FEATS, KING_OF_NEED_MIN, OPENINGS, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
+  CHAPTERS, FACTIONS, FEATS, KING_OF_NEED_MIN, OPENINGS, PLAYER_KING_CAP, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
   type Ability, type BuildingType, type ChronicleView, type Piece, type PieceKind, type SettlementInfo, type SideQuest, type Step,
 } from '@owc/shared';
 import { biomeAt, RARE_BIOMES, resourcesInRect } from '@owc/worldgen';
@@ -241,6 +241,9 @@ export class Chronicle {
 
   progress(p: PlayerRec, s: Step): [number, number] {
     const st = this.of(p);
+    // Already holding every king your title allows: there's no room to crown one, and nothing
+    // left for this step to teach (it must never trap a player: campaign.md §5.8).
+    if (s.verb === 'crown' && this.game.kingsOf(p.id).length >= Math.min(PLAYER_KING_CAP, this.kingCap(p))) return [s.count, s.count];
     const key = keyOf(s);
     if (key) {
       const have = (st.tallies[key] ?? 0) - (SINCE_STEP(key) ? st.chBase?.[key] ?? 0 : 0);

@@ -427,7 +427,7 @@ function Details() {
   const b = id != null ? mirror.buildings.get(id) : undefined;
   if (!b || b.type === 'ruin') return <p className="muted">Tap one of your buildings to see it here.</p>;
   const spec = BUILDINGS[b.type as BuildingType];
-  const why: Record<string, string> = { unanchored: b.type === 'altar' ? 'No bishop tending it: bring one within 2 squares, or it will fall to ruin' : 'No king (or tended altar) nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': popFull(b.type as BuildingType), building: 'Under construction', paused: 'Paused by you' };
+  const why: Record<string, string> = { unanchored: b.type === 'altar' ? 'No bishop tending it: bring one within 2 squares, or it will fall to ruin' : 'No king (or tended altar) nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': popFull(b.type as BuildingType), 'king-cap': `Your title lets you hold ${TITLES[mirror.self?.chronicle?.title ?? 0]?.kingCap ?? 2} kings, and you have them all: it crowns again when your title rises (or a king falls). Switch it to queens meanwhile.`, building: 'Under construction', paused: 'Paused by you' };
   return (
     <div className="details">
       <h3>{b.type[0].toUpperCase() + b.type.slice(1)}</h3>

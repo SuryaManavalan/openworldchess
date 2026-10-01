@@ -320,6 +320,31 @@ describe('the Chronicle', () => {
     expect(early.some((s) => s.verb === 'win')).toBe(false);
   });
 
+  it('every crown the campaign asks for or gives has room under the title cap (no impossible step)', () => {
+    let title = 0, kings = 2;
+    for (const c of CHAPTERS) {
+      const cap = () => TITLES[title].kingCap;
+      if (c.gift?.coronation) { expect(kings).toBeLessThan(cap()); kings++; }
+      for (const s of c.steps) if (s.verb === 'crown') { expect(kings + s.count, `chapter ${c.n}`).toBeLessThanOrEqual(cap()); kings += s.count; }
+      if (c.reward.title != null) title = c.reward.title;
+      if (c.reward.coronation) { expect(kings, `chapter ${c.n}'s reward crown`).toBeLessThan(cap()); kings++; }
+    }
+  });
+
+  it('a palace set to kings never makes queens: at the cap it waits, and says why', () => {
+    const p = join('Palatine');
+    const st = game.chronicle.of(p);
+    st.title = 0; // Settler: 2 kings, and they have 2
+    const k = game.kingsOf(p.id).find((x) => !x.emperor)!;
+    const b = place(p.id, 'palace', k.x + 3, k.y + 3, 3);
+    game.setPalaceMode(p.id, b.id, 'K');
+    b.prod = 0.999;
+    const queens = () => [...game.world.pieces.values()].filter((q) => q.owner === p.id && q.kind === 'Q').length;
+    for (let i = 0; i < 20; i++) tick(60_000);
+    expect(queens()).toBe(0);
+    expect(['king-cap', 'no-node', 'unanchored']).toContain(b.blocked);
+  });
+
   it("a player's king cap follows their title", () => {
     const p = join('Capped');
     const st = game.chronicle.of(p);

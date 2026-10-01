@@ -1091,7 +1091,8 @@ export class Game {
     if (chosen.some((n) => !n)) { b.blocked = 'no-node'; b.drawsFrom = []; return; }
     // Room for this kind of piece (safeguards.md §1). A full room never blocks what the
     // Chronicle is asking for (campaign.md §12), up to the number it still needs.
-    let kind: PieceKind = b.type === 'palace' ? (b.palaceNext ?? 'K') : spec.produces[0];
+    // A palace set to kings (or queens) always makes that; only 'alt' takes turns (palaceNext).
+    let kind: PieceKind = b.type === 'palace' ? (b.palaceMode === 'K' || b.palaceMode === 'Q' ? b.palaceMode : b.palaceNext ?? 'K') : spec.produces[0];
     if (pop.count >= PLAYER_PIECE_CAP) { b.blocked = 'pop-cap'; return; }
     if (kind !== 'K' && pop.by[kind] >= pop.caps[kind]) {
       const pl = this.players.get(b.owner!);
@@ -1106,13 +1107,14 @@ export class Game {
     // Each extra king takes longer to crown, and there's a hard cap (safeguards.md §2).
     let slow = 1;
     const pl = this.players.get(b.owner!);
-    if (b.type === 'palace' && (b.palaceNext ?? 'K') === 'K') {
+    if (b.type === 'palace' && kind === 'K') {
       const kings = this.kingsOf(b.owner!).length;
       // The title sets how many kings you may hold (campaign.md §4.1).
       const cap = pl && !pl.wild ? Math.min(PLAYER_KING_CAP, this.chronicle.kingCap(pl)) : PLAYER_KING_CAP;
       if (kings >= cap) {
+        // Kings only: wait for room (a higher title, or a king lost), and say why.
+        if (b.palaceMode === 'K') { b.blocked = 'king-cap'; return; }
         b.palaceNext = 'Q';
-        if (b.palaceMode === 'K') { b.blocked = 'pop-cap'; return; }
         // At the king limit the palace makes a queen instead, if there's room for one.
         kind = 'Q';
         if (pop.by.Q >= pop.caps.Q) { b.blocked = 'pop-cap'; return; }
