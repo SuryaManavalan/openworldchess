@@ -1,0 +1,39 @@
+{
+ "base": "http://localhost:23390",
+ "center": [
+  513,
+  -1190
+ ],
+ "time": "noon",
+ "headless": false,
+ "out": "out/day05a/e.mp4",
+ "seconds": 18.0,
+ "ease": "inOut",
+ "path": [
+  {
+   "t": 0,
+   "zoom": 0.44,
+   "dx": 0,
+   "dy": 0
+  },
+  {
+   "t": 4.2,
+   "zoom": 0.34,
+   "dx": 0,
+   "dy": 1
+  },
+  {
+   "t": 10.6,
+   "zoom": 0.22,
+   "dx": 0,
+   "dy": 0
+  },
+  {
+   "t": 18,
+   "zoom": 0.12,
+   "dx": 0,
+   "dy": 0
+  }
+ ],
+ "nolabels": true
+}

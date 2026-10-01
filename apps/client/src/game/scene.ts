@@ -55,6 +55,9 @@ class BuildingView {
   constructor() { this.sprite.anchor.set(0.5, 0.88); }
 }
 
+/** ?nolabels: no town names on the map (filming, tools/shorts). */
+const NO_LABELS = typeof location !== 'undefined' && new URLSearchParams(location.search).has('nolabels');
+
 export class Scene {
   app = new Application();
   world = new Container();
@@ -879,6 +882,7 @@ export class Scene {
     // Name labels: readable when zoomed out, where they matter most.
     const seen = new Set<number>();
     for (const st of this.settlements) {
+      if (NO_LABELS) continue;
       seen.add(st.id);
       let t = this.townLabels.get(st.id);
       const text = `${st.name} · ${TIER_NAME[st.tier]}`;

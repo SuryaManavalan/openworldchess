@@ -51,7 +51,11 @@ if (voices.length && voices.at(-1).at + voices.at(-1).d > tl.seconds) console.wa
   const spoken = voices.filter((v) => v.words).flatMap((v) => v.words.map((w) => ({ ...w, s: w.s + v.at, e: w.e + v.at })));
   let from = 0;
   const cued = tl.layers.filter((l) => l.cue);
+  const prev = new Map();
   for (const l of cued) {
+    // Several cards on the same words (a title and its subtitle) share one match.
+    const same = prev.get(l.cue);
+    if (same) { l.t0 = same.t0; l.cueEnd = same.cueEnd; continue; }
     const want = norm(l.cue);
     let hit = -1;
     for (let i = from; i + want.length <= spoken.length && hit < 0; i++) if (want.every((w, j) => spoken[i + j].w === w)) hit = i;
@@ -59,6 +63,7 @@ if (voices.length && voices.at(-1).at + voices.at(-1).d > tl.seconds) console.wa
     from = hit + want.length;
     l.t0 = Math.max(0, spoken[hit].s - (l.lead ?? 0.1));
     l.cueEnd = spoken[hit + want.length - 1].e;
+    prev.set(l.cue, l);
   }
   cued.forEach((l, i) => { if (l.t1 == null) l.t1 = l.hold != null ? l.cueEnd + l.hold : (cued[i + 1] ? cued[i + 1].t0 - 0.05 : tl.seconds); });
   for (const l of cued) console.log(`cue ${l.t0.toFixed(2)}–${l.t1.toFixed(2)}  "${l.cue}"`);

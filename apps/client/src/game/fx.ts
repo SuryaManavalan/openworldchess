@@ -21,6 +21,7 @@ interface Floater { t: Text; x: number; y: number; t0: number; dur: number; rise
 
 /** Day length: 40 real minutes, the same for everyone (visuals.md §4). */
 import { DAY_MS } from '@owc/shared';
+const FILM_TIME = (() => { try { const t = new URLSearchParams(location.search).get('time'); return t === 'noon' ? 0.25 : t === 'dusk' ? 0.52 : t === 'night' ? 0.72 : t ? Number(t) : null; } catch { return null; } })();
 
 export class Fx {
   layer = new Container();
@@ -298,7 +299,9 @@ export class Fx {
   /** Cosmetic day/night: color grading and warm windows at night. */
   private updateNight(now: number) {
     const sc = this.scene, m = sc.mirror;
-    const phase = ((m.serverNow() % DAY_MS) + DAY_MS) % DAY_MS / DAY_MS;
+    // ?time=noon|dusk|night pins the hour (filming, tools/shorts).
+    const pin = FILM_TIME;
+    const phase = pin ?? ((m.serverNow() % DAY_MS) + DAY_MS) % DAY_MS / DAY_MS;
     const sun = Math.sin(phase * Math.PI * 2);
     // The sun crossing the horizon: bells at dawn, a softer one at dusk.
     if (this.prevSun != null && this.prevSun < 0 && sun >= 0) this.dawn(false);

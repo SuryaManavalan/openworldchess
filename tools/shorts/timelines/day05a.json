@@ -1,0 +1,199 @@
+{
+ "out": "out/day05a/day05a.mp4",
+ "seconds": 44.4,
+ "base": {
+  "video": "out/day05a/base.mp4"
+ },
+ "layers": [
+  {
+   "type": "vignette",
+   "t0": 0,
+   "t1": 44.4,
+   "strength": 0.45
+  },
+  {
+   "type": "text",
+   "cue": "every city in open world chess",
+   "lead": 0.4,
+   "hold": 0.6,
+   "lines": [
+    "Every city",
+    "is drawn by hand."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 360,
+   "size": 104,
+   "anim": "fade"
+  },
+  {
+   "type": "text",
+   "cue": "blossomford",
+   "hold": 4.6,
+   "lines": [
+    "BLOSSOMFORD"
+   ],
+   "y": 300,
+   "size": 118,
+   "anim": "slam",
+   "color": "#ece6da",
+   "glow": "rgba(227,178,60,0.35)"
+  },
+  {
+   "type": "text",
+   "cue": "blossomford",
+   "hold": 4.6,
+   "lines": [
+    "a river town · blossom groves"
+   ],
+   "y": 405,
+   "size": 46,
+   "font": "bold",
+   "color": "#e3b23c",
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "sunwall",
+   "hold": 4.6,
+   "lines": [
+    "SUNWALL"
+   ],
+   "y": 300,
+   "size": 118,
+   "anim": "slam",
+   "color": "#ece6da",
+   "glow": "rgba(227,178,60,0.35)"
+  },
+  {
+   "type": "text",
+   "cue": "sunwall",
+   "hold": 4.6,
+   "lines": [
+    "a desert citadel"
+   ],
+   "y": 405,
+   "size": 46,
+   "font": "bold",
+   "color": "#e3b23c",
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "pinehold",
+   "hold": 4.6,
+   "lines": [
+    "PINEHOLD"
+   ],
+   "y": 300,
+   "size": 118,
+   "anim": "slam",
+   "color": "#ece6da",
+   "glow": "rgba(227,178,60,0.35)"
+  },
+  {
+   "type": "text",
+   "cue": "pinehold",
+   "hold": 4.6,
+   "lines": [
+    "a ring village · birch woods"
+   ],
+   "y": 405,
+   "size": 46,
+   "font": "bold",
+   "color": "#e3b23c",
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "stillwater",
+   "hold": 4.6,
+   "lines": [
+    "STILLWATER"
+   ],
+   "y": 300,
+   "size": 118,
+   "anim": "slam",
+   "color": "#ece6da",
+   "glow": "rgba(227,178,60,0.35)"
+  },
+  {
+   "type": "text",
+   "cue": "stillwater",
+   "hold": 4.6,
+   "lines": [
+    "a lakeside harbour · at dusk"
+   ],
+   "y": 405,
+   "size": 46,
+   "font": "bold",
+   "color": "#e3b23c",
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "and emberfort",
+   "hold": 3.6,
+   "lines": [
+    "EMBERFORT"
+   ],
+   "y": 300,
+   "size": 118,
+   "anim": "slam",
+   "color": "#ece6da",
+   "glow": "rgba(227,178,60,0.35)"
+  },
+  {
+   "type": "text",
+   "cue": "and emberfort",
+   "hold": 3.6,
+   "lines": [
+    "a fortress in the strange lands"
+   ],
+   "y": 405,
+   "size": 46,
+   "font": "bold",
+   "color": "#e3b23c",
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "streets and squares",
+   "hold": 0.3,
+   "lines": [
+    "Every piece fits."
+   ],
+   "y": 360,
+   "size": 104,
+   "anim": "pop"
+  },
+  {
+   "type": "endcard",
+   "cue": "open world chess the city builder",
+   "sub": "The City Builder Update · out now",
+   "url": "openworldchess.com",
+   "dim": 0.6,
+   "y": 560
+  }
+ ],
+ "audio": {
+  "bpm": 80,
+  "musicGain": 0.55,
+  "sfxGain": 0.4
+ },
+ "voice": [
+  {
+   "at": 0.5,
+   "voice": "chronicler",
+   "timed": true,
+   "text": "Every city in Open World Chess is drawn by the hand that rules it. Blossomford, where a wide bridge carries the avenue over the river and into a garden square. Sunwall, a citadel in the desert, four gates on four roads, and a well at its heart. Pinehold, a ring of homes around a village green, its fields fenced against the forest. Stillwater, where the piers reach out across the lake, and the lamps come on at dusk. And Emberfort, a keep within a keep, walled against the strange lands. Streets and squares, bridges and walls, gardens and fields, and every piece fits every other. Open World Chess, the City Builder update. Build something beautiful."
+  }
+ ]
+}

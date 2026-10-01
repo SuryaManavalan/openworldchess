@@ -1,0 +1,27 @@
+{
+ "base": "http://localhost:23390",
+ "center": [
+  28,
+  -160
+ ],
+ "time": "noon",
+ "headless": false,
+ "out": "out/day05a/b.mp4",
+ "seconds": 6.0,
+ "ease": "inOut",
+ "path": [
+  {
+   "t": 0,
+   "zoom": 0.3,
+   "dx": 0,
+   "dy": 2
+  },
+  {
+   "t": 6.0,
+   "zoom": 0.4,
+   "dx": 0,
+   "dy": -1
+  }
+ ],
+ "nolabels": true
+}

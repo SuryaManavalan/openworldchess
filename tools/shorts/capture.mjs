@@ -84,7 +84,7 @@ if (spec.as) {
   await page.waitForFunction(() => window.__owc?.scene && window.__owc.mirror.self, null, { timeout: 30_000 });
 } else {
   // ?watch: look at the world without an empire (no guest, no rate limit); ?cinema: no interface.
-  await page.goto(`${spec.base.replace(/\/$/, '')}/?cinema&watch`);
+  await page.goto(`${spec.base.replace(/\/$/, '')}/?cinema&watch${spec.time ? `&time=${spec.time}` : ''}${spec.nolabels ? '&nolabels' : ''}`);
   await page.waitForFunction(() => window.__owc?.scene && window.__owc.mirror.me === 'watcher', null, { timeout: 30_000 });
 }
 if (spec.css) await page.addStyleTag({ content: spec.css });

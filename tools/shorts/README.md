@@ -90,6 +90,11 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-10-01: `towns.ts` builds a world of hand-designed cities (sites found by biome, water or dryness;
+  layouts in code). Shots take `time` (noon, dusk or night: pins the client's day, `?time=`) and
+  `nolabels` (no town names drawn: `?nolabels`). Cards that share a cue (a title and its subtitle)
+  share one match. First used for Day 5a.
+
 - 2026-10-01: **drawing on camera.**
   - `stroke` events grow a stroke frame by frame through the real input, under a fingertip
     dot, and commit it ("to": "bridge" crosses the scenario's river); `tap` events tap the map.
