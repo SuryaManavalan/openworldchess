@@ -171,10 +171,11 @@ export class Net {
       case 'build': reply(msg.rid, g.build(p.id, msg.building, msg.at)); break;
       case 'building.move': reply(msg.rid, g.city.move(p.id, msg.buildingId, msg.at)); break;
       case 'building.demolish': reply(msg.rid, g.city.demolish(p.id, msg.buildingId)); break;
-      case 'decor.place': { const r = g.city.placeDecor(p.id, msg.type, msg.cells); reply(msg.rid, r.placed ? null : r.err); if (r.placed && r.err) this.send(s, { t: 'err', msg: r.err }); break; }
+      case 'decor.place': { g.city.begin(p.id, msg.sid); const r = g.city.placeDecor(p.id, msg.type, msg.cells); g.city.end(p.id); reply(msg.rid, r.placed ? null : r.err); if (r.placed && r.err) this.send(s, { t: 'err', msg: r.err }); break; }
+      case 'city.undo': reply(msg.rid, g.city.undo(p.id)); break;
       case 'decor.erase': g.city.erase(p.id, msg.cells); reply(msg.rid, null); break;
-      case 'paint.paving': { const r = g.city.paintPaving(p.id, msg.cells, msg.erase ? null : msg.style ?? 1); reply(msg.rid, r.err); break; }
-      case 'plant': { const r = g.city.plant(p.id, msg.kind, msg.cells); reply(msg.rid, r.placed ? null : r.err); break; }
+      case 'paint.paving': { g.city.begin(p.id, msg.sid); const r = g.city.paintPaving(p.id, msg.cells, msg.erase ? null : msg.style ?? 1); g.city.end(p.id); reply(msg.rid, r.err); break; }
+      case 'plant': { g.city.begin(p.id, msg.sid); const r = g.city.plant(p.id, msg.kind, msg.cells); g.city.end(p.id); reply(msg.rid, r.placed ? null : r.err); break; }
       case 'building.pause': g.setPaused(p.id, msg.buildingId, msg.paused); break;
       case 'bubble.pop': g.popBubble(p.id, msg.buildingId, msg.i); break;
       case 'palace.mode': g.setPalaceMode(p.id, msg.buildingId, msg.mode); break;

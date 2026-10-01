@@ -3,7 +3,7 @@
 // sheet on phones and leaves one slim bar at the bottom (ToolBar); the map is the canvas.
 import type { ReactNode } from 'react';
 import { BUILDINGS, DECOR_BASE, DECOR_CAP, DECOR_PER_BUILDING, PLANT_FIELD_COST, isDecor, type DecorType } from '@owc/shared';
-import { mirror } from '../net.ts';
+import { commands, mirror } from '../net.ts';
 import { useUI, type CityTool } from '../store.ts';
 import { decorUrl, nodeUrl } from '../game/textures.ts';
 import { previewUrl } from '../game/cityart.ts';
@@ -139,6 +139,7 @@ export function ToolBar() {
             {[1, 2, 3].map((w) => <button key={w} className={ui.toolWidth === w ? 'on' : ''} onClick={() => ui.set({ toolWidth: w })}>{w === 1 ? 'Narrow' : w === 2 ? 'Wide' : 'Square'}</button>)}
           </div>
         )}
+        <button className="btn ghost tool-undo" title={phone ? 'Undo your last stroke' : 'Undo your last stroke (Ctrl+Z)'} onClick={() => void commands.undoCity().then((e) => e && ui.toast(e, 'info'))}><Icon name="undo" size={15} /> Undo</button>
         <button className={`btn ghost tool-erase ${ui.toolErase ? 'on' : ''}`} title="Erase (X)" onClick={() => ui.set({ toolErase: !ui.toolErase, stroke: null })}><Icon name="close" size={15} stroke={2.6} /> Erase</button>
       </div>
       <span className="hint-text">{phone ? 'One finger draws · two fingers move the map' : 'Drag to draw · right-drag pans · X erases · Esc when done'}</span>

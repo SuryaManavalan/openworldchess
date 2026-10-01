@@ -79,6 +79,8 @@ export class Scene {
   /** Settlements (visuals.md §10), their settled ground, decorations and name labels. */
   settlements: Settlement[] = [];
   groundMap = new Map<number, number>();
+  /** Squares of a city's heart (the chessboard plaza). */
+  heart = new Set<number>();
   decor: Decor[] = [];
   private decorSprites = new Map<string, Sprite>();
   private townLabels = new Map<number, Text>();
@@ -247,6 +249,7 @@ export class Scene {
       codes: v.codes,
       biomes: v.biomes,
       ground: (x, y) => this.groundMap.get(key(x, y)) ?? 0,
+      heart: (x, y) => this.heart.has(key(x, y)),
       traffic: (x, y) => m.traffic.get(key(x, y)) ?? 0,
     }, v.canvas);
     // Pixi caches one texture per canvas: re-upload the pixels, don't make a new one.
@@ -782,12 +785,16 @@ export class Scene {
     this.settlements = computeSettlements(m);
     const next = new Map<number, number>();
     for (const st of this.settlements) for (const [k, t] of st.ground) next.set(k, Math.max(next.get(k) ?? 0, t));
-    // A city's heart (citybuilding.md §9): the framed chessboard plaza, only near its centre.
-    for (const st of this.settlements) if (st.tier >= 4) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const hk = key(st.cx + dx, st.cy + dy); if (st.ground.has(hk)) next.set(hk, 5); }
     const touched = new Set<string>();
     const mark = (k: number) => { const x = Math.round(k / 134217728), y = k - x * 134217728; touched.add(chunkKey(Math.floor(x / CHUNK), Math.floor(y / CHUNK))); };
     for (const [k, t] of next) if (this.groundMap.get(k) !== t) mark(k);
     for (const k of this.groundMap.keys()) if (!next.has(k)) mark(k);
+    // A city's heart (citybuilding.md §9): the framed chessboard plaza, only near its centre.
+    const heart = new Set<number>();
+    for (const st of this.settlements) if (st.tier >= 4) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const hk = key(st.cx + dx, st.cy + dy); if (st.ground.has(hk)) heart.add(hk); }
+    for (const k of heart) if (!this.heart.has(k)) mark(k);
+    for (const k of this.heart) if (!heart.has(k)) mark(k);
+    this.heart = heart;
     this.groundMap = next;
     for (const ck of touched) { const v = this.chunkViews.get(ck); if (v) v.dirty = true; }
     const traffic = (x: number, y: number) => m.traffic.get(key(x, y)) ?? 0;

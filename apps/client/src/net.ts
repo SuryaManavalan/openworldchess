@@ -89,10 +89,11 @@ export const commands = {
   },
   muster(kingId: number) { return conn.request({ t: 'muster', kingId }); },
   // City building (citybuilding.md).
-  placeDecor(type: DecorType, cells: [number, number][]) { return conn.request({ t: 'decor.place', type, cells }); },
+  placeDecor(type: DecorType, cells: [number, number][], sid?: number) { return conn.request({ t: 'decor.place', type, cells, sid }); },
   eraseDecor(cells: [number, number][]) { return conn.request({ t: 'decor.erase', cells }); },
-  paintPaving(cells: [number, number][], style: number | null) { return conn.request(style == null ? { t: 'paint.paving', cells, erase: true } : { t: 'paint.paving', cells, style }); },
-  plant(kind: 'wheat' | 'tree', cells: [number, number][]) { return conn.request({ t: 'plant', kind, cells }); },
+  paintPaving(cells: [number, number][], style: number | null, sid?: number) { return conn.request(style == null ? { t: 'paint.paving', cells, erase: true, sid } : { t: 'paint.paving', cells, style, sid }); },
+  plant(kind: 'wheat' | 'tree', cells: [number, number][], sid?: number) { return conn.request({ t: 'plant', kind, cells, sid }); },
+  undoCity() { return conn.request({ t: 'city.undo' }); },
   moveBuilding(buildingId: number, at: [number, number]) { return conn.request({ t: 'building.move', buildingId, at }); },
   demolish(buildingId: number) { return conn.request({ t: 'building.demolish', buildingId }); },
   // Troops (movement.md §10).

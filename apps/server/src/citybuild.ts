@@ -5,11 +5,13 @@
 // demolishing leaves salvage piles (hoards); planting grows ordinary nodes.
 import {
   BUILDING_MAX_HP, BUILDINGS, BUILD_SPACING, DECOR_BASE, DECOR_CAP, DECOR_CLEAR_R, DECOR_PER_BUILDING, PLANT_FIELD_COST, PLANT_FIELD_MS, PLANT_TREE_MS,
-  REACH, TROOP_CITY_R, cheb, distToRect, isDecor, key,
+  PAVED, REACH, TROOP_CITY_R, cheb, distToRect, isDecor, key,
   type Building, type BuildingType, type DecorType, type NodeKind,
 } from '@owc/shared';
 import type { Game } from './game.ts';
 
+/** Decorations draw on piles this far away (anywhere in a town). */
+const PILE_REACH = 24;
 /** Paving styles a player can lay (1 cobble, 2 flagstone, 3 earth); knights' roads are 0. */
 export const PAVING_STYLES = [1, 2, 3];
 /** Line decorations a street turns into a gate where it crosses. */
@@ -19,9 +21,58 @@ const PLANT_CAPACITY = { wheat: 60, tree: 100 } as const;
 
 const NAME: Record<string, string> = { tree: 'wood', rock: 'stone', wheat: 'crops', ore: 'ore' };
 
+/** One undoable stroke: what it built, the paving it changed, and what it drew from (citybuilding.md §8). */
+interface Act { sid: number; buildings: number[]; planted: number[]; paving: [number, number, number][]; draws: [number, number][] }
+const UNDO_DEPTH = 20;
+
 export class CityBuild {
   private game: Game;
   constructor(game: Game) { this.game = game; }
+  /** Each player's recent strokes, newest last. */
+  private history = new Map<string, Act[]>();
+  /** The stroke being recorded (set around each request). */
+  private act: Act | null = null;
+
+  /** Record what a request does under stroke `sid` (requests of one stroke merge). */
+  begin(owner: string, sid?: number) {
+    const h = this.history.get(owner) ?? [];
+    const last = h.at(-1);
+    if (sid != null && last?.sid === sid) { this.act = last; return; }
+    this.act = { sid: sid ?? -Math.random(), buildings: [], planted: [], paving: [], draws: [] };
+    h.push(this.act);
+    if (h.length > UNDO_DEPTH) h.shift();
+    this.history.set(owner, h);
+  }
+  end(owner: string) {
+    const h = this.history.get(owner);
+    const a = this.act;
+    this.act = null;
+    if (h && a && !a.buildings.length && !a.planted.length && !a.paving.length && !a.draws.length && h.at(-1) === a) h.pop();
+  }
+
+  /** Undo the player's last stroke: remove what it built, restore the paving, give back what it cost. */
+  undo(owner: string): string | null {
+    const w = this.w, h = this.history.get(owner);
+    const a = h?.pop();
+    if (!a) return 'Nothing to undo';
+    for (const id of a.buildings) { const b = w.buildings.get(id); if (b && b.owner === owner) w.removeBuilding(id); }
+    for (const k of a.planted) { const n = w.nodeOverlay.get(k); if (n?.planted && !n.gone) { n.gone = true; w.dirtyNodes.add(k); w.dirtyWalk(n.x, n.y); } }
+    for (const [x, y, prev] of a.paving.reverse()) {
+      const k = key(x, y);
+      if (prev) w.traffic.set(k, prev); else w.traffic.delete(k);
+      w.pavedNow.push(x, y, prev >= PAVED ? prev : 0);
+      const bid = w.buildingIdAt(x, y), b = bid != null ? w.buildings.get(bid) : undefined;
+      if (b?.gate && prev < PAVED) { b.gate = undefined; w.dirtyBuildings.add(b.id); w.dirtyWalk(x, y); }
+    }
+    for (const [k, amt] of a.draws) {
+      const n = w.nodeOverlay.get(k);
+      if (!n) continue;
+      n.remaining = Math.min(n.capacity, n.remaining + amt);
+      if (n.remaining > 0) { n.gone = false; n.regrowAt = undefined; n.dig = undefined; }
+      w.dirtyNodes.add(k); w.dirtyWalk(n.x, n.y);
+    }
+    return null;
+  }
   private get w() { return this.game.world; }
 
   /** A real building (not a decoration, ruin or camp) of the owner's. */
@@ -61,14 +112,20 @@ export class CityBuild {
   /** Take a cost from nodes near (x, y), nearest first; an error if there isn't enough. */
   private pay(cost: Partial<Record<NodeKind, number>>, x: number, y: number, size = 1): string | null {
     const w = this.w;
-    const pool = w.nodesNear(x, y, size, REACH).sort((a, b) => distToRect(a.x, a.y, x, y, size) - distToRect(b.x, b.y, x, y, size));
+    // Anything within reach, and piles (hauled stone, salvage, hoards) anywhere in town: one
+    // pile in the middle can build a wall all the way around (citybuilding.md §6).
+    const near = w.nodesNear(x, y, size, REACH);
+    const piles = w.nodesNear(x, y, size, PILE_REACH).filter((n) => n.hoard && distToRect(n.x, n.y, x, y, size) > REACH);
+    const pool = [...near, ...piles].sort((a, b) => distToRect(a.x, a.y, x, y, size) - distToRect(b.x, b.y, x, y, size));
     for (const [kind, amt] of Object.entries(cost) as [NodeKind, number][]) {
       const have = pool.filter((n) => n.kind === kind).reduce((s, n) => s + n.remaining, 0);
-      if (have < amt) return `Needs ${amt} ${NAME[kind]} within ${REACH} squares`;
+      if (have < amt) return kind === 'rock'
+        ? `Needs ${amt} stone nearby: have your war elephants haul some into town (a pile anywhere in town will do)`
+        : `Needs ${amt} ${NAME[kind]} nearby (or a pile of it anywhere in town)`;
     }
     for (const [kind, amt] of Object.entries(cost) as [NodeKind, number][]) {
       let need = amt;
-      for (const n of pool) if (need > 0 && n.kind === kind) need -= w.drawNode(n, need, this.game.now);
+      for (const n of pool) if (need > 0 && n.kind === kind) { const got = w.drawNode(n, need, this.game.now); need -= got; if (got) this.act?.draws.push([key(n.x, n.y), got]); }
     }
     return null;
   }
@@ -118,7 +175,9 @@ export class CityBuild {
       if (err) return { placed, err };
       // Drawn across a street, a wall (fence, hedge) is a gate there.
       const gate = GATEABLE.includes(type) && this.w.paved(x, y) ? true : undefined;
-      this.w.addBuilding({ id: this.w.id(), owner, type, x, y, size: spec.size, hp: BUILDING_MAX_HP, built: 0, prod: 0, blocked: 'building', gate });
+      const nb = { id: this.w.id(), owner, type, x, y, size: spec.size, hp: BUILDING_MAX_HP, built: 0, prod: 0, blocked: 'building' as const, gate };
+      this.w.addBuilding(nb);
+      this.act?.buildings.push(nb.id);
       pending.add(key(x, y));
       placed++; have++;
     }
@@ -151,7 +210,8 @@ export class CityBuild {
       const bid = w.buildingIdAt(x, y), b = bid != null ? w.buildings.get(bid) : undefined;
       if (b && !(b.owner === owner && GATEABLE.includes(b.type))) { if (style != null) continue; }
       if (style != null && !w.buildable(x, y)) continue;
-      if (w.setPaving(x, y, style)) done++;
+      const prev = w.traffic.get(key(x, y)) ?? 0;
+      if (w.setPaving(x, y, style)) { done++; this.act?.paving.push([x, y, prev]); }
       // A street through a wall is a gate (walkable); without the street it's a wall again.
       if (b && GATEABLE.includes(b.type) && b.owner === owner) {
         const gate = style != null || undefined;
@@ -174,6 +234,7 @@ export class CityBuild {
       if (n && !n.gone && (n.remaining > 0 || n.regrowAt)) continue;
       if (kind === 'wheat') { const e = this.pay({ tree: PLANT_FIELD_COST }, x, y); if (e) return { placed, err: e }; }
       w.addPlanted(x, y, kind, PLANT_CAPACITY[kind], this.game.now + (kind === 'tree' ? PLANT_TREE_MS : 0));
+      this.act?.planted.push(key(x, y));
       if (kind === 'wheat') { const rec = w.nodeAt(x, y)!; rec.acc = 0; rec.growMs = PLANT_FIELD_MS; }
       placed++; have++;
     }

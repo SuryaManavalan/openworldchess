@@ -9,6 +9,7 @@ const P: Record<string, string> = {
   help: 'M9.2 9a3 3 0 1 1 4.3 2.7c-.9.4-1.5 1.2-1.5 2.1v.7M12 18h.01',
   flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
   troop: 'M4 21V5M4 5h7l-1.5 3L11 11H4M13 21V9M13 9h7l-1.5 3L20 15h-7',
+  undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
   move: 'M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3',
   close: 'M6 6l12 12M18 6L6 18',
   check: 'M5 12.5l4.5 4.5L19 7.5',

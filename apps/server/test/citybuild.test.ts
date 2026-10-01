@@ -48,6 +48,20 @@ describe('city building', () => {
     for (const [x, y] of row) expect(w.walkable(x, y)).toBe(false);
   });
 
+  it('undo takes back the last stroke and refunds exactly what it cost', () => {
+    const row = emptyRow(k.x - 1, k.y - 4, 3);
+    const stone = () => [...w.nodesNear(k.x, k.y, 1, 30)].filter((n) => n.kind === 'rock').reduce((s, n) => s + n.remaining, 0);
+    const before = stone();
+    game.city.begin(p.id, 42);
+    expect(game.city.placeDecor(p.id, 'wall', row).placed).toBe(3);
+    game.city.end(p.id);
+    expect(before - stone()).toBe(3 * BUILDINGS.wall.cost.rock!);
+    expect(game.city.undo(p.id)).toBeNull();
+    for (const [x, y] of row) expect(w.buildingIdAt(x, y)).toBeUndefined();
+    expect(stone()).toBe(before);
+    expect(game.city.undo(p.id)).toMatch(/Nothing to undo/);
+  });
+
   it("decorations don't raise a town's tier or count toward the building caps", () => {
     const tierBefore = game.chronicle.settlementsOf(p.id).find((s) => s.buildings.some((b) => b.id === h.id))!.tier;
     game.city.placeDecor(p.id, 'lamp', emptyRow(k.x - 2, k.y - 2, 1));
@@ -128,6 +142,15 @@ describe('city building', () => {
     expect(near() - before).toBe(130);
     // Rock only, and in reach of a king.
     expect(game.works.haul(p.id, ele.map((e) => e.id), [k.x + 300, k.y], drop)).toMatch(/rock or ore/);
+  });
+
+  it("pawns on supply runs keep moving (they aren't mistaken for elephants on a haul), and a clump spreads out", () => {
+    const at = w.nearestFree(h.x, h.y + 2, 4)!;
+    const pawns = Array.from({ length: 6 }, () => { const a = w.nearestFree(at[0], at[1], 4)!; const q = { id: w.id(), owner: p.id, kind: 'P' as const, x: a[0], y: a[1], facing: 2 as const, state: 'idle' as const, routine: 'haul:wheat' }; game.addPiece(q); return q; });
+    const start = pawns.map((q) => [q.x, q.y].join());
+    turn(60);
+    const moved = pawns.filter((q, i) => [q.x, q.y].join() !== start[i]).length;
+    expect(moved).toBeGreaterThanOrEqual(4);
   });
 
   it('the decor budget grows with real buildings; decorations far from any building are swept away', () => {

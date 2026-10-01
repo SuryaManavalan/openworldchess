@@ -17,6 +17,8 @@ interface Life {
   home: [number, number];
   step: number;
   since: number;
+  /** Turns in a row it couldn't move. */
+  blocked: number;
   /** The turn it may act next (each kind has its own pace, PERIOD). */
   due?: number;
   /** No trade run before this turn (its last market was out of reach). */
@@ -54,14 +56,16 @@ export class Routines {
     let i = 0;
     for (; i < n && this.moves > 0; i++) {
       const p = all[(this.cursor + i) % n];
-      if (p.state !== 'idle' || p.groupId || !p.owner || p.wild || p.routine === 'pave' || p.routine === 'clear' || p.routine === 'tend' || p.routine?.startsWith('haul')) { this.lives.delete(p.id); continue; }
+      // Pieces on a work order (paving, clearing, an elephant's haul) or tending an altar are busy.
+      // (A pawn's own supply runs are routines here too, 'haul' and 'haul:<kind>': not work orders.)
+      if (p.state !== 'idle' || p.groupId || !p.owner || p.wild || p.routine === 'tend' || g.works.busy(p.id)) { this.lives.delete(p.id); continue; }
       // Idle life is for watching: nobody looking, nothing to animate (performance.md §5).
       // Except merchants: trade is part of the game (campaign.md §4.4), so caravans keep going.
       const watched = g.watched(p.x, p.y);
       const merchant = p.kind === 'P' && hash01(w.seed, p.id, 3, 75) < MERCHANT_SHARE;
       if (!watched && !merchant) continue;
       let life = this.lives.get(p.id);
-      if (!life) { life = { home: [p.x, p.y], step: 0, since: turn, due: turn + ((p.id * 7) % PERIOD[p.kind]) }; this.lives.set(p.id, life); }
+      if (!life) { life = { home: this.roomy(p, p.x, p.y), blocked: 0, step: 0, since: turn, due: turn + ((p.id * 7) % PERIOD[p.kind]) }; this.lives.set(p.id, life); }
       // Each piece keeps its own pace. (A pace from the turn number alone let the round-robin
       // reach the same pieces on their off-turns every time, and they never moved.)
       if (turn < (life.due ?? 0)) continue;
@@ -138,13 +142,35 @@ export class Routines {
       this.moves--;
       const m = bestGaitMove(p, tx, ty, ok, haul ? 90 : 60, haul ? 10 : 7);
       if (p.routine !== routine) { p.routine = routine; w.touch(p); }
-      if (!m) continue;
+      // Hemmed in for a while (a clump of pawns at a door): find a roomier home and go there.
+      if (!m) { if (++life.blocked >= 4) { life.blocked = 0; life.home = this.roomy(p, hx, hy, true); } continue; }
+      life.blocked = 0;
       const fx = p.x, fy = p.y;
       p.facing = m.facing;
       if (!m.turn) w.movePiece(p, m.x, m.y); else w.touch(p);
       record(p, fx, fy);
     }
     this.cursor = n ? (this.cursor + i) % n : 0;
+  }
+
+  /**
+   * A home square with room around it: here, unless 3+ pieces crowd the squares around it (or
+   * `move` is set); then the free square within 7 that has the fewest pieces around it, still
+   * in a king's reach. Spreads clumps of pawns across their town.
+   */
+  private roomy(p: Piece, x: number, y: number, move = false): [number, number] {
+    const g = this.game, w = g.world;
+    const crowd = (cx: number, cy: number) => { let n = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const id = w.pieceIdAt(cx + dx, cy + dy); if (id != null && id !== p.id) n++; } return n; };
+    if (!move && crowd(x, y) < 3) return [x, y];
+    let best: [number, number] = [x, y], bn = crowd(x, y) + (move ? 1 : 0);
+    for (let i = 0; i < 24; i++) {
+      const a = hash01(w.seed, p.id, g.turn + i, 78) * Math.PI * 2, r = 2 + hash01(w.seed, p.id, g.turn + i, 79) * 5;
+      const cx = Math.round(x + Math.cos(a) * r), cy = Math.round(y + Math.sin(a) * r);
+      if (!w.free(cx, cy, p.id) || !p.owner || !g.inReach(p.owner, cx, cy)) continue;
+      const n = crowd(cx, cy);
+      if (n < bn) { best = [cx, cy]; bn = n; if (n === 0) break; }
+    }
+    return best;
   }
 
   /** Market squares: the center of each of the owner's settlements (kings with buildings near them). */

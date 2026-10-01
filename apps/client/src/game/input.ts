@@ -184,14 +184,16 @@ export class Input {
     const water = (c: [number, number]) => terrainAt(mirror.seed, c[0], c[1]) === 'water';
     let err: string | null = null;
     const run = async (f: (part: [number, number][]) => Promise<string | null>, list: [number, number][], n = 100) => { for (const part of chunks(list, n)) { const e = await f(part); if (e) err = e; } };
+    // One id for the whole stroke, so Undo takes it back in one go.
+    const sid = Date.now() + Math.random();
     if (t.kind === 'pave') {
       // A street across water is a bridge (citybuilding.md §4).
       const land = cells.filter((c) => !water(c)), wet = cells.filter(water);
-      if (ui.toolErase) { await run((c) => commands.paintPaving(c, null), land, 200); await run((c) => commands.eraseDecor(c), wet); }
-      else { await run((c) => commands.paintPaving(c, t.style), land, 200); await run((c) => commands.placeDecor('bridge', c), wet); }
+      if (ui.toolErase) { await run((c) => commands.paintPaving(c, null, sid), land, 200); await run((c) => commands.eraseDecor(c), wet); }
+      else { await run((c) => commands.paintPaving(c, t.style, sid), land, 200); await run((c) => commands.placeDecor('bridge', c, sid), wet); }
     } else if (ui.toolErase) await run((c) => commands.eraseDecor(c), cells);
-    else if (t.kind === 'decor') await run((c) => commands.placeDecor(t.type, c), cells);
-    else await run((c) => commands.plant(t.plant, c), cells, 60);
+    else if (t.kind === 'decor') await run((c) => commands.placeDecor(t.type, c, sid), cells);
+    else await run((c) => commands.plant(t.plant, c, sid), cells, 60);
     if (err) { useUI.getState().toast(err, 'error'); audio.error(); }
     else { audio.commit(); haptic(8); }
   }
@@ -565,6 +567,7 @@ export class Input {
     else if (k === 'e') sc.rotate(1);
     else if (k === 'Escape' && (ui.tool || ui.moving != null)) ui.set({ tool: null, toolErase: false, stroke: null, moving: null, buildType: null, ghost: null });
     else if (k === 'x' && ui.tool) ui.set({ toolErase: !ui.toolErase });
+    else if (k === 'z' && (e.ctrlKey || e.metaKey) && ui.tool) { e.preventDefault(); void commands.undoCity().then((err) => { if (err) ui.toast(err, 'info'); else audio.commit(); }); }
     else if (k === 'Escape') { if (ui.orderMode) ui.set({ orderMode: null }); else if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else { ui.select([]); this.pendingMove = null; sc.pendingMarker = null; } }
     else if (k === 's' && !e.ctrlKey) { if (ui.selection.length) commands.stop(ui.selection); }
     else if (k === 'b') ui.set({ sheet: ui.sheet === 'build' ? null : 'build' });

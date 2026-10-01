@@ -192,6 +192,21 @@ function TroopsChip() {
   );
 }
 
+/** What a piece is up to, in a few words (its idle routine or work order). */
+function DOING(p: Piece): string | null {
+  if (p.state === 'battle') return 'Fighting';
+  if (p.state === 'moving') return 'On the march';
+  if (p.state === 'routed') return 'Fleeing home';
+  const r = p.routine ?? '';
+  const load: Record<string, string> = { wheat: 'Bringing in the harvest', tree: 'Carrying timber', rock: 'Carrying stone', ore: 'Carrying ore' };
+  if (r.startsWith('haul:')) return load[r.slice(5)] ?? 'Carrying goods';
+  return ({
+    haul: p.kind === 'R' ? 'Hauling' : 'Off to gather', drill: 'Drilling in the square', rest: 'Resting', merchant: 'Trading with another town', 'merchant:back': 'Coming home from market',
+    trade: 'At market', circuit: 'Riding the bounds', patrol: 'On patrol', procession: 'In procession', survey: 'Surveying the land', pace: 'Keeping watch',
+    watch: 'Watching a battle', pave: 'Paving a road', clear: 'Clearing land', tend: 'Tending the altar', born: 'Just arrived',
+  } as Record<string, string>)[r] ?? (p.posted ? 'Holding its post' : null);
+}
+
 /**
  * The selection bar (ux.md §3, reworked 2026-09-28). Top: what you have, kind by kind (tap a
  * kind to leave one behind), and a × that's always there. With a king: how much of its
@@ -248,6 +263,8 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
     audio.select(ui.selection.length);
   };
   const kinds = KIND_ORDER.filter((kind) => mine.some((p) => p.kind === kind));
+  // One piece: what it's doing right now (its routine or work order).
+  const doing = sel.length === 1 ? DOING(sel[0]) : null;
   return (
     <div className="action-row sel-bar">
       <div className="sel-top">
@@ -255,6 +272,7 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
           {troop ? <><Icon name="troop" size={16} /> Troop {troopNo}</> : 'Selected'}
           <b className="sel-count">{troop ? `· ${sel.length}` : sel.length}</b>
           {joining.size > 0 && <span className="sel-otw">{joining.size} on the way</span>}
+          {doing && <span className="sel-doing">{doing}</span>}
         </span>
         <button className="icon-btn sel-close" aria-label="Deselect" title="Deselect (Esc)" onClick={clear}><Icon name="close" size={18} stroke={2.6} /></button>
       </div>

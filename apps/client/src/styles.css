@@ -713,3 +713,4 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .settings .guide-row { margin: 2px 0 10px; }
 .tool-bar .tool-help { flex: none; width: 40px; height: 40px; border-radius: 12px; }
 .keys-link { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-weight: 800; background: none; border: 0; cursor: pointer; padding: 6px 0; }
+.sel-bar .sel-doing { font-size: 12px; font-weight: 800; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

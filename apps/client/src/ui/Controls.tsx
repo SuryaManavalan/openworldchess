@@ -24,7 +24,7 @@ const PHONE: Section[] = [
   { id: 'tools', title: 'Streets, decorations and planting', rows: [
     ['Pick a tool', 'The hammer, then Streets, Adorn or Plant'], ['Draw', 'One finger: tap to place one, drag for a line or an area'],
     ['Move the map while drawing', 'Two fingers'], ['Street width', 'Narrow, Wide or Square on the tool bar'],
-    ['Remove', 'Erase on the tool bar, then drag over it'], ['Finish', 'Done'],
+    ['Remove', 'Erase on the tool bar, then drag over it'], ['Take back your last stroke', 'Undo on the tool bar'], ['Finish', 'Done'],
   ] },
   { id: 'works', title: 'Work crews', rows: [
     ['Pave (knights only)', 'Pave, then tap where the road goes'], ['Clear land (elephants only)', 'Clear land, then drag over the area'],
@@ -50,7 +50,7 @@ const DESKTOP: Section[] = [
   { id: 'tools', title: 'Streets, decorations and planting', rows: [
     ['Pick a tool', 'Streets, Adorn or Plant in the Build panel'], ['Draw', 'Click to place one; drag for a line or an area'],
     ['Move the map while drawing', 'Right-drag or Space + drag'], ['Street width', 'Narrow, Wide or Square on the tool bar'],
-    ['Erase', 'X, then drag over it'], ['Finish', 'Esc or Done'],
+    ['Erase', 'X, then drag over it'], ['Take back your last stroke', 'Ctrl + Z, or Undo'], ['Finish', 'Esc or Done'],
   ] },
   { id: 'works', title: 'Work crews', rows: [
     ['Pave (knights only)', 'Pave, then click where the road goes'], ['Clear land (elephants only)', 'Clear land, then drag over the area'],

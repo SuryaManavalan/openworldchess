@@ -27,6 +27,8 @@ export interface ChunkPaint {
   biomes: Uint8Array;
   /** Settlement tier of a world square (0 = wild). */
   ground: (x: number, y: number) => number;
+  /** A city's heart: the chessboard plaza (citybuilding.md §9). */
+  heart?: (x: number, y: number) => boolean;
   /** Walking traffic at a world square. */
   traffic: (x: number, y: number) => number;
 }
@@ -299,10 +301,11 @@ function paintPlazas(g: CanvasRenderingContext2D, seed: number, x0: number, y0: 
     const r = hash01(seed, x0 + x, y0 + y, 341);
     if (r < 0.35) { g.beginPath(); g.ellipse(x * TPX + 3 + r * 26, y * TPX + 4 + (r * 97 % 8), 1.5, 1, r * 4, 0, Math.PI * 2); g.fill(); }
   }
-  if (any < 5) return;
+  if (any < 4 || !d.heart) return;
   // A city's heart (citybuilding.md §9): the chessboard, walnut and cream, in a bronze frame,
   // only around its centre. Everything else is calm earth, for players to pave as they like.
-  const city = region(5), cSegs = outline(city, seed, x0, y0, F, T, 0);
+  const city = (x: number, y: number) => tier(x, y) >= 4 && d.heart!(x0 + x, y0 + y);
+  const cSegs = outline(city, seed, x0, y0, F, T, 0);
   for (let y = F; y < T; y++) for (let x = F; x < T; x++) {
     if (!city(x, y)) continue;
     g.fillStyle = dark(x, y) ? '#b58863' : '#efe0c0';
