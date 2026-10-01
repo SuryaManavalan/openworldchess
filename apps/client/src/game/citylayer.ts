@@ -18,8 +18,32 @@ export class CityLayer {
   private m: Mirror;
   constructor(m: Mirror) { this.m = m; }
 
+  /** Each bridge's direction, worked out once for its whole group (cleared when bridges change). */
+  private axes = new Map<number, boolean>();
+  private axisOf(x: number, y: number): boolean {
+    const hit = this.axes.get(key(x, y));
+    if (hit != null) return hit;
+    const isB = (ax: number, ay: number) => this.decorAt(ax, ay)?.type === 'bridge';
+    const land = (ax: number, ay: number) => !this.water(ax, ay) && terrainAt(this.m.seed, ax, ay) !== 'mountain';
+    const seen = new Set<number>([key(x, y)]), todo: [number, number][] = [[x, y]], all: [number, number][] = [];
+    while (todo.length && all.length < 400) {
+      const [cx, cy] = todo.pop()!; all.push([cx, cy]);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = key(cx + dx, cy + dy); if (!seen.has(k) && isB(cx + dx, cy + dy)) { seen.add(k); todo.push([cx + dx, cy + dy]); } }
+    }
+    const xs = all.map((c) => c[0]), ys = all.map((c) => c[1]);
+    const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+    let along = w > h;
+    if (w === h) { const ew = all.filter(([ax, ay]) => land(ax + 1, ay) || land(ax - 1, ay)).length, ns = all.filter(([ax, ay]) => land(ax, ay + 1) || land(ax, ay - 1)).length; along = ew >= ns; }
+    for (const [ax, ay] of all) this.axes.set(key(ax, ay), along);
+    return along;
+  }
+
   /** A square (and its neighbours) changed. */
-  mark(x: number, y: number) { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) this.dirty.set(key(x + dx, y + dy), [x + dx, y + dy]); }
+  mark(x: number, y: number) {
+    // A bridge changing can turn its whole group: re-tile all of it.
+    if (this.decorAt(x, y)?.type === 'bridge' || this.axes.has(key(x, y))) {
+      for (const k of [...this.axes.keys()]) { const bx = Math.round(k / 134217728), by = k - bx * 134217728; if (Math.max(Math.abs(bx - x), Math.abs(by - y)) <= 30) { this.axes.delete(k); this.dirty.set(k, [bx, by]); } }
+    } for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) this.dirty.set(key(x + dx, y + dy), [x + dx, y + dy]); }
 
   /** A chunk arrived: everything paved or planted in it needs tiles. */
   markChunk(cx: number, cy: number) {
@@ -48,13 +72,13 @@ export class CityLayer {
       if (d?.type === 'bridge') {
         const isB = (ax: number, ay: number) => this.decorAt(ax, ay)?.type === 'bridge';
         const land = (ax: number, ay: number) => !this.water(ax, ay) && terrainAt(this.m.seed, ax, ay) !== 'mountain';
-        const ew = isB(x + 1, y) || isB(x - 1, y) || land(x + 1, y) || land(x - 1, y);
-        const ns = isB(x, y + 1) || isB(x, y - 1) || land(x, y + 1) || land(x, y - 1);
-        // Along the crossing: the axis with bridge (or bank) on it; prefer a line of bridges.
-        const along = (isB(x + 1, y) || isB(x - 1, y)) ? true : (isB(x, y + 1) || isB(x, y - 1)) ? false : ew || !ns;
-        const rails = (along ? [[0, -1, N], [0, 1, SOUTH]] : [[1, 0, E], [-1, 0, W]]).reduce((m2, [dx, dy, bit]) => (!isB(x + dx, y + dy) && this.water(x + dx, y + dy) ? m2 | bit : m2), 0);
+        // The whole bridge (every bridge square touching this one) runs one way: along its
+        // longer side, or across the river (toward the banks) when it's square.
+        const along = this.axisOf(x, y);
+        const joined = [[0, -1, N], [1, 0, E], [0, 1, SOUTH], [-1, 0, W]].reduce((m2, [dx, dy, bit]) => (isB(x + dx, y + dy) ? m2 | bit : m2), 0);
         const bank = [[0, -1, N], [1, 0, E], [0, 1, SOUTH], [-1, 0, W]].reduce((m2, [dx, dy, bit]) => (land(x + dx, y + dy) ? m2 | bit : m2), 0);
-        tex = bridgeTile(along, rails, bank, hash(x, y));
+        // Planks seeded by position along the deck, so side-by-side rows line up as one plank.
+        tex = bridgeTile(along, joined, bank, along ? hash(x, 0) : hash(0, y));
       } else if (d?.type === 'flowerbed') {
         tex = flowerbedTile(maskAt(x, y, (ax, ay) => this.decorAt(ax, ay)?.type === 'flowerbed'), hash(x, y));
       } else if (this.paved(x, y)) {

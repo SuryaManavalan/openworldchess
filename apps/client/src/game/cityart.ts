@@ -152,32 +152,36 @@ export function flowerbedTile(mask: number, variant: number): Texture {
 }
 
 /**
- * Bridges: one deck along the crossing (planks across it), rails only on its two outer edges,
- * and a stone abutment where it meets a bank. `along`: the deck runs east–west (true) or
- * north–south. `bank`: which ends touch land (N/E/S/W bits).
+ * Bridges: bridge squares that touch make one deck (citybuilding.md §9), in one direction
+ * (`along`: east–west, else north–south). Planks run across it; `joined` says which sides
+ * (N/E/S/W) carry on into more bridge, so the deck reaches the edge there and only its outer
+ * edges get rails; a stone abutment stands where it meets a bank (`bank`).
  */
-export function bridgeTile(along: boolean, rails: number, bank: number, variant: number): Texture {
-  return make(`bridge:${along}:${rails}:${bank}:${variant}`, (g) => {
+export function bridgeTile(along: boolean, joined: number, bank: number, variant: number): Texture {
+  return make(`bridge:${along}:${joined}:${bank}:${variant}`, (g) => {
     g.save();
     if (!along) { g.translate(T / 2, T / 2); g.rotate(Math.PI / 2); g.translate(-T / 2, -T / 2); }
-    // In the rotated frame the deck always runs left–right; rails on top and bottom.
-    const top = along ? rails & N : rails & E, bottom = along ? rails & S : rails & W;
+    // In the rotated frame the deck runs left–right: "top"/"bottom" are its sides, "left"/"right" its ends.
+    const topJ = along ? joined & N : joined & E, botJ = along ? joined & S : joined & W;
     const leftBank = along ? bank & W : bank & N, rightBank = along ? bank & E : bank & S;
-    const d0 = T * 0.18, d1 = T * 0.82;
-    g.fillStyle = 'rgba(20,40,60,0.28)'; g.fillRect(0, d1 - 2, T, 10); // shadow on the water
+    const d0 = topJ ? 0 : T * 0.16, d1 = botJ ? T : T * 0.84;
+    if (!botJ) { g.fillStyle = 'rgba(20,40,60,0.28)'; g.fillRect(0, d1 - 2, T, 10); } // shadow on the water
     g.fillStyle = PAL.woodShade; g.fillRect(0, d0, T, d1 - d0);
     const r = rng(variant + 3);
-    for (let x = 0; x < T; x += 12) { g.fillStyle = r() < 0.5 ? PAL.wood : PAL.woodLight; g.fillRect(x + 1, d0 + 2, 10, d1 - d0 - 4); }
-    g.strokeStyle = 'rgba(60,38,20,0.45)'; g.lineWidth = 1;
-    for (let x = 0; x <= T; x += 12) { g.beginPath(); g.moveTo(x + 0.5, d0); g.lineTo(x + 0.5, d1); g.stroke(); }
+    // Planks across the deck, 16 to a square so they line up from one square to the next.
+    for (let x = 0; x < T; x += 16) { g.fillStyle = r() < 0.5 ? PAL.wood : PAL.woodLight; g.fillRect(x + 1, d0 + (topJ ? 0 : 2), 14, d1 - d0 - (topJ ? 0 : 2) - (botJ ? 0 : 2)); }
+    g.strokeStyle = 'rgba(60,38,20,0.4)'; g.lineWidth = 1;
+    for (let x = 0; x <= T; x += 16) { g.beginPath(); g.moveTo(x + 0.5, d0); g.lineTo(x + 0.5, d1); g.stroke(); }
+    // Stringers: two dark beams under a wide deck, every square, so a big bridge still reads as built.
+    if (topJ || botJ) { g.fillStyle = 'rgba(70,45,25,0.18)'; g.fillRect(0, T * 0.3, T, 3); g.fillRect(0, T * 0.7, T, 3); }
     const rail = (y: number) => {
       g.fillStyle = PAL.woodShade; g.fillRect(0, y - 3, T, 6);
       g.fillStyle = PAL.woodLight; g.fillRect(0, y - 3, T, 2);
-      for (const px of [T * 0.2, T * 0.8]) { g.fillStyle = PAL.woodShade; g.beginPath(); g.roundRect(px - 5, y - 7, 10, 14, 3); g.fill(); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); }
+      for (const px of [T * 0.25, T * 0.75]) { g.fillStyle = PAL.woodShade; g.beginPath(); g.roundRect(px - 5, y - 7, 10, 14, 3); g.fill(); g.strokeStyle = INK; g.lineWidth = 2; g.stroke(); }
     };
-    if (top) rail(d0 + 2);
-    if (bottom) rail(d1 - 2);
-    const abut = (x: number) => { g.fillStyle = PAL.stone; g.beginPath(); g.roundRect(x, d0 - 6, T * 0.22, d1 - d0 + 12, 6); g.fill(); g.strokeStyle = PAL.mortar; g.lineWidth = 3; g.stroke(); };
+    if (!topJ) rail(d0 + 2);
+    if (!botJ) rail(d1 - 2);
+    const abut = (x: number) => { g.fillStyle = PAL.stone; g.beginPath(); g.roundRect(x, d0 - (topJ ? 0 : 6), T * 0.22, d1 - d0 + (topJ ? 0 : 6) + (botJ ? 0 : 6), topJ || botJ ? 0 : 6); g.fill(); g.strokeStyle = PAL.mortar; g.lineWidth = 3; g.stroke(); };
     if (leftBank) abut(-T * 0.06);
     if (rightBank) abut(T * 0.84);
     g.restore();
