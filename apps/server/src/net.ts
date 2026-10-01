@@ -2,6 +2,7 @@
 // and per-client filtering of world events.
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage, Server } from 'node:http';
+import { townName } from '@owc/worldgen';
 import { stats } from './stats.ts';
 import { LAND_CELL, landUnkey } from '@owc/worldgen';
 import {
@@ -51,6 +52,7 @@ export class Net {
     game.onPlayers = () => this.broadcastPlayers();
     game.chronicle.onChapter = (pid, info) => {
       const who = game.players.get(pid); if (who && !who.isBot) stats.chapter(info.n);
+      game.herald.chapter(pid, info.n, info.title);
       for (const s of this.sessions) if (s.player?.id === pid) { this.send(s, { t: 'chapter', ...info }); this.send(s, { t: 'self', self: game.selfPlayer(s.player) }); }
     };
     game.onSelf = (pid) => { for (const s of this.sessions) if (s.player?.id === pid) this.send(s, { t: 'self', self: game.selfPlayer(s.player) }); };
@@ -351,6 +353,10 @@ export class Net {
     const human = [w, k].some((x) => x && !x.isBot && !x.wild);
     if (b.kind === 'practice') { if (human) stats.battle('practice'); }
     else if (human) stats.battle(w?.wild || k?.wild ? 'wild' : 'pvp');
+    if (b.kind !== 'practice') {
+      const town = b.kind === 'siege' ? this.game.chronicle.settlementsOf(summary.winner ?? '').find((st) => Math.max(Math.abs(st.cx - b.cx), Math.abs(st.cy - b.cy)) <= 14) : undefined;
+      this.game.herald.battle(b.kind, summary.winner, summary.loser, !!(w?.wild || k?.wild), town ? townName(this.game.world.seed, town.id, town.cx, town.cy) : undefined);
+    }
     this.broadcast({ t: 'battle.end', battleId: b.id, result: b.result ?? 'draw', termination: b.termination ?? '', summary });
     // Only the people involved need a fresh copy of their holdings.
     for (const s of this.sessions) if (s.player && _involved.includes(s.player.id)) this.sendMine(s);

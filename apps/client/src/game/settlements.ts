@@ -2,8 +2,8 @@
 // buildings, their tier (hamlet → city), a name drawn from the land, and the
 // decorations that appear as they grow. Everything here is derived from real
 // state and seeded, so every viewer sees the same town. None of it affects play.
-import { cheb, distToRect, key, type Building } from '@owc/shared';
-import { biomeAt, hash01, terrainAt } from '@owc/worldgen';
+import { cheb, distToRect, isDecor, key, type Building } from '@owc/shared';
+import { biomeAt, hash01, terrainAt, townName } from '@owc/worldgen';
 import type { Mirror } from '@owc/client-core';
 
 export type Tier = 1 | 2 | 3 | 4;
@@ -40,27 +40,12 @@ export interface Wall {
   edges: { x: number; y: number; side: number }[];
 }
 
-const ROOT_A = ['Oak', 'Ash', 'Stone', 'Elm', 'Thorn', 'Wheat', 'Iron', 'Raven', 'Amber', 'Bright', 'Frost', 'Moss', 'Red', 'Wolf', 'King', 'Queen', 'Rook', 'Bishop'];
-const ROOT_B = { water: ['ford', 'bridge', 'port', 'mere', 'brook'], forest: ['wood', 'glade', 'holt', 'grove'], mountain: ['crag', 'fell', 'tor', 'ridge'], plain: ['field', 'ton', 'stead', 'ham', 'bury', 'wick', 'gate'] };
-
 /** Tier by number of buildings (hamlet 1–2, village 3–5, town 6–9, city 10+). */
 export const tierOf = (n: number): Tier => (n >= 10 ? 4 : n >= 6 ? 3 : n >= 3 ? 2 : 1);
 
-function nameFor(seed: number, id: number, cx: number, cy: number) {
-  // Look at the land around the center: water, forest or mountain flavor the name.
-  let water = 0, forest = 0, mountain = 0;
-  for (let dy = -8; dy <= 8; dy += 2) for (let dx = -8; dx <= 8; dx += 2) {
-    const t = terrainAt(seed, cx + dx, cy + dy);
-    if (t === 'water') water++; else if (t === 'forest') forest++; else if (t === 'mountain') mountain++;
-  }
-  const kind = water > 2 ? 'water' : mountain > 2 ? 'mountain' : forest > 12 ? 'forest' : 'plain';
-  const a = ROOT_A[Math.floor(hash01(seed, id, 0, 401) * ROOT_A.length)];
-  const list = ROOT_B[kind];
-  return a + list[Math.floor(hash01(seed, id, 1, 402) * list.length)];
-}
-
 export function computeSettlements(m: Mirror): Settlement[] {
-  const blds = [...m.buildings.values()].filter((b) => b.owner && b.type !== 'ruin' && b.type !== 'camp');
+  // (Decorations don't make a settlement or raise its tier: citybuilding.md §11, as on the server.)
+  const blds = [...m.buildings.values()].filter((b) => b.owner && b.type !== 'ruin' && b.type !== 'camp' && !isDecor(b.type));
   // Union buildings of the same owner that are close together.
   const parent = new Map<number, number>(blds.map((b) => [b.id, b.id]));
   const find = (i: number): number => { let p = parent.get(i)!; while (p !== parent.get(p)) p = parent.get(p)!; parent.set(i, p); return p; };
@@ -89,7 +74,7 @@ export function computeSettlements(m: Mirror): Settlement[] {
       const r = tier === 4 ? 6 : 4;
       for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) if (Math.hypot(x - cx, y - cy) <= r + 0.5) ground.set(key(x, y), tier);
     }
-    out.push({ id, owner: bs[0].owner!, buildings: bs, cx, cy, tier, name: nameFor(m.seed, id, cx, cy), ground, sieges: Math.max(0, ...bs.map((b) => b.sieges ?? 0)) });
+    out.push({ id, owner: bs[0].owner!, buildings: bs, cx, cy, tier, name: townName(m.seed, id, cx, cy), ground, sieges: Math.max(0, ...bs.map((b) => b.sieges ?? 0)) });
   }
   return out;
 }

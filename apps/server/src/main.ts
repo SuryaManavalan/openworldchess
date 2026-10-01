@@ -33,6 +33,7 @@ if (process.env.SHIELD_MS) game.shieldMs = Number(process.env.SHIELD_MS);
 if (process.env.GUEST_GRACE_MS) game.guestGraceMs = Number(process.env.GUEST_GRACE_MS);
 if (load(game, DATA)) console.log(`loaded ${game.world.pieces.size} pieces, ${game.players.size} players from ${DATA}`);
 stats.load(join(dirname(DATA), 'stats.json'), game);
+game.herald.load(join(dirname(DATA), 'herald.json'));
 // Shape the land from the empires already living on it (elo.md §3), settled before anyone connects.
 for (let i = 0; i < 8; i++) game.reshapeLand();
 
@@ -54,6 +55,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (req.url?.startsWith('/shop/') || req.url?.startsWith('/stripe/')) { handleShop(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { res.statusCode = 500; res.end('shop error'); }); return; }
+  if (req.url === '/api/showcase') { res.setHeader('content-type', 'application/json'); res.setHeader('cache-control', 'max-age=300'); res.end(JSON.stringify(game.herald.showcase())); return; }
   if (req.url?.startsWith('/api/')) { handleStats(game, req, res, () => net.liveCounts()).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end(); } }); return; }
   if (req.url?.startsWith('/tiktok/') || req.url?.startsWith('/auth/tiktok/')) { handleTikTok(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end('tiktok error'); } }); return; }
   if (req.url?.startsWith('/auth/')) { handleAuth(game, req, res).catch(() => { res.statusCode = 500; res.end('auth error'); }); return; }
@@ -105,17 +107,17 @@ setInterval(() => {
   if (now - lastMine >= MINE_EVERY_MS) { lastMine = now; perf.time('net.sendAllMine', () => net.sendAllMine()); }
   if (now - lastSelf >= 2500) { lastSelf = now; perf.time('net.sendAllSelf', () => net.sendAllSelf()); net.sendAllLand(); }
   if (now - lastFall >= Math.min(30_000, game.guestGraceMs / 2)) { lastFall = now; game.fallOfGuests(now); }
-  if (now - lastRoll >= 60_000) { lastRoll = now; perf.roll(now); stats.sample(net.liveCounts().humans); }
+  if (now - lastRoll >= 60_000) { lastRoll = now; perf.roll(now); const humans = net.liveCounts().humans; stats.sample(humans); perf.time('herald', () => game.herald.tick(now, humans)); }
   if (now - lastMaintain >= 60_000) {
     lastMaintain = now;
     const fade = now - lastFade >= 3_600_000;
     if (fade) lastFade = now;
     perf.time('maintain', () => game.world.maintain(net.watchedChunks(), fade));
   }
-  if (now - lastSave >= SAVE_EVERY_MS) { lastSave = now; perf.time('save', () => { save(game, DATA); stats.save(); }); }
+  if (now - lastSave >= SAVE_EVERY_MS) { lastSave = now; perf.time('save', () => { save(game, DATA); stats.save(); game.herald.save(); }); }
 }, Math.min(1000 / TICK_HZ, TURN / 2));
 
-const shutdown = () => { save(game, DATA); stats.save(); game.battles.ai.stop(); console.log('saved'); process.exit(0); };
+const shutdown = () => { save(game, DATA); stats.save(); game.herald.save(); game.battles.ai.stop(); console.log('saved'); process.exit(0); };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 

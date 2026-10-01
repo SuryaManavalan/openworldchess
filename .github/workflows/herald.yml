@@ -1,0 +1,20 @@
+name: Herald
+# City of the Day for the community Discord (docs/specs/discord.md). Daily at 18:00 UTC, or by hand.
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+jobs:
+  city-of-the-day:
+    runs-on: ubuntu-latest
+    if: ${{ vars.HERALD_ON == '1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: node tools/herald/showcase.mjs
+        env:
+          HERALD_WEBHOOK: ${{ secrets.HERALD_WEBHOOK }}

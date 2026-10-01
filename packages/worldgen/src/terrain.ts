@@ -96,3 +96,19 @@ export function eloAt(seed: number, x: number, y: number): number {
   elo = Math.min(elo, 1000) + (elo - Math.min(elo, 1000)) * fade;
   return Math.max(400, Math.min(2800, elo));
 }
+
+const ROOT_A = ['Oak', 'Ash', 'Stone', 'Elm', 'Thorn', 'Wheat', 'Iron', 'Raven', 'Amber', 'Bright', 'Frost', 'Moss', 'Red', 'Wolf', 'King', 'Queen', 'Rook', 'Bishop'];
+const ROOT_B = { water: ['ford', 'bridge', 'port', 'mere', 'brook'], forest: ['wood', 'glade', 'holt', 'grove'], mountain: ['crag', 'fell', 'tor', 'ridge'], plain: ['field', 'ton', 'stead', 'ham', 'bury', 'wick', 'gate'] };
+
+/** A settlement's name (visuals.md §10), from its id and the land around its center: water, forest or mountain flavour it. */
+export function townName(seed: number, id: number, cx: number, cy: number): string {
+  let water = 0, forest = 0, mountain = 0;
+  for (let dy = -8; dy <= 8; dy += 2) for (let dx = -8; dx <= 8; dx += 2) {
+    const t = terrainAt(seed, cx + dx, cy + dy);
+    if (t === 'water') water++; else if (t === 'forest') forest++; else if (t === 'mountain') mountain++;
+  }
+  const kind = water > 2 ? 'water' : mountain > 2 ? 'mountain' : forest > 12 ? 'forest' : 'plain';
+  const a = ROOT_A[Math.floor(hash01(seed, id, 0, 401) * ROOT_A.length)];
+  const list = ROOT_B[kind];
+  return a + list[Math.floor(hash01(seed, id, 1, 402) * list.length)];
+}

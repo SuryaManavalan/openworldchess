@@ -110,6 +110,10 @@ export class Chronicle {
   /** Cached quest targets per player (so we don't search every tick). */
   private targets = new Map<string, { key: string; at?: [number, number]; until: number }>();
   /** Chapter completions to announce (the network layer sends the ceremony). */
+  /** A side quest done (the Herald counts them). */
+  onSide: (playerId: string, kind: string) => void = () => {};
+  /** A camp scattered (the Herald hails dragons). */
+  onSlain: (playerId: string, faction: string, rarity: string) => void = () => {};
   onChapter: (playerId: string, info: { n: number; name: string; opens: string; title?: string; coronation?: boolean }) => void = () => {};
   constructor(game: Game) { this.game = game; }
 
@@ -364,6 +368,7 @@ export class Chronicle {
     if (!p || p.wild || !f) return;
     const st = this.of(p);
     st.renown += RENOWN[f.rarity] * (1 + size / 16);
+    this.onSlain(p.id, faction, f.rarity);
     const rareLand = RARE_BIOMES.includes(biomeAt(this.w.seed, at[0], at[1]));
     this.note(p.id, 'hunt', 1, { camp: campId });
     this.note(p.id, `hunt:${f.temper}`);
@@ -860,6 +865,7 @@ export class Chronicle {
     const st = this.of(p);
     st.sides = st.sides.filter((x) => x.id !== q.id);
     st.renown += q.renown;
+    this.onSide(p.id, q.kind);
     for (const k of q.pieces ?? []) this.grantPiece(p, k, q.at);
     this.game.onAlert(p.id, { kind: 'info', text: `Quest complete: +${q.renown} Renown${q.pieces?.length ? ` and ${q.pieces.map((k) => `a ${PIECE_NAME[k].toLowerCase()}`).join(', ')}` : ''}` });
   }
