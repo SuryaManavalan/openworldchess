@@ -16,6 +16,8 @@ export class CityLayer {
   private tiles = new Map<number, Sprite>();
   private dirty = new Map<number, [number, number]>();
   private m: Mirror;
+  /** A city's heart (the chessboard plaza, painted in the ground): streets give way to it. */
+  heart: (x: number, y: number) => boolean = () => false;
   constructor(m: Mirror) { this.m = m; }
 
   /** Each bridge's direction, worked out once for its whole group (cleared when bridges change). */
@@ -81,9 +83,11 @@ export class CityLayer {
         tex = bridgeTile(along, joined, bank, along ? hash(x, 0) : hash(0, y));
       } else if (d?.type === 'flowerbed') {
         tex = flowerbedTile(maskAt(x, y, (ax, ay) => this.decorAt(ax, ay)?.type === 'flowerbed'), hash(x, y));
-      } else if (this.paved(x, y)) {
+      } else if (this.paved(x, y) && !this.heart(x, y)) {
+        // Streets join what they run into (citybuilding.md §9): more street, a city's chessboard
+        // heart (the street gives way to it, no kerb), and a bridge (straight onto the deck).
         const style = Math.max(0, Math.min(3, (this.m.traffic.get(key(x, y)) ?? PAVED) - PAVED));
-        tex = pavingTile(style, maskAt(x, y, (ax, ay) => this.paved(ax, ay)), hash(x, y));
+        tex = pavingTile(style, maskAt(x, y, (ax, ay) => this.paved(ax, ay) || this.heart(ax, ay) || this.decorAt(ax, ay)?.type === 'bridge'), hash(x, y));
       }
       let s = this.tiles.get(k);
       if (!tex) { if (s) { s.destroy(); this.tiles.delete(k); } continue; }

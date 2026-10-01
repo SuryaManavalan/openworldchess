@@ -210,6 +210,9 @@ export class CityBuild {
       const bid = w.buildingIdAt(x, y), b = bid != null ? w.buildings.get(bid) : undefined;
       if (b && !(b.owner === owner && GATEABLE.includes(b.type))) { if (style != null) continue; }
       if (style != null && !w.buildable(x, y)) continue;
+      // (Not under a standing tree, rock or crop: streets go around them.)
+      const nd = w.nodeAt(x, y);
+      if (style != null && nd && !nd.gone && nd.remaining > 0) continue;
       const prev = w.traffic.get(key(x, y)) ?? 0;
       if (w.setPaving(x, y, style)) { done++; this.act?.paving.push([x, y, prev]); }
       // A street through a wall is a gate (walkable); without the street it's a wall again.

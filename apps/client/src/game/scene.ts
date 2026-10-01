@@ -128,6 +128,7 @@ export class Scene {
     el.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
     this.city = new CityLayer(this.mirror);
+    this.city.heart = (x, y) => this.heart.has(key(x, y));
     this.world.addChild(this.ground, this.city.layer, this.wallsG, this.decals, this.objects, this.farIcons.layer, this.farG, this.arenas, this.fx.layer, this.bubbles.layer, this.fx.top, this.labels);
     this.arenas.addChild(this.arenaG);
     this.arenaG.zIndex = -1e9;
@@ -518,7 +519,7 @@ export class Scene {
   }
 
   private kingLabel(p: Piece, v: PieceView, wx: number, wy: number, th: number) {
-    const show = this.cam.zoom > 0.55;
+    const show = this.cam.zoom > 0.55 && !NO_LABELS;
     let label = this.kingLabels.get(p.id);
     if (!show) { if (label) label.visible = false; return; }
     if (!label) {
@@ -799,8 +800,9 @@ export class Scene {
     // A city's heart (citybuilding.md §9): the framed chessboard plaza, only near its centre.
     const heart = new Set<number>();
     for (const st of this.settlements) if (st.tier >= 4) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const hk = key(st.cx + dx, st.cy + dy); if (st.ground.has(hk)) heart.add(hk); }
-    for (const k of heart) if (!this.heart.has(k)) mark(k);
-    for (const k of this.heart) if (!heart.has(k)) mark(k);
+    const retile = (k: number) => { mark(k); const x = Math.round(k / 134217728), y = k - x * 134217728; this.city.mark(x, y); };
+    for (const k of heart) if (!this.heart.has(k)) retile(k);
+    for (const k of this.heart) if (!heart.has(k)) retile(k);
     this.heart = heart;
     this.groundMap = next;
     for (const ck of touched) { const v = this.chunkViews.get(ck); if (v) v.dirty = true; }
