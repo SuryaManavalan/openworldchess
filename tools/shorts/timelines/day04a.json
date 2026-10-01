@@ -1,0 +1,312 @@
+{
+ "out": "out/day04a/day04a.mp4",
+ "seconds": 24,
+ "base": {
+  "video": "out/day04a/base.mp4"
+ },
+ "layers": [
+  {
+   "type": "board",
+   "t0": 0,
+   "t1": 6.95,
+   "mode": "drift",
+   "light": "#2f3347",
+   "dark": "#22253a",
+   "speed": 0.35
+  },
+  {
+   "type": "image",
+   "t0": 0,
+   "t1": 6.95,
+   "src": "art/out/svg/pawn-light.svg",
+   "x": 495,
+   "y": 1080,
+   "w": 300,
+   "anim": "float"
+  },
+  {
+   "type": "vignette",
+   "t0": 0,
+   "t1": 24,
+   "strength": 0.5
+  },
+  {
+   "type": "vignette",
+   "t0": 6.95,
+   "t1": 10.12,
+   "strength": 0.55
+  },
+  {
+   "type": "label",
+   "t0": 10.15,
+   "t1": 19,
+   "text": "Sped up",
+   "y": 250
+  },
+  {
+   "type": "text",
+   "cue": "one lonely sadge developer",
+   "lead": 1.6,
+   "lines": [
+    "ONE LONELY",
+    "SADGE DEVELOPER"
+   ],
+   "colors": [
+    "#ece6da",
+    "#9fb3d1"
+   ],
+   "y": 470,
+   "size": 112,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "who built an endless chessboard",
+   "lines": [
+    "Built an endless",
+    "chessboard. Alone."
+   ],
+   "y": 470,
+   "size": 92,
+   "font": "bold",
+   "anim": "fade"
+  },
+  {
+   "type": "text",
+   "t0": 4.8,
+   "t1": 6.9,
+   "lines": [
+    "contributors: 1"
+   ],
+   "y": 1360,
+   "size": 50,
+   "font": "bold",
+   "color": "#9fb3d1",
+   "plate": true,
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "t0": 5.7,
+   "t1": 8.3,
+   "lines": [
+    "3:07 AM  git commit -m \"fix knight (again)\""
+   ],
+   "y": 1250,
+   "size": 40,
+   "font": "bold",
+   "color": "#cfe6a4",
+   "plate": true,
+   "anim": "type",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "talking to the bots",
+   "lines": [
+    "Talking to the bots."
+   ],
+   "y": 470,
+   "size": 100,
+   "font": "bold",
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "cue": "it was so over",
+   "lines": [
+    "IT WAS",
+    "SO OVER."
+   ],
+   "colors": [
+    "#9fb3d1",
+    "#9fb3d1"
+   ],
+   "y": 470,
+   "size": 140,
+   "anim": "slam"
+  },
+  {
+   "type": "flash",
+   "t0": 10.12,
+   "dur": 0.3
+  },
+  {
+   "type": "sweep",
+   "t0": 10.15,
+   "t1": 11.0
+  },
+  {
+   "type": "text",
+   "cue": "but now open world chess is open source",
+   "lines": [
+    "IT'S OPEN",
+    "SOURCE NOW."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 470,
+   "size": 140,
+   "anim": "slam",
+   "glow": "rgba(227,178,60,0.4)"
+  },
+  {
+   "type": "text",
+   "cue": "so open a pull request",
+   "lines": [
+    "Open a pull request."
+   ],
+   "y": 470,
+   "size": 96,
+   "font": "bold",
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 12.95,
+   "t1": 14.45,
+   "lines": [
+    "github.com/SuryaManavalan/openworldchess"
+   ],
+   "y": 640,
+   "size": 40,
+   "font": "bold",
+   "color": "#1d1b19",
+   "stroke": false,
+   "plate": "#ece6da",
+   "anim": "pop",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "join the discord",
+   "lines": [
+    "Join the Discord."
+   ],
+   "y": 470,
+   "size": 100,
+   "font": "bold",
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 14.6,
+   "t1": 15.6,
+   "lines": [
+    "discord.gg/B6kPjrakW"
+   ],
+   "y": 640,
+   "size": 54,
+   "font": "bold",
+   "color": "#ffffff",
+   "stroke": false,
+   "plate": "#5865f2",
+   "anim": "pop",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "and build the board with us",
+   "lines": [
+    "Build the Board",
+    "with us."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 470,
+   "size": 110,
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 15.75,
+   "t1": 17.45,
+   "lines": [
+    "contributors: 1 + you"
+   ],
+   "y": 1360,
+   "size": 54,
+   "font": "bold",
+   "color": "#cfe6a4",
+   "plate": true,
+   "anim": "pop",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "we are so back",
+   "t1": 18.95,
+   "lines": [
+    "WE'RE SO",
+    "BACK."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 470,
+   "size": 150,
+   "anim": "slam",
+   "glow": "rgba(227,178,60,0.45)"
+  },
+  {
+   "type": "endcard",
+   "t0": 19.0,
+   "t1": 24,
+   "sub": "Open source. Build it with us.",
+   "url": "openworldchess.com",
+   "dim": 0.6,
+   "y": 520
+  },
+  {
+   "type": "text",
+   "t0": 19.8,
+   "t1": 24,
+   "lines": [
+    "github.com/SuryaManavalan/openworldchess"
+   ],
+   "y": 1180,
+   "size": 38,
+   "font": "bold",
+   "color": "#1d1b19",
+   "stroke": false,
+   "plate": "#ece6da",
+   "anim": "pop",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "t0": 20.1,
+   "t1": 24,
+   "lines": [
+    "discord.gg/B6kPjrakW"
+   ],
+   "y": 1290,
+   "size": 50,
+   "font": "bold",
+   "color": "#ffffff",
+   "stroke": false,
+   "plate": "#5865f2",
+   "anim": "pop",
+   "silent": true
+  }
+ ],
+ "audio": {
+  "bpm": 100,
+  "musicGain": 0.45,
+  "sfxGain": 0.75
+ },
+ "voice": [
+  {
+   "at": 0.3,
+   "voice": "chronicler",
+   "timed": true,
+   "text": "This is the story of one lonely sadge developer, who built an endless chessboard all alone, at three in the morning, talking to the bots. It was so over. But now Open World Chess is open source, so open a pull request, join the Discord, and build the Board with us. We are so back."
+  }
+ ]
+}

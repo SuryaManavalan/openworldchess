@@ -40,7 +40,8 @@ window.setTimeline = async (tl) => {
 /** 0→1 in, 1 on, 1→0 out, for a layer at time t. */
 function life(l, t, fadeIn = 0.25, fadeOut = 0.2) {
   if (t < l.t0 || t > l.t1) return null;
-  return { a: clamp((t - l.t0) / fadeIn) * clamp((l.t1 - t) / fadeOut), k: t - l.t0 };
+  // (+1/60: a layer is already showing on its first frame, so a title at 0 s is there on frame 1.)
+  return { a: clamp((t - l.t0 + 1 / 60) / fadeIn) * clamp((l.t1 - t) / fadeOut), k: t - l.t0 };
 }
 
 function drawText(l, t) {

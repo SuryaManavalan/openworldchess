@@ -90,6 +90,16 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-10-01: two render fixes:
+  - an overlay that turns fully opaque (a full-screen `board` layer) no longer throws the base
+    video's timing off (`-reinit_filter 0`: the PNGs' pixel format changed mid-stream and
+    ffmpeg rebuilt its graph);
+  - layers show from their very first frame, so a title at 0 s is on frame 1.
+
+  Cutting a base from several clips: cut each to its own file, then concatenate with a
+  re-encode (cutting two segments from one input in a single graph gave wrong frames). First
+  used for Day 4a.
+
 - 2026-09-30: **flowing narration.** Voice lines can be `"timed": true` (ElevenLabs'
   with-timestamps endpoint; the alignment is cached next to the MP3), and text layers can take
   a `"cue"` (a phrase from the narration) instead of t0/t1: the card lands as the words are

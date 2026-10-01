@@ -77,7 +77,9 @@ writeFileSync(`${work}/score.wav`, Buffer.from(wav, 'base64'));
 const args = ['-v', 'error', '-y'];
 if (tl.base?.video) args.push('-ss', String(tl.base.start ?? 0), '-i', resolve(tl.base.video));
 else args.push('-f', 'lavfi', '-i', `color=c=${(tl.background ?? '#23211f').replace('#', '0x')}:s=${W}x${H}:r=${FPS}`);
-args.push('-f', 'image2pipe', '-framerate', String(FPS), '-i', '-');
+// (-reinit_filter 0: an overlay that turns fully opaque, like a full-screen board, changes the
+// PNGs' pixel format mid-stream; rebuilding the graph then threw the base video's timing off.)
+args.push('-reinit_filter', '0', '-f', 'image2pipe', '-framerate', String(FPS), '-i', '-');
 args.push('-i', `${work}/score.wav`);
 for (const v of voices) args.push('-i', v.file);
 const sp = tl.base?.speed ?? 1;
