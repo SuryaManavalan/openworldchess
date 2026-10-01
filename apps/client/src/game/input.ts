@@ -1,10 +1,11 @@
 // Input (ux.md §3): touch gestures and mouse/keyboard both turn into the same
 // commands. One model everywhere: select, then direct.
 import { BUILDINGS, REACH, cheb, type Piece } from '@owc/shared';
+import { terrainAt } from '@owc/worldgen';
 import { pickSet } from '@owc/rules';
 import type { Scene } from './scene.ts';
 import { commands, mirror } from '../net.ts';
-import { useUI } from '../store.ts';
+import { setControlsOpen, useUI } from '../store.ts';
 import { audio } from '../audio/audio.ts';
 import { checkPlacement } from './placement.ts';
 
@@ -18,7 +19,7 @@ const haptic = (ms = 10) => { try { navigator.vibrate?.(ms); } catch { /* not su
 export class Input {
   scene: Scene;
   private ptrs = new Map<number, Ptr>();
-  private mode: 'none' | 'pan' | 'command' | 'lasso' | 'box' | 'pinch' | 'ghost' = 'none';
+  private mode: 'none' | 'pan' | 'command' | 'lasso' | 'box' | 'pinch' | 'ghost' | 'paint' = 'none';
   private longTimer: ReturnType<typeof setTimeout> | null = null;
   private longFired = false;
   private lastTap = { t: 0, x: 0, y: 0 };
@@ -109,12 +110,20 @@ export class Input {
       this.mode = 'pinch';
       this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), a: Math.atan2(b.y - a.y, b.x - a.x), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, rotAcc: 0 };
       this.scene.pathPreview = null; this.scene.lasso = null; this.scene.box = null;
+      useUI.getState().set({ stroke: null }); // a second finger pans and zooms instead of drawing
       return;
     }
     if (this.ptrs.size > 2) return;
     this.mode = 'none';
     this.longFired = false;
     const ui = useUI.getState();
+    // A drawing tool (citybuilding.md §8): one finger (or the left button) draws; two fingers,
+    // the middle or right button, Ctrl or Space pan as usual.
+    if (ui.tool && !(e.pointerType === 'mouse' && (e.button === 1 || e.button === 2 || e.ctrlKey || this.keys.has(' ')))) {
+      this.mode = 'paint';
+      this.strokeTo(this.cell(p), true);
+      return;
+    }
     if (ui.buildType) { this.mode = 'ghost'; this.updateGhost(this.sq(p)); return; }
     if (e.pointerType === 'mouse') {
       // Middle-drag, or Ctrl / Space held with any drag, pans (for touchpads: ux.md §3).
@@ -131,6 +140,60 @@ export class Input {
         this.scene.lasso = this.lassoPts;
       }
     }, LONG_PRESS);
+  }
+
+  /** The square under a pointer. */
+  private cell(p: { x: number; y: number }): [number, number] { const [x, y] = this.scene.toSquare(p.x, p.y); return [Math.round(x), Math.round(y)]; }
+
+  /**
+   * Extend the stroke to a square (citybuilding.md §8). Lines and brushes collect every square
+   * along the way (no gaps when the finger moves fast); a single prop just follows the finger
+   * and lands where it's lifted. A street brush is `toolWidth` squares wide.
+   */
+  private strokeTo(c: [number, number], start = false) {
+    const ui = useUI.getState(), t = ui.tool;
+    if (!t) return;
+    const single = t.kind === 'decor' && !BUILDINGS[t.type].line && !ui.toolErase;
+    const cur = start ? [] : (ui.stroke ?? []);
+    if (single) { ui.set({ stroke: [c] }); return; }
+    const out = cur.slice();
+    const seen = new Set(out.map(([x, y]) => x * 134217728 + y));
+    const add = (x: number, y: number) => {
+      const w = t.kind === 'pave' ? ui.toolWidth : 1, lo = -Math.floor((w - 1) / 2);
+      for (let dy = lo; dy < lo + w; dy++) for (let dx = lo; dx < lo + w; dx++) { const k = (x + dx) * 134217728 + (y + dy); if (!seen.has(k)) { seen.add(k); out.push([x + dx, y + dy]); } }
+    };
+    const last = cur[cur.length - 1];
+    if (!last) add(c[0], c[1]);
+    else {
+      // Step square by square from the last one (4-connected, so lines have no diagonal gaps).
+      let [x, y] = last;
+      for (let i = 0; i < 400 && (x !== c[0] || y !== c[1]); i++) {
+        if (Math.abs(c[0] - x) >= Math.abs(c[1] - y)) x += Math.sign(c[0] - x); else y += Math.sign(c[1] - y);
+        add(x, y);
+      }
+    }
+    if (out.length !== cur.length || start) ui.set({ stroke: out });
+  }
+
+  /** Send the stroke (in pieces the server accepts), then report anything that didn't go. */
+  private async commitStroke() {
+    const ui = useUI.getState(), t = ui.tool, cells = ui.stroke ?? [];
+    ui.set({ stroke: null });
+    if (!t || !cells.length) return;
+    const chunks = <X,>(a: X[], n: number) => { const r: X[][] = []; for (let i = 0; i < a.length; i += n) r.push(a.slice(i, i + n)); return r; };
+    const water = (c: [number, number]) => terrainAt(mirror.seed, c[0], c[1]) === 'water';
+    let err: string | null = null;
+    const run = async (f: (part: [number, number][]) => Promise<string | null>, list: [number, number][], n = 100) => { for (const part of chunks(list, n)) { const e = await f(part); if (e) err = e; } };
+    if (t.kind === 'pave') {
+      // A street across water is a bridge (citybuilding.md §4).
+      const land = cells.filter((c) => !water(c)), wet = cells.filter(water);
+      if (ui.toolErase) { await run((c) => commands.paintPaving(c, null), land, 200); await run((c) => commands.eraseDecor(c), wet); }
+      else { await run((c) => commands.paintPaving(c, t.style), land, 200); await run((c) => commands.placeDecor('bridge', c), wet); }
+    } else if (ui.toolErase) await run((c) => commands.eraseDecor(c), cells);
+    else if (t.kind === 'decor') await run((c) => commands.placeDecor(t.type, c), cells);
+    else await run((c) => commands.plant(t.plant, c), cells, 60);
+    if (err) { useUI.getState().toast(err, 'error'); audio.error(); }
+    else { audio.commit(); haptic(8); }
   }
 
   private cancelLong() { if (this.longTimer) clearTimeout(this.longTimer); this.longTimer = null; }
@@ -167,6 +230,7 @@ export class Input {
       return;
     }
     if (this.mode === 'ghost') { this.updateGhost(this.sq(p)); return; }
+    if (this.mode === 'paint') { this.strokeTo(this.cell(p)); return; }
     if (this.mode === 'none' && moved > TAP_MOVE) {
       this.cancelLong();
       const [wx, wy] = this.sq({ ...p, x: p.sx, y: p.sy });
@@ -198,6 +262,7 @@ export class Input {
     this.cancelLong();
     const sc = this.scene;
     if (this.mode === 'pinch') { if (this.ptrs.size === 0) this.mode = 'none'; return; }
+    if (this.mode === 'paint') { this.mode = 'none'; if (!cancelled) void this.commitStroke(); else useUI.getState().set({ stroke: null }); return; }
     const moved = Math.hypot(p.x - p.sx, p.y - p.sy);
     const at = this.sq(p);
     if (cancelled) { this.reset(); return; }
@@ -281,6 +346,20 @@ export class Input {
     if (ui.orderMode && ui.selection.length) {
       const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
       if (ui.orderMode === 'pave') { void commands.pave(ui.selection, to); sc.fx.ripple(to[0], to[1], 0xa39a8b); audio.commit(); haptic(); }
+      else if (ui.orderMode === 'haul') {
+        // First the deposit: the rock or ore under the tap (or next to it).
+        const near = [...mirror.nodes.values()].filter((n) => (n.kind === 'rock' || n.kind === 'ore') && n.remaining > 0 && Math.max(Math.abs(n.x - at[0]), Math.abs(n.y - at[1])) <= 1)
+          .sort((a, b) => Math.hypot(a.x - at[0], a.y - at[1]) - Math.hypot(b.x - at[0], b.y - at[1]))[0];
+        if (!near) { ui.toast('Tap a rock or ore deposit', 'error'); audio.error(); return; }
+        sc.fx.ripple(near.x, near.y, 0xe3b23c); haptic(8);
+        ui.set({ orderMode: 'haulTo', haulFrom: [near.x, near.y] });
+        return;
+      } else if (ui.orderMode === 'haulTo' && ui.haulFrom) {
+        const from = ui.haulFrom;
+        void commands.haul(ui.selection, from, to).then((e) => { if (e) { ui.toast(e, 'error'); audio.error(); } else { ui.toast('The elephants set off to haul it', 'info'); audio.commit(); } });
+        sc.fx.ripple(to[0], to[1], 0xa39a8b); haptic();
+        ui.set({ haulFrom: null });
+      }
       else ui.set({ pendingClear: { ids: ui.selection, a: [to[0] - 4, to[1] - 4], b: [to[0] + 4, to[1] + 4] } });
       ui.set({ orderMode: null });
       return;
@@ -448,8 +527,8 @@ export class Input {
     if (!ui.buildType) return;
     const size = BUILDINGS[ui.buildType].size;
     const x = Math.round(at[0] - (size - 1) / 2), y = Math.round(at[1] - (size - 1) / 2);
-    const res = checkPlacement(ui.buildType, x, y);
-    ui.set({ ghost: { x, y, ok: res.ok, reason: res.reason } });
+    const res = checkPlacement(ui.buildType, x, y, ui.moving ?? undefined);
+    ui.set({ ghost: { x, y, ok: res.ok, reason: res.reason, warn: res.warn } });
   }
 
   placeBuilding() {
@@ -458,6 +537,15 @@ export class Input {
     const { x, y, ok, reason } = ui.ghost;
     if (!ok) { ui.toast(reason, 'error'); audio.error(); return; }
     const type = ui.buildType;
+    // Moving a building (citybuilding.md §3): it's rebuilt at the new spot.
+    if (ui.moving != null) {
+      const id = ui.moving;
+      commands.moveBuilding(id, [x, y]).then((err) => {
+        if (!err) { audio.build(); this.scene.fx.dust(x, y, 12); haptic(15); ui.set({ buildType: null, ghost: null, moving: null }); ui.toast('Moved: it goes up again at the new spot', 'info'); }
+        else { ui.toast(err, 'error'); audio.error(); }
+      });
+      return;
+    }
     commands.build(type, [x, y]).then((err) => {
       if (!err) { audio.build(); this.scene.fx.dust(x, y, 12); haptic(15); ui.set({ buildType: null, ghost: null }); }
       else audio.error();
@@ -475,9 +563,12 @@ export class Input {
     const ui = useUI.getState(), sc = this.scene;
     if (k === 'q') sc.rotate(-1);
     else if (k === 'e') sc.rotate(1);
+    else if (k === 'Escape' && (ui.tool || ui.moving != null)) ui.set({ tool: null, toolErase: false, stroke: null, moving: null, buildType: null, ghost: null });
+    else if (k === 'x' && ui.tool) ui.set({ toolErase: !ui.toolErase });
     else if (k === 'Escape') { if (ui.orderMode) ui.set({ orderMode: null }); else if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else { ui.select([]); this.pendingMove = null; sc.pendingMarker = null; } }
     else if (k === 's' && !e.ctrlKey) { if (ui.selection.length) commands.stop(ui.selection); }
     else if (k === 'b') ui.set({ sheet: ui.sheet === 'build' ? null : 'build' });
+    else if (k === '?') { setControlsOpen(ui.tool ? 'tools' : 'map'); ui.set({ sheet: ui.sheet === 'controls' ? null : 'controls' }); }
     else if (k === 'f' && this.scene.hover) { ui.addFlag(this.scene.hover[0], this.scene.hover[1]); this.scene.fx.ripple(this.scene.hover[0], this.scene.hover[1], 0xe3b23c); }
     else if (k === 'h' || k === 'Home') { const emp = mirror.myPieces().find((p) => p.emperor); if (emp) sc.centerOn(emp.x, emp.y); }
     else if (k === '+' || k === '=') sc.zoomBy(1.15);

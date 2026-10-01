@@ -3,7 +3,7 @@
 // and gives one order, the work is split between them, and more hands finish sooner
 // (less the time spent getting to their share). Workers are ordinary idle pieces with a
 // job: any new order, or a battle, takes them off it, and what's done stays done.
-import { CLEAR_CREW, CLEAR_MAX, CLEAR_TURNS, PAVE_CREW, PAVE_MAX, PAVE_RIDE, PAVE_TURNS, cheb, distToRect, type Piece } from '@owc/shared';
+import { CLEAR_CREW, CLEAR_MAX, CLEAR_TURNS, HAUL_LOAD, PAVE_CREW, PAVE_MAX, PAVE_RIDE, PAVE_TURNS, REACH, cheb, distToRect, type Piece } from '@owc/shared';
 import { bestGaitMove, findPathLong } from '@owc/rules';
 import type { Game } from './game.ts';
 import type { NodeRec } from './world.ts';
@@ -14,11 +14,13 @@ type Record = (p: Piece, fx: number, fy: number) => void;
 interface Paver { kind: 'pave'; job: number; squares: [number, number][]; i: number; going: boolean; stuck: number; work: number }
 /** One elephant on a clearing crew: the node it's working, and how long it has worked it. */
 interface Feller { kind: 'clear'; job: number; target?: number; work: number; stuck: number }
-interface Job { owner: string; kind: 'pave' | 'clear'; left: number; done: number; at: [number, number]; area?: { x0: number; y0: number; x1: number; y1: number; hard: boolean }; claimed: Set<number>; skip: Set<number> }
+/** One elephant hauling (citybuilding.md §6): to the deposit, lift a load, to the drop, set it down; repeat. */
+interface Hauler { kind: 'haul'; job: number; load: number; res: 'rock' | 'ore'; leg: 'fetch' | 'carry'; stuck: number }
+interface Job { owner: string; kind: 'pave' | 'clear' | 'haul'; from?: [number, number]; to?: [number, number]; left: number; done: number; at: [number, number]; area?: { x0: number; y0: number; x1: number; y1: number; hard: boolean }; claimed: Set<number>; skip: Set<number> }
 
 export class Works {
   private game: Game;
-  private workers = new Map<number, Paver | Feller>();
+  private workers = new Map<number, Paver | Feller | Hauler>();
   private jobs = new Map<number, Job>();
   private nextJob = 1;
   constructor(game: Game) { this.game = game; }
@@ -33,7 +35,9 @@ export class Works {
       if (!w) continue;
       this.workers.delete(id);
       const p = this.game.world.pieces.get(id);
-      if (p && (p.routine === 'pave' || p.routine === 'clear')) { p.routine = undefined; this.game.world.touch(p); }
+      if (p && (p.routine === 'pave' || p.routine === 'clear' || p.routine?.startsWith('haul'))) { p.routine = undefined; this.game.world.touch(p); }
+      // An elephant taken off a haul sets its load down where it stands (anyone can use it).
+      if (p && w.kind === 'haul' && w.load > 0) this.drop(p, w);
       if (w.kind === 'clear' && w.target != null) this.jobs.get(w.job)?.claimed.delete(w.target);
       this.finish(w.job, false);
     }
@@ -101,6 +105,77 @@ export class Works {
     return null;
   }
 
+  /**
+   * Elephants haul rock or ore (citybuilding.md §6): each lifts up to HAUL_LOAD from the deposit
+   * at `from`, walks it to `to` (in reach of one of the player's kings) and sets it down as a
+   * pile there, then goes back for more until the deposit is spent.
+   */
+  haul(player: string, ids: number[], from: [number, number], to: [number, number]): string | null {
+    const g = this.game, w = g.world;
+    const crew = g.orderable(player, ids).filter((p) => p.kind === 'R').slice(0, CLEAR_CREW);
+    if (!crew.length) return 'Hauling needs war elephants';
+    const n = w.nodeAt(from[0], from[1]);
+    if (!n || n.gone || n.remaining <= 0 || (n.kind !== 'rock' && n.kind !== 'ore')) return 'Pick a rock or ore deposit to haul';
+    if (n.hoard && !w.buildingsNear(n.x, n.y, REACH).some((b) => b.owner === player)) return 'That pile belongs to someone else\'s town';
+    if (!g.kingsOf(player).some((k) => cheb(k.x, k.y, to[0], to[1]) <= REACH)) return 'Set it down within 10 squares of one of your kings';
+    if (!w.buildable(to[0], to[1])) return 'Set it down on open land';
+    if (cheb(from[0], from[1], to[0], to[1]) < 2) return 'Pick somewhere else to take it';
+    const job = this.nextJob++;
+    this.jobs.set(job, { owner: player, kind: 'haul', left: 0, done: 0, at: [to[0], to[1]], from: [n.x, n.y], to: [to[0], to[1]], claimed: new Set(), skip: new Set() });
+    for (const p of crew) this.start(p, { kind: 'haul', job, load: 0, res: n.kind as 'rock' | 'ore', leg: 'fetch', stuck: 0 });
+    return null;
+  }
+
+  /** Where a haul's pile goes: the drop spot, or the nearest open square beside it. */
+  private dropSpot(at: [number, number], kind: string): [number, number] | null {
+    const w = this.game.world;
+    const here = w.nodeAt(at[0], at[1]);
+    if (here?.hoard && !here.gone && here.kind === kind) return at;
+    return w.nearestFree(at[0], at[1], 3, (x, y) => w.buildable(x, y) && w.buildingIdAt(x, y) == null && (!w.nodeAt(x, y) || (!!w.nodeAt(x, y)!.hoard && w.nodeAt(x, y)!.kind === kind && !w.nodeAt(x, y)!.gone)));
+  }
+
+  /** Set a load down as a pile (adding to one of the same kind already there). */
+  private drop(p: Piece, job: Hauler, at: [number, number] = [p.x, p.y]) {
+    const w = this.game.world;
+    const spot = this.dropSpot(at, job.res);
+    if (spot) {
+      const pile = w.nodeAt(spot[0], spot[1]);
+      if (pile?.hoard && !pile.gone && pile.kind === job.res) { pile.remaining += job.load; pile.capacity += job.load; w.nodeOverlay.set(spot[0] * 134217728 + spot[1], pile); w.dirtyNodes.add(spot[0] * 134217728 + spot[1]); }
+      else w.addHoard(spot[0], spot[1], job.res, job.load);
+    }
+    job.load = 0;
+    p.routine = 'haul'; this.game.world.touch(p);
+  }
+
+  private haulStep(p: Piece, job: Hauler, record: Record) {
+    const w = this.game.world, j = this.jobs.get(job.job);
+    if (!j?.from || !j.to) { this.done(p, job); return; }
+    const [tx, ty] = job.leg === 'fetch' ? j.from : j.to;
+    if (cheb(p.x, p.y, tx, ty) <= 1) {
+      job.stuck = 0;
+      if (job.leg === 'fetch') {
+        const n = w.nodeAt(j.from[0], j.from[1]);
+        if (!n || n.gone || n.remaining <= 0) { this.done(p, job); return; }
+        job.load = w.drawNode(n, HAUL_LOAD, this.game.now);
+        job.leg = 'carry';
+        p.routine = `haul:${job.res}`; w.touch(p);
+      } else {
+        this.drop(p, job, j.to);
+        this.game.chronicle.note(p.owner, 'haul');
+        const n = w.nodeAt(j.from[0], j.from[1]);
+        if (!n || n.gone || n.remaining <= 0) { this.done(p, job); return; }
+        job.leg = 'fetch';
+      }
+      return;
+    }
+    const before = cheb(p.x, p.y, tx, ty);
+    this.walk(p, tx, ty, record);
+    if (cheb(p.x, p.y, tx, ty) >= before && ++job.stuck >= 8) {
+      job.stuck = 0;
+      this.game.orderMove(p.owner!, [p.id], [tx, ty], undefined, 60, undefined, true, true);
+    }
+  }
+
   /** What's left to clear in an area. */
   targets(player: string, area: { x0: number; y0: number; x1: number; y1: number; hard: boolean }): NodeRec[] {
     const w = this.game.world;
@@ -112,7 +187,7 @@ export class Works {
       && !theirs.some((b) => distToRect(n.x, n.y, b.x, b.y, b.size) <= 10));
   }
 
-  private start(p: Piece, job: Paver | Feller, goTo?: [number, number]) {
+  private start(p: Piece, job: Paver | Feller | Hauler, goTo?: [number, number]) {
     const g = this.game;
     // Leaving any march; posted where they work, so they don't drift home.
     g.orderStop(p.owner!, [p.id]);
@@ -121,7 +196,7 @@ export class Works {
     this.workers.set(p.id, job);
     this.jobs.get(job.job)!.left++;
     p.posted = true;
-    p.routine = job.kind;
+    p.routine = job.kind === 'haul' ? 'haul' : job.kind;
     g.world.touch(p);
     if (job.kind === 'pave' && goTo && cheb(p.x, p.y, goTo[0], goTo[1]) > 2) {
       job.going = true;
@@ -136,7 +211,7 @@ export class Works {
     if (completed) j.done++;
     if (j.left > 0) return;
     this.jobs.delete(jobId);
-    if (j.done) this.game.onAlert(j.owner, { kind: 'info', text: j.kind === 'pave' ? 'The road is paved' : 'The land is cleared', at: j.at });
+    if (j.done) this.game.onAlert(j.owner, { kind: 'info', text: j.kind === 'pave' ? 'The road is paved' : j.kind === 'haul' ? 'The haul is done' : 'The land is cleared', at: j.at });
   }
 
   /** One world turn of work. */
@@ -147,13 +222,14 @@ export class Works {
       if (!p || p.state === 'battle' || p.state === 'masterless' || !p.owner) { this.release([id]); continue; }
       if (p.groupId) continue; // riding out to its share
       if (job.kind === 'pave') this.paveStep(p, job, record);
+      else if (job.kind === 'haul') this.haulStep(p, job, record);
       else this.clearStep(p, job, record);
     }
   }
 
-  private done(p: Piece, job: Paver | Feller) {
+  private done(p: Piece, job: Paver | Feller | Hauler) {
     this.workers.delete(p.id);
-    if (p.routine === job.kind) { p.routine = undefined; this.game.world.touch(p); }
+    if (p.routine === job.kind || p.routine?.startsWith('haul')) { p.routine = undefined; this.game.world.touch(p); }
     this.finish(job.job, true);
   }
 

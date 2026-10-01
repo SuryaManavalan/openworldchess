@@ -679,3 +679,37 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 .discord-card .discord-mark { align-self: center; width: 64px; height: 64px; border-radius: 20px; background: #5865f2; color: #fff; display: grid; place-items: center; box-shadow: 0 4px 0 #3c45a5; }
 .discord-card .discord-btn { align-self: stretch; min-height: 50px; font-size: 16px; }
 .discord-card .btn.ghost { align-self: center; }
+/* City building: the Build palette and the drawing tool bar (citybuilding.md §8). */
+.build-palette { display: flex; flex-direction: column; gap: 10px; }
+.palette-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.palette-tabs button { min-height: 40px; font-weight: 900; }
+.palette-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--dim); }
+.palette-note b { color: var(--ink); }
+.build-list.city-grid, .layout-desktop .build-list.city-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.build-card.city-card { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; text-align: center; padding: 8px 4px 7px; min-height: 104px; cursor: pointer; color: var(--ink); font: inherit; }
+.build-card.city-card img { width: 64px; height: 44px; object-fit: contain; grid-row: auto; }
+.build-card.city-card .bname { font-size: 13px; line-height: 1.15; }
+.build-card.city-card .bmeta { font-size: 10.5px; line-height: 1.25; color: var(--dim); }
+.build-card.city-card.on { border-color: #f3d27a; background: rgba(243, 210, 122, 0.12); }
+.build-card.city-card.eraser .eraser-ico { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: rgba(255, 107, 90, 0.16); color: #ffb0a6; }
+.build-card.city-card.eraser.on { border-color: #ff8a7a; background: rgba(255, 107, 90, 0.12); }
+.tool-bar { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.tool-bar .tool-top { display: flex; align-items: center; gap: 10px; }
+.tool-bar .tool-img { width: 52px; height: 36px; object-fit: contain; flex: none; }
+.tool-bar .tool-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-weight: 900; font-size: 15px; line-height: 1.2; }
+.tool-bar .tool-name small { font-weight: 700; font-size: 12px; color: var(--dim); }
+.tool-bar .tool-done { min-height: 40px; padding: 8px 20px; }
+.tool-bar .tool-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.tool-bar .tool-width { display: flex; gap: 4px; flex: 1; }
+.tool-bar .tool-width button { flex: 1; min-height: 40px; font-weight: 800; }
+.tool-bar .tool-erase { min-height: 40px; gap: 4px; display: inline-flex; align-items: center; }
+.tool-bar .tool-erase.on { background: rgba(255, 107, 90, 0.18); border-color: #ff8a7a; color: #ffb0a6; }
+.move-demolish { margin-top: 8px; }
+.controls-list { margin: 4px 0 8px; display: flex; flex-direction: column; gap: 0; }
+.controls-list .ctl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 10px; padding: 7px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); font-size: 13.5px; line-height: 1.35; }
+.controls-list .ctl:first-child { border-top: 0; }
+.controls-list dt { font-weight: 800; color: var(--ink); }
+.controls-list dd { margin: 0; color: var(--dim); }
+.settings .guide-row { margin: 2px 0 10px; }
+.tool-bar .tool-help { flex: none; width: 40px; height: 40px; border-radius: 12px; }
+.keys-link { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-weight: 800; background: none; border: 0; cursor: pointer; padding: 6px 0; }

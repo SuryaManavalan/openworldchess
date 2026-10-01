@@ -1,13 +1,18 @@
 // UI state shared by the HUD (React) and the game view (Pixi). The world
 // itself lives in the Mirror; React re-renders on `version` bumps.
 import { create } from 'zustand';
-import type { BuildingType } from '@owc/shared';
+import type { BuildingType, DecorType } from '@owc/shared';
 import type { ClipData } from './game/clip.ts';
 
 export interface AlertItem { id: number; kind: string; text: string; battleId?: number; at?: [number, number]; time: number }
 export interface Toast { id: number; text: string; tone: 'info' | 'error' | 'good'; icon?: string }
 
-export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help' | 'shop' | 'chronicle' | 'troops';
+/** A drawing tool (citybuilding.md §8). */
+export type CityTool = { kind: 'decor'; type: DecorType } | { kind: 'pave'; style: number } | { kind: 'plant'; plant: 'wheat' | 'tree' };
+export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help' | 'shop' | 'chronicle' | 'troops' | 'controls';
+/** Which part of the Controls guide to open first. */
+export let controlsOpen = 'map';
+export const setControlsOpen = (s: string) => { controlsOpen = s; };
 
 interface Settings {
   sound: boolean;
@@ -24,7 +29,19 @@ interface UIState {
   selection: number[];
   sheet: Sheet;
   buildType: BuildingType | null;
-  ghost: { x: number; y: number; ok: boolean; reason: string } | null;
+  /** A building being moved (citybuilding.md §3): the ghost places it instead of a new one. */
+  moving: number | null;
+  /** A drawing tool (citybuilding.md §8): streets, decorations or planting; null when none. */
+  tool: CityTool | null;
+  /** The eraser for the current tool. */
+  toolErase: boolean;
+  /** Street brush width in squares (1–3). */
+  toolWidth: number;
+  /** Squares in the stroke being drawn (previewed until it's lifted). */
+  stroke: [number, number][] | null;
+  /** The Build palette's tab. */
+  buildTab: 'build' | 'streets' | 'adorn' | 'plant';
+  ghost: { x: number; y: number; ok: boolean; reason: string; warn?: boolean } | null;
   alerts: AlertItem[];
   toasts: Toast[];
   battleFocus: number | null;
@@ -47,7 +64,9 @@ interface UIState {
   /** Help for a quest open (campaign.md §5.5): the banner's step, or a side quest by id. */
   questHelp: { side?: number } | null;
   /** A work order waiting for its place (movement.md §9): where to pave to, or what to clear. */
-  orderMode: 'pave' | 'clear' | null;
+  orderMode: 'pave' | 'clear' | 'haul' | 'haulTo' | null;
+  /** A haul's deposit, chosen before its drop spot (citybuilding.md §6). */
+  haulFrom: [number, number] | null;
   /** An area chosen for elephants to clear, waiting for confirmation. */
   pendingClear: { ids: number[]; a: [number, number]; b: [number, number] } | null;
   lassoMode: boolean;
@@ -90,6 +109,12 @@ export const useUI = create<UIState>((set, get) => ({
   ceremony: null,
   sheet: null,
   buildType: null,
+  moving: null,
+  tool: null,
+  toolErase: false,
+  toolWidth: 1,
+  stroke: null,
+  buildTab: 'build',
   ghost: null,
   alerts: [],
   toasts: [],
@@ -100,6 +125,7 @@ export const useUI = create<UIState>((set, get) => ({
   hint: null,
   trackerMin: (() => { try { return localStorage.getItem('owc.trackerMin') === '1'; } catch { return false; } })(),
   orderMode: null,
+  haulFrom: null,
   riddle: null,
   questHelp: null,
   pendingClear: null,

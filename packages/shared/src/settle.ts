@@ -3,6 +3,7 @@
 // draws them; the server uses them for holding cities, trade and quests.
 import { cheb, distToRect } from './geom.ts';
 import { tierOfCount } from './chronicle.ts';
+import { isDecor } from './constants.ts';
 import type { Building } from './types.ts';
 
 export interface SettlementInfo { id: number; owner: string; buildings: Building[]; cx: number; cy: number; tier: number }
@@ -10,7 +11,8 @@ export interface SettlementInfo { id: number; owner: string; buildings: Building
 export function clusterSettlements(all: Iterable<Building>): SettlementInfo[] {
   const byOwner = new Map<string, Building[]>();
   for (const b of all) {
-    if (!b.owner || b.type === 'ruin' || b.type === 'camp') continue;
+    // Decorations (citybuilding.md) don't make a settlement or raise its tier.
+    if (!b.owner || b.type === 'ruin' || b.type === 'camp' || isDecor(b.type)) continue;
     let l = byOwner.get(b.owner);
     if (!l) byOwner.set(b.owner, (l = []));
     l.push(b);

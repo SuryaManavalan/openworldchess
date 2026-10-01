@@ -55,6 +55,8 @@ export interface Building {
   cycleMs?: number;
   /** Held by a tended altar rather than a king (economy.md §8): works at ALTAR_RATE. */
   outpost?: boolean;
+  /** A wall, fence or hedge with a street through it (citybuilding.md §4): a gate, walkable. */
+  gate?: boolean;
   /** Hurry bubbles waiting to be popped by the owner (economy.md §7): 0 plain, 1 gold. */
   bubbles?: number[];
   /** Server: when the next bubble rises. */
@@ -90,6 +92,8 @@ export interface NodeState {
   remaining: number;
   /** A cache a scattered camp left behind (campaign.md §4.2): rich, and it never regrows. */
   hoard?: boolean;
+  /** Planted by a player (citybuilding.md §5): grows in from nothing, then is ordinary wheat or wood. */
+  planted?: boolean;
 }
 
 export interface PlayerPublic {

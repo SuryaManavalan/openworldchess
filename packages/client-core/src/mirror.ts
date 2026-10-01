@@ -21,6 +21,8 @@ export class Mirror {
   nextTurnAt = 0;
   pieces = new Map<number, Piece>();
   buildings = new Map<number, Building>();
+  /** Which building stands on each square (for neighbour-aware art). */
+  buildingAt = new Map<number, number>();
   nodes = new Map<number, NodeState>();
   pieceAt = new Map<number, number>();
   traffic = new Map<number, number>();
@@ -81,8 +83,17 @@ export class Mirror {
     this.onPieceRemoved(p);
   }
 
+  private indexBuilding(b: Building, on: boolean) {
+    for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) {
+      const k = key(b.x + dx, b.y + dy);
+      if (on) this.buildingAt.set(k, b.id); else if (this.buildingAt.get(k) === b.id) this.buildingAt.delete(k);
+    }
+  }
+
   private setBuilding(b: Building) {
     const prev = this.buildings.get(b.id);
+    if (prev) this.indexBuilding(prev, false);
+    this.indexBuilding(b, true);
     this.buildings.set(b.id, b);
     if (b.owner === this.me) this.mineBuildings.add(b.id); else this.mineBuildings.delete(b.id);
     this.onBuildingChange(b, prev);
@@ -133,11 +144,15 @@ export class Mirror {
           }
         }
         // Newly paved roads (movement.md §9).
-        if (m.paved) for (let i = 0; i + 1 < m.paved.length; i += 2) { this.traffic.set(key(m.paved[i], m.paved[i + 1]), PAVED); this.onPaved(m.paved[i], m.paved[i + 1]); }
+        if (m.paved) for (let i = 0; i + 2 < m.paved.length; i += 3) {
+          const k = key(m.paved[i], m.paved[i + 1]), v = m.paved[i + 2];
+          if (v) this.traffic.set(k, v); else this.traffic.delete(k);
+          this.onPaved(m.paved[i], m.paved[i + 1]);
+        }
         for (const p of m.pieces) this.setPiece(p);
         for (const id of m.removed) this.dropPiece(id);
         for (const b of m.buildings) this.setBuilding(b);
-        for (const id of m.removedBuildings) { this.buildings.delete(id); this.mineBuildings.delete(id); this.onBuildingRemoved(id); }
+        for (const id of m.removedBuildings) { const ob = this.buildings.get(id); if (ob) this.indexBuilding(ob, false); this.buildings.delete(id); this.mineBuildings.delete(id); this.onBuildingRemoved(id); }
         for (const n of m.nodes) this.setNode(n);
         this.onMoves(events);
         this.onTurn(m.n);
@@ -175,7 +190,7 @@ export class Mirror {
   prune(keep: Set<string>) {
     for (const ck of [...this.chunks]) if (!keep.has(ck)) this.chunks.delete(ck);
     for (const p of [...this.pieces.values()]) if (p.owner !== this.me && !this.inChunks(p.x, p.y)) this.dropPiece(p.id);
-    for (const b of [...this.buildings.values()]) if (b.owner !== this.me && !this.inChunks(b.x, b.y)) { this.buildings.delete(b.id); this.onBuildingRemoved(b.id); }
+    for (const b of [...this.buildings.values()]) if (b.owner !== this.me && !this.inChunks(b.x, b.y)) { this.indexBuilding(b, false); this.buildings.delete(b.id); this.onBuildingRemoved(b.id); }
     for (const [k, n] of [...this.nodes]) if (!this.inChunks(n.x, n.y)) { this.nodes.delete(k); this.onNodeDropped(k); }
   }
 

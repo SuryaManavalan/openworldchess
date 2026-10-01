@@ -178,6 +178,17 @@ export function pieceUrl(kind: PieceKind, side: 'light' | 'dark', team: string, 
   return u;
 }
 
+/** A decoration's art as an image URL (the Adorn palette). */
+export function decorUrl(kind: string, team: string): string {
+  const k = `dec:${kind}:${team}`;
+  let u = urlCache.get(k);
+  if (!u) {
+    u = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${DECOR[kind]({ team, awning: team })}</svg>`);
+    urlCache.set(k, u);
+  }
+  return u;
+}
+
 export function buildingUrl(type: string, team: string, civ?: string): string {
   const k = `b:${type}:${team}:${civ ?? ''}`;
   let u = urlCache.get(k);
@@ -195,6 +206,6 @@ export function civicTexture(variant: string, team: string, onReady?: () => void
   return get(`c:${variant}:${team}`, () => civicDraw({ kind, tier: +tier, clump: clump === '1', biome, team, variant: +v }), 128, onReady);
 }
 
-export function decorTexture(kind: string, color = '#d9534a', variant?: string, onReady?: () => void) {
-  return get(`d:${kind}:${color}:${variant ?? ''}`, () => DECOR[kind]({ team: color, awning: variant ?? color }), 96, onReady);
+export function decorTexture(kind: string, color = '#d9534a', variant?: string, onReady?: () => void, px = 96) {
+  return get(`d:${kind}:${color}:${variant ?? ''}:${px}`, () => DECOR[kind]({ team: color, awning: variant ?? color }), px, onReady);
 }

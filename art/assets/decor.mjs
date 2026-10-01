@@ -162,4 +162,32 @@ export function shrine() {
     line('M40 70 q5 3 10 0 M52 76 q4 2 8 0', 1.6, MAT.stoneShade) + part('M34 86 q6 -8 12 -2 q4 -6 8 2 Z', '#7fa65a', null, { stroke: false });
 }
 
-export const DECOR = { shrine, well, lamp, stall, haystack, dummy, flowers, crates, bench, banner, cargo, gate, tower, belltower, fountain, shrub, planter };
+// A statue players raise in their squares (citybuilding.md §4): a chess knight in pale stone
+// on a stepped plinth, the town's colour on a ribbon.
+export function statue({ team = '#d9534a' } = {}) {
+  return groundShadow(26, 90) +
+    part(rr(26, 76, 48, 12, 3), MAT.stone, MAT.stoneShade, { shadeX: 62 }) +
+    part(rr(32, 64, 36, 14, 3), MAT.stone, MAT.stoneShade, { shadeX: 60 }) +
+    part(rr(34, 62, 32, 4, 2), team, null) +
+    part('M38 64 C36 52 40 44 44 40 C38 38 36 30 42 22 C46 14 56 10 62 16 C68 20 70 30 66 38 L62 40 C64 48 64 56 62 64 Z', '#e6e0d4', '#c9c1b2', { shadeX: 56 }) +
+    part(circ(56, 24, 2.2), INK, null, { stroke: false }) +
+    line('M48 18 Q54 12 60 14', 2.2, '#c9c1b2');
+}
+
+// A tavern (2x2): timber-framed, a warm lit window, smoke, and a hanging sign with a tankard.
+export function tavern({ team = '#d9534a' } = {}) {
+  return groundShadow(42, 92) +
+    part('M14 90 V48 H86 V90 Z', MAT.wall, MAT.wallShade, { shadeX: 66 }) +
+    line('M14 62 H86 M30 48 V90 M70 48 V90 M30 62 L48 48 M70 62 L52 48', 2.4, '#6b4a2e') +
+    part('M8 50 L50 18 L92 50 Z', MAT.roofRed, MAT.roofRedShade, { shadeX: 56 }) +
+    line('M18 43 H82 M28 35 H72 M38 27 H62', 1.6, MAT.roofRedShade) +
+    part(rr(66, 18, 9, 18, 2), MAT.stone, MAT.stoneShade, { shadeX: 72 }) +
+    part(circ(71, 10, 5), '#e8e2d6', null, { stroke: false }) + part(circ(76, 4, 3.5), '#efe9de', null, { stroke: false }) +
+    part(rr(42, 68, 16, 22, 7), MAT.wood, MAT.woodShade, { shadeX: 52 }) +
+    part(rr(18, 66, 16, 14, 2), '#f6d58a', '#e3b23c', { shadeX: 28 }) + line('M26 66 V80 M18 73 H34', 1.8) +
+    part(rr(66, 66, 16, 14, 2), '#f6d58a', '#e3b23c', { shadeX: 76 }) + line('M74 66 V80 M66 73 H82', 1.8) +
+    line('M86 56 H96 M94 56 V60', 2.4) +
+    part(rr(86, 60, 12, 12, 2), team, null) + part(rr(89, 63, 5, 6, 1), '#f6d58a', null);
+}
+
+export const DECOR = { shrine, well, lamp, stall, haystack, dummy, flowers, crates, bench, banner, cargo, gate, tower, belltower, fountain, shrub, planter, statue, tavern };

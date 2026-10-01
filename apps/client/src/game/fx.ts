@@ -1,7 +1,7 @@
 // Life and juice (visuals.md): wind, particles, ripples, birds that react to
 // troops, water glints, day and night with lit windows, and the conversion wave.
 import { Container, Graphics, Text } from 'pixi.js';
-import type { PieceKind } from '@owc/shared';
+import { isDecor, type PieceKind } from '@owc/shared';
 import type { MoveEvent } from '@owc/client-core';
 import type { Scene } from './scene.ts';
 import { codeAt } from './terrain.ts';
@@ -317,12 +317,17 @@ export class Fx {
     l.clear();
     if (this.darkness < 0.05) return;
     const a = this.darkness * 1.6;
+    // Lit windows: a soft pool (a few fading rings, not one hard disc) under real buildings, and
+    // under the decorations that hold a flame (lamps, taverns, stalls). Walls and gardens stay dark.
+    const pool = (x: number, y: number, r: number, alpha: number) => {
+      for (const [k, f] of [[1, 0.22], [0.72, 0.3], [0.48, 0.4], [0.26, 0.55]] as const) l.circle(x, y, r * k).fill({ color: k > 0.6 ? 0xffb347 : 0xffd27a, alpha: alpha * f });
+    };
     for (const b of m.buildings.values()) {
       if (b.type === 'ruin' || b.built < 1) continue;
+      if (isDecor(b.type) && b.type !== 'lamp' && b.type !== 'tavern' && b.type !== 'stall') continue;
       const bx = (b.x + b.size / 2) * S, by = (b.y + b.size / 2) * S;
       const flick = 0.85 + 0.15 * Math.sin(now / 180 + b.id * 3);
-      l.circle(bx, by, S * (0.9 + b.size * 0.5)).fill({ color: 0xffb347, alpha: a * 0.28 * flick });
-      l.circle(bx, by, S * 0.45 * b.size).fill({ color: 0xffd27a, alpha: a * 0.35 * flick });
+      pool(bx, b.type === 'lamp' ? by - S * 0.2 : by, b.type === 'lamp' ? S * 0.85 : S * (0.55 + b.size * 0.3), a * flick * (b.type === 'lamp' ? 1 : 0.8));
     }
     // Street lamps light one by one as the dark deepens, each with a little spark.
     for (const d of sc.decor) {
@@ -331,7 +336,7 @@ export class Fx {
       const threshold = 0.04 + hash01(sc.mirror.seed, d.x, d.y, 440) * 0.12;
       if (this.darkness < threshold) { this.lampsLit.delete(id); continue; }
       if (!this.lampsLit.has(id)) { this.lampsLit.add(id); this.sparkle(d.x, d.y - 0.4, 0xffe3a0, 6); }
-      l.circle((d.x + 0.5) * S, (d.y + 0.5) * S - S * 0.2, S * 0.9).fill({ color: 0xffd27a, alpha: a * 0.35 });
+      pool((d.x + 0.5) * S, (d.y + 0.5) * S - S * 0.2, S * 0.85, a);
     }
     // Pawns drilling at night carry lanterns.
     for (const [id, v] of sc.pieces) {

@@ -163,11 +163,18 @@ export class Net {
         s.lastSub = now; this.subscribe(s, msg.chunks.slice(0, 81)); break;
       case 'order.move': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderMove(p.id, msg.pieceIds, msg.to, undefined, undefined, undefined, true)); break;
       case 'order.pave': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.works.pave(p.id, msg.pieceIds, msg.to)); break;
+      case 'order.haul': reply(msg.rid, g.works.haul(p.id, msg.pieceIds, msg.from, msg.to)); break;
       case 'order.clear': reply(msg.rid, g.works.clear(p.id, msg.pieceIds, msg.a, msg.b, msg.hard)); break;
       case 'order.stop': g.orderStop(p.id, msg.pieceIds); break;
       case 'order.attack': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderAttack(p.id, msg.pieceIds, msg.targetKingId)); break;
       case 'order.cancelAttack': g.battles.cancel(p.id, msg.battleId); break;
       case 'build': reply(msg.rid, g.build(p.id, msg.building, msg.at)); break;
+      case 'building.move': reply(msg.rid, g.city.move(p.id, msg.buildingId, msg.at)); break;
+      case 'building.demolish': reply(msg.rid, g.city.demolish(p.id, msg.buildingId)); break;
+      case 'decor.place': { const r = g.city.placeDecor(p.id, msg.type, msg.cells); reply(msg.rid, r.placed ? null : r.err); if (r.placed && r.err) this.send(s, { t: 'err', msg: r.err }); break; }
+      case 'decor.erase': g.city.erase(p.id, msg.cells); reply(msg.rid, null); break;
+      case 'paint.paving': { const r = g.city.paintPaving(p.id, msg.cells, msg.erase ? null : msg.style ?? 1); reply(msg.rid, r.err); break; }
+      case 'plant': { const r = g.city.plant(p.id, msg.kind, msg.cells); reply(msg.rid, r.placed ? null : r.err); break; }
       case 'building.pause': g.setPaused(p.id, msg.buildingId, msg.paused); break;
       case 'bubble.pop': g.popBubble(p.id, msg.buildingId, msg.i); break;
       case 'palace.mode': g.setPalaceMode(p.id, msg.buildingId, msg.mode); break;
@@ -265,7 +272,7 @@ export class Net {
       // The client already knew the piece (it started in view) and gets this move: nothing else to send.
       const gotMove = (p: Piece) => { const m = moveOf.get(p.id); return !!m && m[3] === p.x && m[4] === p.y && inSubs(s, m[1], m[2]); };
       const out = pieces.filter(seen);
-      const pavedIn = (s: Session) => { if (bot || !paved.length) return undefined; const v: number[] = []; for (let i = 0; i < paved.length; i += 2) if (inSubs(s, paved[i], paved[i + 1])) v.push(paved[i], paved[i + 1]); return v.length ? v : undefined; };
+      const pavedIn = (s: Session) => { if (bot || !paved.length) return undefined; const v: number[] = []; for (let i = 0; i < paved.length; i += 3) if (inSubs(s, paved[i], paved[i + 1])) v.push(paved[i], paved[i + 1], paved[i + 2]); return v.length ? v : undefined; };
       for (const p of walked) if (seen(p) && (bot || !gotMove(p))) out.push(p);
       this.send(s, {
         t: 'turn', n: this.game.turn, at,

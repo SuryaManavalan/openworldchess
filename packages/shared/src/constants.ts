@@ -67,7 +67,9 @@ export function setWorth(kinds: Iterable<PieceKind>): number {
   return w;
 }
 
-export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks' | 'wonder' | 'altar';
+/** Decorations (citybuilding.md §4): drawn by players, no production, no tier, no anchor. */
+export type DecorType = 'bridge' | 'wall' | 'fence' | 'hedge' | 'flowerbed' | 'lamp' | 'bench' | 'banner' | 'planter' | 'well' | 'stall' | 'statue' | 'fountain' | 'tavern';
+export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks' | 'wonder' | 'altar' | DecorType;
 /** Resources. "ore" looks different in each biome (gold, silver, copper, gems) but is one resource. */
 export type NodeKind = 'tree' | 'wheat' | 'rock' | 'ore';
 
@@ -84,6 +86,14 @@ export interface BuildingSpec {
   produces: PieceKind[];
   /** Base production time at richness 1 (economy.md §3). */
   baseMs: number;
+  /** A decoration (citybuilding.md §4): no production, tier, anchor or building cap. */
+  decor?: true;
+  /** Pieces may walk over it (a bridge, a flowerbed). */
+  walk?: true;
+  /** Placed on water (bridges), not land. */
+  onWater?: true;
+  /** Drawn as a line by dragging (walls, fences, hedges, bridges, flowerbeds). */
+  line?: true;
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingSpec> = {
@@ -96,7 +106,34 @@ export const BUILDINGS: Record<BuildingType, BuildingSpec> = {
   // A bishop's altar (economy.md §8): raised anywhere by a bishop standing beside it; free, and it produces nothing.
   altar: { type: 'altar', size: 1, cost: {}, buildMs: 60_000, needs: [], draw: {}, produces: [], baseMs: 0 },
   wonder: { type: 'wonder', size: 3, cost: { tree: 400, rock: 400, ore: 150 }, buildMs: 30 * 60_000, needs: [], draw: {}, produces: [], baseMs: 0 },
+  // Decorations (citybuilding.md §4).
+  bridge: { type: 'bridge', size: 1, cost: { tree: 10 }, buildMs: 4_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true, walk: true, onWater: true, line: true },
+  wall: { type: 'wall', size: 1, cost: { rock: 8 }, buildMs: 4_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true, line: true },
+  fence: { type: 'fence', size: 1, cost: { tree: 3 }, buildMs: 2_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true, line: true },
+  hedge: { type: 'hedge', size: 1, cost: { tree: 2 }, buildMs: 2_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true, line: true },
+  flowerbed: { type: 'flowerbed', size: 1, cost: { tree: 2 }, buildMs: 2_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true, walk: true, line: true },
+  lamp: { type: 'lamp', size: 1, cost: { tree: 3 }, buildMs: 2_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
+  bench: { type: 'bench', size: 1, cost: { tree: 4 }, buildMs: 2_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
+  banner: { type: 'banner', size: 1, cost: { tree: 4 }, buildMs: 2_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
+  planter: { type: 'planter', size: 1, cost: { tree: 5 }, buildMs: 2_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
+  well: { type: 'well', size: 1, cost: { rock: 12 }, buildMs: 6_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
+  stall: { type: 'stall', size: 1, cost: { tree: 10 }, buildMs: 5_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
+  statue: { type: 'statue', size: 1, cost: { rock: 25 }, buildMs: 10_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
+  fountain: { type: 'fountain', size: 1, cost: { rock: 35 }, buildMs: 12_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
+  tavern: { type: 'tavern', size: 2, cost: { tree: 40, rock: 15 }, buildMs: 30_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true },
 };
+
+/** Every decoration type, in palette order (citybuilding.md §4). */
+export const DECOR_TYPES: DecorType[] = ['bridge', 'wall', 'fence', 'hedge', 'flowerbed', 'lamp', 'bench', 'banner', 'planter', 'well', 'stall', 'statue', 'fountain', 'tavern'];
+export const isDecor = (t: string): t is DecorType => !!(BUILDINGS as Record<string, BuildingSpec | undefined>)[t]?.decor;
+/** Decorations a player may hold: a base, more for each real building, and a hard cap (citybuilding.md §7). */
+export const DECOR_BASE = 20, DECOR_PER_BUILDING = 4, DECOR_CAP = 400;
+/** Decor with none of its owner's real buildings this close is cleared. */
+export const DECOR_CLEAR_R = 15;
+/** Planting (citybuilding.md §5): how long a field and a sapling take to grow in, and what a field costs. */
+export const PLANT_FIELD_MS = 5 * 60_000, PLANT_TREE_MS = 8 * 60_000, PLANT_FIELD_COST = 2;
+/** Hauling (citybuilding.md §6): what one elephant carries. */
+export const HAUL_LOAD = 60;
 
 /**
  * Population by piece (safeguards.md §1, as of 2026-09-28): each piece has its own room,

@@ -215,7 +215,7 @@ export class Chronicle {
     // Side quests tied to a camp, or to a kind of event.
     for (const q of st.sides.filter(active)) {
       const done = (q.kind === 'bounty' || q.kind === 'rescue') ? key === 'hunt' && extra?.camp === q.camp
-        : q.kind === 'skirmish' ? key === 'win:empire' : false;
+        : q.kind === 'skirmish' ? key === 'win:empire' : q.kind === 'haul' ? key === 'haul' : false;
       if (done) this.finishSide(p, q);
     }
     this.advance(p);
@@ -684,6 +684,7 @@ export class Chronicle {
         return o ? { id, kind: 'opening', challenge: o, line: `${OPENINGS[o].who} honor only ${OPENINGS[o].name}. Win a battle opening with it (${OPENINGS[o].moves.join(', ')}).`, renown: 70 } : null;
       } },
       { kind: 'pilgrimage', ch: 5, make: () => (setts.some((x) => x.tier >= 2) ? this.pilgrimage(p, id) : null) },
+      { kind: 'haul', ch: 6, make: () => (st.buildings.includes('barracks') ? { id, kind: 'haul', line: 'The moving stone: have your war elephants haul a load of rock or ore into one of your towns.', renown: 40 } : null) },
       { kind: 'scout', ch: 7, make: () => { const at = this.searchRing(from.x, from.y, 500, 30, (x, y) => RARE_BIOMES.includes(biomeAt(w.seed, x, y))); return at && !st.discovered ? { id, kind: 'scout', at, line: 'Travelers speak of a strange land nearby. See it for yourself.', renown: 50 } : null; } },
       { kind: 'skirmish', ch: 10, make: () => { const rival = this.fairRival(p, [...w.pieces.values()].filter((k) => k.kind === 'K' && k.owner && k.owner !== p.id && !k.emperor && !g.players.get(k.owner)?.wild && cheb(k.x, k.y, from.x, from.y) <= 200 && (g.players.get(k.owner)?.shieldUntil ?? 0) < g.now), army, (xs) => xs.sort((a, b) => cheb(a.x, a.y, from.x, from.y) - cheb(b.x, b.y, from.x, from.y))[0]); return rival ? { id, kind: 'skirmish', at: [rival.x, rival.y], line: `${g.players.get(rival.owner!)?.name ?? 'A rival'} has troops nearby. Win a battle against an empire.`, renown: RENOWN.empireWin * 2 } : null; } },
     ];
@@ -691,7 +692,7 @@ export class Chronicle {
     const verb = CHAPTERS[st.ch - 1]?.steps[st.step]?.verb;
     const SUITS: Record<string, SideQuest['kind'][]> = {
       hunt: ['bounty', 'rescue', 'feat'], free: ['rescue', 'bounty', 'feat'], promote: ['feat', 'bounty'],
-      grow: ['grow', 'pilgrimage', 'shrine'], build: ['grow', 'shrine'], raise: ['shrine', 'grow', 'opening'], crown: ['shrine', 'grow'], link: ['pilgrimage', 'grow'],
+      grow: ['grow', 'pilgrimage', 'shrine', 'haul'], build: ['grow', 'shrine', 'haul'], raise: ['shrine', 'grow', 'opening'], crown: ['shrine', 'grow'], link: ['pilgrimage', 'grow'],
       settle: ['scout', 'pilgrimage', 'shrine'], march: ['scout', 'shrine', 'pilgrimage'], discover: ['scout', 'shrine'],
       win: ['skirmish', 'opening', 'feat'],
     };

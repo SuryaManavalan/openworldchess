@@ -202,6 +202,12 @@ function helpForSide(q: SideQuest, phone: boolean): Help {
       look: [], actions: [{ label: 'Show me the shrine', run: fly(q.at) }, ...(!q.puzzle ? [{ label: 'Select my army', run: selectArmy }] : [])],
     };
     case 'opening': { const o = OPENINGS[q.challenge ?? '']; return { title: `Win with ${o?.name ?? 'the opening'}`, steps: ['Attack a camp or a rival: when you attack, you play White.', `Open with ${o?.moves.join(', then ')} (among your first ${o?.within} moves).`, 'Then win the game.'], look: [], actions: [{ label: 'Select my army', run: selectArmy }] }; }
+    case 'haul': return {
+      title: 'The moving stone',
+      steps: ['Select only war elephants (tap one, then + Add for more).', `${phone ? 'Tap' : 'Click'} Haul, then ${phone ? 'tap' : 'click'} a rock or ore deposit.`, `Then ${phone ? 'tap' : 'click'} where to set it down, inside your town. Each elephant carries one load at a time.`],
+      look: [{ img: pieceUrl('R', 'light', mirror.self?.color ?? '#888', false, mirror.self?.civ), label: 'war elephant' }, { img: nodeUrl('rock'), label: 'rock' }],
+      actions: [{ label: 'Show me rock', run: () => showResource('rock') }],
+    };
     case 'feat': return { title: FEATS[q.challenge ?? ''] ?? 'A feat', steps: ['Win any battle (a camp or a rival) this way.', 'Pick a camp you can beat comfortably.'], look: [], actions: [{ label: 'Select my army', run: selectArmy }] };
     case 'pilgrimage': return {
       title: `A pilgrimage, ${(q.stage ?? 0) + 1} of 3`,

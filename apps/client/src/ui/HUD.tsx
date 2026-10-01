@@ -24,6 +24,9 @@ import { Riddle } from './Riddle.tsx';
 import { QuestHelp } from './QuestHelp.tsx';
 import { DiscordButton, DiscordNudge } from './Discord.tsx';
 import { TroopList, nearestOf, troopOfSelection, troopsOf } from './troops.tsx';
+import { BuildPalette, ToolBar } from './BuildPalette.tsx';
+import { Controls } from './Controls.tsx';
+import { controlsOpen, setControlsOpen } from '../store.ts';
 import { Celebrate } from './Celebrate.tsx';
 import { checkPlacement } from '../game/placement.ts';
 
@@ -218,6 +221,8 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
   const joining = new Set(troop?.joining.map((j) => j.id) ?? []);
   const hint = ui.orderMode === 'pave' ? `Tap where the road should go: ${knights} knight${knights > 1 ? 's' : ''} will pave it`
     : ui.orderMode === 'clear' ? 'Drag over the land to clear, or tap its middle'
+    : ui.orderMode === 'haul' ? 'Tap the rock or ore deposit to haul'
+    : ui.orderMode === 'haulTo' ? 'Now tap where to set it down (near one of your kings)'
     : ui.lassoMode ? (phone ? 'Tap pieces to add or remove them · long-press and draw to add many' : 'Click pieces to add or remove them')
     : pending ? null
     : troop ? (phone ? '+ calls the nearest piece of that kind out to the troop' : '+ calls the nearest piece of that kind out to the troop · right-click to move it')
@@ -285,7 +290,7 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
         </> : <>
           {troop && !troop.home && <button className="btn ghost" title="March this troop back to the nearest city; it disbands there" onClick={() => commands.troopHome(troop.id).then((e) => e ? ui.toast(e, 'error') : ui.toast('The troop marches home', 'info'))}>Home</button>}
           <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>
-          <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} title="Add or remove pieces by tapping them (Shift-click on desktop)" onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>{ui.lassoMode ? 'Adding…' : '+ Add'}</button>
+          <button className={`btn ghost ${ui.lassoMode ? 'on' : ''}`} title={phone ? 'Add or remove pieces by tapping them' : 'Add or remove pieces by clicking them (or Shift-click)'} onClick={() => ui.set({ lassoMode: !ui.lassoMode })}>{ui.lassoMode ? 'Adding…' : '+ Add'}</button>
           {/* Works (movement.md §9): knights pave, elephants clear. */}
           {only('N') && <button className={`btn ghost ${ui.orderMode === 'pave' ? 'on' : ''}`} title="Knights pave a road from here to where you tap" onClick={() => ui.set({ orderMode: ui.orderMode === 'pave' ? null : 'pave' })}>Pave</button>}
           {/* A bishop raises an altar beside itself (economy.md §8). */}
@@ -299,6 +304,7 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
             ui.set({ buildType: 'altar' });
             input?.updateGhost(at);
           }}>Raise altar</button>}
+          {only('R') && <button className={`btn ghost ${ui.orderMode === 'haul' || ui.orderMode === 'haulTo' ? 'on' : ''}`} title="Elephants carry rock or ore to where you want it, a load at a time" onClick={() => ui.set({ orderMode: ui.orderMode === 'haul' || ui.orderMode === 'haulTo' ? null : 'haul', haulFrom: null })}>Haul</button>}
           {only('R') && <button className={`btn ghost ${ui.orderMode === 'clear' ? 'on' : ''}`} title="Elephants clear the trees (and, if you choose, rock and ore) in an area" onClick={() => ui.set({ orderMode: ui.orderMode === 'clear' ? null : 'clear' })}>Clear land</button>}
           {mirror.self?.chronicle?.abilities.includes('muster') && sel.length === 1 && sel[0].kind === 'K' && <button className="btn ghost" title="Gather every piece within 20 squares to this king" onClick={() => commands.muster(sel[0].id).then((e) => e && ui.toast(e, 'error'))}><Icon name="horn" size={15} /> Muster</button>}
         </>}
@@ -315,17 +321,18 @@ function BottomDock() {
   const pending = input?.pendingMove;
   return (
     <div className="dock">
+      {ui.tool && <ToolBar />}
       {/* On a wide screen, toasts sit just above whatever the dock is showing (never under the selection bar). */}
       {ui.layout !== 'phone' && <Toasts />}
-      {ui.buildType && (
+      {!ui.tool && ui.buildType && (
         <div className="action-row build-row">
           <span className={`ghost-state ${ui.ghost?.ok ? 'ok' : 'bad'}`}>{ui.ghost ? ui.ghost.reason : 'Drag on the map to place'}</span>
-          {ui.layout === 'phone' && <button className="btn" disabled={!ui.ghost?.ok} onClick={() => input?.placeBuilding()}><Icon name="check" size={18} /> Build</button>}
-          <button className="btn ghost" onClick={() => ui.set({ buildType: null, ghost: null })}>Cancel</button>
+          {ui.layout === 'phone' && <button className="btn" disabled={!ui.ghost?.ok} onClick={() => input?.placeBuilding()}><Icon name="check" size={18} /> {ui.moving != null ? 'Move here' : 'Build'}</button>}
+          <button className="btn ghost" onClick={() => ui.set({ buildType: null, ghost: null, moving: null })}>Cancel</button>
         </div>
       )}
-      {!ui.buildType && sel.length > 0 && <SelectionBar sel={sel} pending={pending} />}
-      {ui.layout === 'phone' && (
+      {!ui.tool && !ui.buildType && sel.length > 0 && <SelectionBar sel={sel} pending={pending} />}
+      {ui.layout === 'phone' && !ui.tool && (
         <div className="troop-bar">
           <div className="chips">
             {kings.map((k) => <KingChip key={k.id} k={k} compact />)}
@@ -356,10 +363,10 @@ function SidePanel() {
       )}
       <section>
         <h3>Build <span className="muted kbd">B</span></h3>
-        <BuildList />
+        <BuildPalette buildings={<BuildList />} />
       </section>
       <Minimap />
-      <p className="keys muted">Drag to select · right-click to move or attack · pan: right-drag, Ctrl/Space + drag, two-finger swipe or WASD · zoom: wheel or pinch · Q/E rotate · H home · S stop</p>
+      <button className="link keys-link" onClick={() => { setControlsOpen('map'); ui.set({ sheet: 'controls' }); }}><Icon name="help" size={14} /> Controls <span className="kbd">?</span></button>
       {ui.sheet === 'details' && <Details />}
     </div>
   );
@@ -427,6 +434,15 @@ function Details() {
   const b = id != null ? mirror.buildings.get(id) : undefined;
   if (!b || b.type === 'ruin') return <p className="muted">Tap one of your buildings to see it here.</p>;
   const spec = BUILDINGS[b.type as BuildingType];
+  const mine = b.owner === mirror.me;
+  // A decoration (citybuilding.md §4): what it is, and remove it.
+  if (spec?.decor) return (
+    <div className="details">
+      <h3>{b.type[0].toUpperCase() + b.type.slice(1)}</h3>
+      <p className="muted">A decoration: it adds beauty, not production. {b.gate ? 'A street runs through it, so it\'s a gate.' : ''}</p>
+      {mine && <div className="row-actions"><button className="btn ghost small" onClick={() => { void commands.eraseDecor([[b.x, b.y]]); ui.set({ sheet: null, hint: null }); }}><Icon name="close" size={14} /> Remove</button></div>}
+    </div>
+  );
   const why: Record<string, string> = { unanchored: b.type === 'altar' ? 'No bishop tending it: bring one within 2 squares, or it will fall to ruin' : 'No king (or tended altar) nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': popFull(b.type as BuildingType), 'king-cap': `Your title lets you hold ${TITLES[mirror.self?.chronicle?.title ?? 0]?.kingCap ?? 2} kings, and you have them all: it crowns again when your title rises (or a king falls). Switch it to queens meanwhile.`, building: 'Under construction', paused: 'Paused by you' };
   return (
     <div className="details">
@@ -441,11 +457,30 @@ function Details() {
           ? <p className="muted"><Icon name="crown" size={13} /> Your capital: it holds itself forever and crowns kings faster.</p>
           : <button className="btn ghost small" onClick={() => commands.setCapital(b.id).then((e) => e && ui.toast(e, 'error'))}><Icon name="crown" size={14} /> Make this town your capital</button>
       )}
+      {mine && b.type !== 'altar' && b.type !== 'wonder' && <MoveDemolish b={b} />}
       {b.type === 'palace' && (
         <div className="seg">
           {(['alt', 'K', 'Q'] as const).map((m) => <button key={m} className={b.palaceMode === m ? 'on' : ''} onClick={() => commands.palaceMode(b.id, m)}>{m === 'alt' ? 'Alternate' : m === 'K' ? 'Kings' : 'Queens'}</button>)}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Move a building or tear it down (citybuilding.md §3). Demolishing asks twice. */
+function MoveDemolish({ b }: { b: { id: number; type: string; x: number; y: number } }) {
+  const ui = useUI();
+  const [sure, setSure] = useState(false);
+  return (
+    <div className="row-actions move-demolish">
+      <button className="btn ghost small" onClick={() => {
+        ui.set({ moving: b.id, buildType: b.type as BuildingType, sheet: ui.layout === 'phone' ? null : ui.sheet, tool: null });
+        input?.updateGhost([b.x, b.y]);
+      }}><Icon name="move" size={14} /> Move</button>
+      <button className={`btn ghost small ${sure ? 'danger-text' : ''}`} onClick={() => {
+        if (!sure) { setSure(true); return; }
+        void commands.demolish(b.id).then((e) => { if (e) ui.toast(e, 'error'); else { ui.toast('Torn down: half its wood and stone are left beside it', 'info'); ui.set({ sheet: null, hint: null }); } });
+      }}><Icon name="close" size={14} /> {sure ? 'Tap again to tear it down' : 'Demolish'}</button>
     </div>
   );
 }
@@ -458,7 +493,7 @@ function Sheet() {
     <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && close()}>
       <div className="sheet">
         <SheetGrab onClose={close} />
-        {ui.sheet === 'build' && <><h3>Build near a king</h3><BuildList /></>}
+        {ui.sheet === 'build' && <><h3>Build</h3><BuildPalette buildings={<BuildList />} /></>}
         {ui.sheet === 'details' && <Details />}
         {ui.sheet === 'battles' && <BattleList />}
         {ui.sheet === 'settings' && <Settings />}
@@ -466,7 +501,8 @@ function Sheet() {
         {ui.sheet === 'shop' && <Shop />}
         {ui.sheet === 'chronicle' && <ChronicleBook />}
         {ui.sheet === 'troops' && <><h3>Troops out</h3><TroopList /></>}
-        {ui.layout === 'phone' && ui.sheet === 'build' && <Minimap />}
+        {ui.sheet === 'controls' && <Controls open={controlsOpen} />}
+        {ui.layout === 'phone' && ui.sheet === 'build' && ui.buildTab === 'build' && <Minimap />}
       </div>
     </div>
   );
@@ -498,6 +534,10 @@ function Settings() {
   return (
     <div className="settings">
       <h3>Settings</h3>
+      <div className="row-actions guide-row">
+        <button className="btn ghost" onClick={() => { setControlsOpen('map'); ui.set({ sheet: 'controls' }); }}><Icon name="help" size={16} /> Controls</button>
+        <button className="btn ghost" onClick={() => ui.set({ sheet: 'help' })}><Icon name="book" size={16} /> Rulebook</button>
+      </div>
       <div className="discord-row">
         <DiscordButton />
         <span className="muted small">Allies, rivals, bug reports, and what's coming next.</span>
@@ -569,13 +609,13 @@ function Help() {
   return (
     <div className="help">
       <h3>The rulebook</h3>
+      <button className="btn ghost small" onClick={() => { setControlsOpen('map'); ui.set({ sheet: 'controls' }); }}><Icon name="help" size={14} /> Controls for this {ui.layout === 'phone' ? 'phone' : 'computer'}</button>
       <p className="muted">Every rule of the game. Open a rule for its fine print (every number and exception) and tactics. The Chronicle teaches these as you go; they're all here if you'd rather read ahead.</p>
       <div className="rulebook">
         {Object.entries(LESSONS).map(([id, l]) => (
           <details key={id} className="lesson-row"><summary>{l.title}</summary><LessonView l={l} bare /></details>
         ))}
       </div>
-      <p className="muted">{ui.layout === 'phone' ? 'Phone: tap to select · tap the ground to move (tap the marker again to go) · drag from a piece to move or attack · long-press and draw to select many · pinch to zoom · twist with two fingers to rotate.' : 'Desktop: click to select · right-click to move or attack · drag a box to select · Ctrl/Space + drag or two-finger swipe to pan · wheel or pinch to zoom · Q/E rotate · Esc deselect.'}</p>
     </div>
   );
 }

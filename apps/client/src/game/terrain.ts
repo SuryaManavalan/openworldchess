@@ -89,44 +89,8 @@ export function paintChunk(seed: number, cx: number, cy: number, d: ChunkPaint, 
     }
   paintPaths(g, seed, x0, y0, d);
   paintPlazas(g, seed, x0, y0, d);
-  paintPaved(g, seed, x0, y0, d);
-  // Bridges (visuals.md §10): where a road crosses a river at a ford, the crossing
-  // becomes a plank bridge, and a stone bridge once the road is a busy street.
-  for (let y = 0; y < CHUNK; y++) for (let x = 0; x < CHUNK; x++) {
-    const wx = x0 + x, wy = y0 + y, t = d.traffic(wx, wy);
-    const code = d.codes[y * CHUNK + x];
-    if (t < 12 || code === 2 || code === 4 || !riverBed(seed, wx, wy)) continue;
-    const px = x * TPX, py = y * TPX, stone = t >= 60;
-    // The deck runs along the road...
-    const vertical = d.traffic(wx, wy - 1) + d.traffic(wx, wy + 1) >= d.traffic(wx - 1, wy) + d.traffic(wx + 1, wy);
-    // ...and only where it crosses the river: the riverbed must be short along the
-    // road (about the river's width), not a road running down a long ford.
-    let span = 1;
-    for (const s of [-1, 1]) for (let i = 1; i <= 14; i++) { if (!riverBed(seed, wx + (vertical ? 0 : s * i), wy + (vertical ? s * i : 0))) break; span++; }
-    if (span > 24) continue;
-    const light = ((wx + wy) & 1) === 0;
-    g.fillStyle = light ? WATER[0] : WATER[1];
-    g.fillRect(px, py, TPX, TPX);
-    const [dx0, dy0, dw, dh] = vertical ? [px + 2, py, TPX - 4, TPX] : [px, py + 2, TPX, TPX - 4];
-    g.fillStyle = stone ? '#bdb6a8' : '#a3784a';
-    g.fillRect(dx0, dy0, dw, dh);
-    g.strokeStyle = stone ? 'rgba(80,74,64,0.45)' : 'rgba(70,45,25,0.55)';
-    g.lineWidth = 1;
-    for (let i = 2; i < TPX; i += stone ? 5 : 3) {
-      g.beginPath();
-      if (vertical) { g.moveTo(dx0, py + i); g.lineTo(dx0 + dw, py + i); } else { g.moveTo(px + i, dy0); g.lineTo(px + i, dy0 + dh); }
-      g.stroke();
-    }
-    // Rails on both sides of the deck, with posts.
-    g.strokeStyle = stone ? '#8f887b' : '#5c3d22';
-    g.lineWidth = stone ? 2.5 : 1.8;
-    g.beginPath();
-    if (vertical) { g.moveTo(px + 2, py); g.lineTo(px + 2, py + TPX); g.moveTo(px + TPX - 2, py); g.lineTo(px + TPX - 2, py + TPX); }
-    else { g.moveTo(px, py + 2); g.lineTo(px + TPX, py + 2); g.moveTo(px, py + TPX - 2); g.lineTo(px + TPX, py + TPX - 2); }
-    g.stroke();
-    g.fillStyle = stone ? '#8f887b' : '#5c3d22';
-    for (const o of [3, TPX - 5]) vertical ? (g.fillRect(px + 1, py + o, 3, 2), g.fillRect(px + TPX - 4, py + o, 3, 2)) : (g.fillRect(px + o, py + 1, 2, 3), g.fillRect(px + o, py + TPX - 4, 2, 3));
-  }
+  // (Bridges are built by players now: citybuilding.md §4. Knights' roads and player streets
+  // are drawn crisp by the city layer, citylayer.ts.)
   return c;
 }
 
@@ -315,7 +279,9 @@ function paintPlazas(g: CanvasRenderingContext2D, seed: number, x0: number, y0: 
   const F = -3, T = CHUNK + 3;
   const tierAt = new Map<number, number>();
   let any = 0;
-  for (let y = F - 1; y <= T; y++) for (let x = F - 1; x <= T; x++) { const t = d.ground(x0 + x, y0 + y); if (t) { tierAt.set((y + 8) * 64 + (x + 8), t); any = Math.max(any, t); } }
+  // (Water and mountains stay themselves inside a town: rivers run through, bridges cross them.)
+  const open = (x: number, y: number) => { const c = x >= 0 && y >= 0 && x < CHUNK && y < CHUNK ? d.codes[y * CHUNK + x] : codeAt(x0 + x, y0 + y); return c !== 2 && c !== 4; };
+  for (let y = F - 1; y <= T; y++) for (let x = F - 1; x <= T; x++) { const t = d.ground(x0 + x, y0 + y); if (t && open(x, y)) { tierAt.set((y + 8) * 64 + (x + 8), t); any = Math.max(any, t); } }
   if (!any) return;
   const tier = (x: number, y: number) => tierAt.get((y + 8) * 64 + (x + 8)) ?? 0;
   const dark = (x: number, y: number) => ((x0 + x + y0 + y) & 1) === 1;
@@ -333,32 +299,10 @@ function paintPlazas(g: CanvasRenderingContext2D, seed: number, x0: number, y0: 
     const r = hash01(seed, x0 + x, y0 + y, 341);
     if (r < 0.35) { g.beginPath(); g.ellipse(x * TPX + 3 + r * 26, y * TPX + 4 + (r * 97 % 8), 1.5, 1, r * 4, 0, Math.PI * 2); g.fill(); }
   }
-  if (any < 3) return;
-  // Towns: flagstones in staggered courses (not one per square), with a kerb.
-  const town = region(3), tSegs = outline(town, seed, x0, y0, F, T, 1);
-  g.strokeStyle = 'rgba(104,94,80,0.35)'; g.lineWidth = 7; g.beginPath(); for (const [ax, ay, bx, by] of tSegs) { g.moveTo(ax, ay); g.lineTo(bx, by); } g.stroke();
-  fillSoft(g, town, tSegs, F, T, '#c4b393', 2);
-  g.save();
-  g.beginPath();
-  for (let y = F; y < T; y++) for (let x = F; x < T; x++) if (town(x, y)) g.rect(x * TPX - 0.5, y * TPX - 0.5, TPX + 1, TPX + 1);
-  g.clip();
-  const course = TPX / 2;
-  for (let r = Math.floor((F * TPX) / course); r < (T * TPX) / course; r++) {
-    const wr = r + Math.round((y0 * TPX) / course);
-    let x = F * TPX - (hash01(seed, wr, 0, 362) * 14) - ((x0 * TPX) % 24);
-    for (let k = 0; x < T * TPX; k++) {
-      const len = 10 + hash01(seed, wr, k + Math.floor((x0 * TPX) / 24), 363) * 12;
-      const sx = Math.floor((x + len / 2) / TPX), sy = Math.floor((r * course + course / 2) / TPX);
-      const v = hash01(seed, wr, k, 364) * 8 - 4;
-      g.fillStyle = dark(sx, sy) ? `rgb(${216 + v},${200 + v},${170 + v})` : `rgb(${236 + v},${224 + v},${198 + v})`;
-      g.beginPath(); g.roundRect(x + 0.6, r * course + 0.6, len - 1.2, course - 1.2, 2.2); g.fill();
-      x += len;
-    }
-  }
-  g.restore();
-  if (any < 4) return;
-  // Cities: the chessboard, walnut and cream, in a bronze frame.
-  const city = region(4), cSegs = outline(city, seed, x0, y0, F, T, 0);
+  if (any < 5) return;
+  // A city's heart (citybuilding.md §9): the chessboard, walnut and cream, in a bronze frame,
+  // only around its centre. Everything else is calm earth, for players to pave as they like.
+  const city = region(5), cSegs = outline(city, seed, x0, y0, F, T, 0);
   for (let y = F; y < T; y++) for (let x = F; x < T; x++) {
     if (!city(x, y)) continue;
     g.fillStyle = dark(x, y) ? '#b58863' : '#efe0c0';
@@ -372,47 +316,4 @@ function paintPlazas(g: CanvasRenderingContext2D, seed: number, x0: number, y0: 
   g.strokeStyle = '#c9a15a'; g.lineWidth = 2; g.beginPath(); for (const [ax, ay, bx, by] of cSegs) { g.moveTo(ax, ay); g.lineTo(bx, by); } g.stroke();
 }
 
-/**
- * Roads paved by knights (movement.md §9): a kerbed band of laid stones that follows the
- * squares a knight paved, with rounded turns.
- */
-function paintPaved(g: CanvasRenderingContext2D, seed: number, x0: number, y0: number, d: ChunkPaint) {
-  const paved = (wx: number, wy: number) => d.traffic(wx, wy) >= PAVED;
-  const segs: [number, number, number, number][] = [];
-  const dots: [number, number][] = [];
-  for (let y = -1; y <= CHUNK; y++) for (let x = -1; x <= CHUNK; x++) {
-    const wx = x0 + x, wy = y0 + y;
-    if (!paved(wx, wy)) continue;
-    dots.push([x, y]);
-    for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [-1, 1]]) {
-      if (!paved(wx + dx, wy + dy)) continue;
-      if (dx && dy && (paved(wx + dx, wy) || paved(wx, wy + dy))) continue;
-      segs.push([x, y, x + dx, y + dy]);
-    }
-  }
-  if (!dots.length) return;
-  g.lineCap = 'round'; g.lineJoin = 'round';
-  for (const [w, color] of [[13, 'rgba(70,62,52,0.45)'], [10.5, '#a79e8e']] as const) {
-    g.strokeStyle = color; g.fillStyle = color; g.lineWidth = w;
-    g.beginPath();
-    for (const [ax, ay, bx, by] of segs) { g.moveTo(cen(ax), cen(ay)); g.lineTo(cen(bx), cen(by)); }
-    g.stroke();
-    g.beginPath();
-    for (const [x, y] of dots) { g.moveTo(cen(x) + w / 2, cen(y)); g.arc(cen(x), cen(y), w / 2, 0, Math.PI * 2); }
-    g.fill();
-  }
-  // Laid stones: small rounded blocks along each link, in two tones.
-  const lay = (x: number, y: number, ang: number, k: number) => {
-    const t = hash01(seed, Math.round(x * 7), Math.round(y * 7), 350 + k);
-    g.save(); g.translate(x, y); g.rotate(ang);
-    g.fillStyle = t < 0.5 ? '#c9c0b0' : '#b8ae9c';
-    g.beginPath(); g.roundRect(-2.6, -3.4, 5.2, 3, 1.2); g.roundRect(-2.6 + (t < 0.5 ? 1.3 : -1.3), 0.4, 5.2, 3, 1.2); g.fill();
-    g.restore();
-  };
-  for (const [ax, ay, bx, by] of segs) {
-    const ang = Math.atan2(by - ay, bx - ax), len = Math.hypot(bx - ax, by - ay) * TPX;
-    for (let s = 0; s < len; s += 6) lay(cen(ax) + Math.cos(ang) * s, cen(ay) + Math.sin(ang) * s, ang, s);
-  }
-  void x0;
-}
 

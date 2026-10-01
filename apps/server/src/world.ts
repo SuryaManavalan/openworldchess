@@ -1,7 +1,7 @@
 // The world's state: terrain (from worldgen), resource nodes (worldgen plus
 // runtime changes), pieces, buildings, and the indexes that answer "what's
 // here" and "what's near" quickly.
-import { ALTAR_REACH, ALTAR_TEND, CHUNK, cheb, chunkKey, chunkOf, key, PAVED, REACH, distToRect, type Building, type NodeState, type Piece } from '@owc/shared';
+import { ALTAR_REACH, ALTAR_TEND, BUILDINGS, CHUNK, cheb, chunkKey, chunkOf, key, PAVED, REACH, distToRect, type Building, type NodeState, type Piece } from '@owc/shared';
 import { resourcesInRect, terrainAt, walkable as terrainWalkable, buildable as terrainBuildable, LandField } from '@owc/worldgen';
 
 /** Numeric chunk key (chunks within ±65536 of the origin, i.e. ±2M squares). */
@@ -21,6 +21,8 @@ export interface NodeRec extends NodeState {
   acc?: number;
   /** A tree felled to clear land (movement.md §9): its stump is dug out instead of regrowing. */
   dig?: boolean;
+  /** A planted field filling in (citybuilding.md §5): it fills over this long, then regrows as wheat does. */
+  growMs?: number;
 }
 
 export class World {
@@ -104,6 +106,23 @@ export class World {
     s.add(key(n.x, n.y));
   }
 
+  /**
+   * Plant wheat or a tree (citybuilding.md §5): a node that starts empty and grows in (a tree
+   * all at once after `growMs`, wheat a little at a time, as wheat regrows).
+   */
+  addPlanted(x: number, y: number, kind: 'wheat' | 'tree', capacity: number, growAt: number): NodeRec {
+    const k = key(x, y);
+    const rec: NodeRec = { x, y, kind, capacity, remaining: 0, planted: true, regrowAt: kind === 'tree' ? growAt : undefined };
+    this.nodeOverlay.set(k, rec);
+    this.indexHoard(rec);
+    const ck = chunkKey(...chunkOf(x, y));
+    const list = this.nodesByChunk.get(ck);
+    if (list) { list.push(rec); this.nodes.set(k, rec); }
+    this.dirtyNodes.add(k);
+    this.dirtyWalk(x, y);
+    return rec;
+  }
+
   /** Leave a hoard (campaign.md §4.2): a rich resource cache at (x, y). */
   addHoard(x: number, y: number, kind: NodeRec['kind'], capacity: number): NodeRec {
     const k = key(x, y);
@@ -168,9 +187,11 @@ export class World {
       if (n.gone || n.hoard) continue;
       if (n.kind === 'tree' && n.remaining === 0 && n.regrowAt && now >= n.regrowAt) {
         // Inside a settlement the stump is dug out instead: towns open into clearings (visuals.md §10).
-        if (n.dig || this.settledNear(n.x, n.y, SETTLED_R)) { n.gone = true; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y); continue; }
+        if (!n.planted && (n.dig || this.settledNear(n.x, n.y, SETTLED_R))) { n.gone = true; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y); continue; }
         n.remaining = n.capacity; n.regrowAt = undefined; this.dirtyNodes.add(k); this.dirtyWalk(n.x, n.y);
       } else if (n.kind === 'wheat' && n.remaining < n.capacity) {
+        // A planted field fills in over its grow time, then regrows like any wheat.
+        if (n.growMs) { n.remaining = Math.min(n.capacity, n.remaining + (n.capacity * dt) / n.growMs); if (n.remaining >= n.capacity) n.growMs = undefined; this.dirtyNodes.add(k); continue; }
         n.acc = (n.acc ?? 0) + dt;
         if (n.acc >= WHEAT_REGROW_EVERY_MS) {
           const inc = Math.floor(n.acc / WHEAT_REGROW_EVERY_MS);
@@ -213,7 +234,10 @@ export class World {
     for (let ly = 0; ly < CHUNK; ly++)
       for (let lx = 0; lx < CHUNK; lx++) {
         const x = cx * CHUNK + lx, y = cy * CHUNK + ly, k = key(x, y);
-        if (!terrainWalkable(this.terrain(x, y)) || this.buildingAt.has(k)) continue;
+        // Buildings block, except decorations you walk over (bridges carry you over water).
+        const bid = this.buildingAt.get(k);
+        if (bid != null) { const b = this.buildings.get(bid); if (b && (b.gate || (BUILDINGS as Record<string, { walk?: true } | undefined>)[b.type]?.walk)) grid[(ly << 5) | lx] = 1; continue; }
+        if (!terrainWalkable(this.terrain(x, y))) continue;
         const n = this.nodes.get(k);
         if (n && !n.gone && BLOCKING_NODE[n.kind] && n.remaining > 0) { if (n.kind === 'tree') grid[(ly << 5) | lx] = 2; continue; }
         grid[(ly << 5) | lx] = 1;
@@ -391,7 +415,7 @@ export class World {
     }
   }
 
-  /** Squares paved since the last turn went out, flat [x, y, ...]. */
+  /** Squares paved (or unpaved) since the last turn went out, flat [x, y, value, ...] (0: unpaved). */
   pavedNow: number[] = [];
   paved(x: number, y: number) { return (this.traffic.get(key(x, y)) ?? 0) >= PAVED; }
   /** Pave a square (movement.md §9): a road that never wears off. */
@@ -399,7 +423,20 @@ export class World {
     if (this.paved(x, y) || !this.walkable(x, y)) return false;
     this.traffic.set(key(x, y), PAVED);
     this.trafficCache.delete(chunkKey(...chunkOf(x, y)));
-    this.pavedNow.push(x, y);
+    this.pavedNow.push(x, y, PAVED);
+    return true;
+  }
+
+  /**
+   * A player's street or square (citybuilding.md §4): paved in a style (1 cobble, 2 flagstone,
+   * 3 earth; knights' roads are style 0), or unpaved with `null`.
+   */
+  setPaving(x: number, y: number, style: number | null) {
+    const k = key(x, y), v = style == null ? 0 : PAVED + style;
+    if ((this.traffic.get(k) ?? 0) === v) return false;
+    if (v) this.traffic.set(k, v); else this.traffic.delete(k);
+    this.trafficCache.delete(chunkKey(...chunkOf(x, y)));
+    this.pavedNow.push(x, y, v);
     return true;
   }
 

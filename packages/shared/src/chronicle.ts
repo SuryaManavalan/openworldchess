@@ -208,10 +208,11 @@ export const SIDE_TEACH: Record<string, string[]> = {
   bounty: ['battle', 'army', 'wilds', 'hoards'], rescue: ['hoards', 'stakes'], skirmish: ['rivals', 'stakes', 'siege'],
   pilgrimage: ['clearing', 'altars', 'paving'], opening: ['battle'], feat: ['army', 'cooldown', 'promotion'],
   grow: ['settlements', 'hold'], scout: ['land', 'pieces'], shrine: ['battle'],
+  haul: ['hauling', 'citybuilding'],
 };
 
 /** Side quests (campaign.md §5.3): short errands written from the world around you. */
-export type SideKind = 'bounty' | 'rescue' | 'scout' | 'grow' | 'skirmish' | 'pilgrimage' | 'shrine' | 'opening' | 'feat';
+export type SideKind = 'bounty' | 'rescue' | 'scout' | 'grow' | 'skirmish' | 'pilgrimage' | 'shrine' | 'opening' | 'feat' | 'haul';
 export interface SideQuest {
   id: number;
   kind: SideKind;

@@ -1,7 +1,7 @@
 // The browser's connection to the game server, plus the commands every
 // gesture and key turns into (ux.md §9).
 import { Connection } from '@owc/client-core';
-import type { BuildingType } from '@owc/shared';
+import type { BuildingType, DecorType } from '@owc/shared';
 import { useUI } from './store.ts';
 
 const tokenKey = 'owc.token';
@@ -54,6 +54,7 @@ export const commands = {
     const err = await conn.request({ t: 'order.clear', pieceIds, a, b, hard });
     if (err) useUI.getState().toast(err, 'error'); else useUI.getState().toast('The elephants set to work', 'info');
   },
+  haul(pieceIds: number[], from: [number, number], to: [number, number]) { return conn.request({ t: 'order.haul', pieceIds, from, to }); },
   stop(pieceIds: number[]) { conn.send({ t: 'order.stop', pieceIds }); },
   async attack(pieceIds: number[], targetKingId: number) {
     const err = await conn.request({ t: 'order.attack', pieceIds, targetKingId });
@@ -87,6 +88,13 @@ export const commands = {
     if (err) useUI.getState().toast(err, 'error');
   },
   muster(kingId: number) { return conn.request({ t: 'muster', kingId }); },
+  // City building (citybuilding.md).
+  placeDecor(type: DecorType, cells: [number, number][]) { return conn.request({ t: 'decor.place', type, cells }); },
+  eraseDecor(cells: [number, number][]) { return conn.request({ t: 'decor.erase', cells }); },
+  paintPaving(cells: [number, number][], style: number | null) { return conn.request(style == null ? { t: 'paint.paving', cells, erase: true } : { t: 'paint.paving', cells, style }); },
+  plant(kind: 'wheat' | 'tree', cells: [number, number][]) { return conn.request({ t: 'plant', kind, cells }); },
+  moveBuilding(buildingId: number, at: [number, number]) { return conn.request({ t: 'building.move', buildingId, at }); },
+  demolish(buildingId: number) { return conn.request({ t: 'building.demolish', buildingId }); },
   // Troops (movement.md §10).
   reinforce(troopId: number, pieceId: number) { return conn.request({ t: 'troop.reinforce', troopId, pieceId }); },
   troopHome(troopId: number, to?: [number, number]) { return conn.request({ t: 'troop.home', troopId, to }); },

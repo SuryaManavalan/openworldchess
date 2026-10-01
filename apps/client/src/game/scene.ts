@@ -1,7 +1,7 @@
 // The world view: camera, chunk streaming, and live views of pieces,
 // buildings and resource nodes, animated from server turns (movement.md §8).
 import { Application, Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
-import { BUILDINGS, CHUNK, PAVED, REACH, cheb, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
+import { isDecor, BUILDINGS, CHUNK, PAVED, REACH, cheb, chunkKey, key, type Building, type NodeState, type Piece, type PieceKind } from '@owc/shared';
 import { biomeAt, hash01 } from '@owc/worldgen';
 import { Chess } from 'chess.js';
 import type { Mirror, MoveEvent } from '@owc/client-core';
@@ -13,6 +13,8 @@ import { Bubbles } from './bubbles.ts';
 import { FarIcons } from './farIcons.ts';
 import { civicResources, computeSettlements, decorate, wallsFor, TIER_NAME, type Decor, type Settlement, type Wall } from './settlements.ts';
 import { civicTexture, decorTexture } from './textures.ts';
+import { CityLayer } from './citylayer.ts';
+import { E as EB, N as NB, S as SB, W as WB, lineTile } from './cityart.ts';
 import { useUI } from '../store.ts';
 
 export const S = 64; // world pixels per square
@@ -57,6 +59,8 @@ export class Scene {
   app = new Application();
   world = new Container();
   ground = new Container();
+  /** Player-built ground: streets, squares, flowerbeds, bridges (citybuilding.md §9). */
+  city!: CityLayer;
   decals = new Graphics();
   objects = new Container({ sortableChildren: true });
   arenas = new Container({ sortableChildren: true });
@@ -118,7 +122,8 @@ export class Scene {
     await this.app.init({ resizeTo: el, background: '#6f8f4a', antialias: true, resolution: Math.min(2, devicePixelRatio), autoDensity: true });
     el.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
-    this.world.addChild(this.ground, this.wallsG, this.decals, this.objects, this.farIcons.layer, this.farG, this.arenas, this.fx.layer, this.bubbles.layer, this.fx.top, this.labels);
+    this.city = new CityLayer(this.mirror);
+    this.world.addChild(this.ground, this.city.layer, this.wallsG, this.decals, this.objects, this.farIcons.layer, this.farG, this.arenas, this.fx.layer, this.bubbles.layer, this.fx.top, this.labels);
     this.arenas.addChild(this.arenaG);
     this.arenaG.zIndex = -1e9;
     this.app.stage.addChild(this.world, this.fx.screenLayer, this.overlay);
@@ -297,20 +302,24 @@ export class Scene {
     };
     m.onBuildingChange = (b, prev) => {
       if (!prev || prev.type !== b.type || prev.owner !== b.owner) this.settleDirty = true;
+      if (b.type === 'flowerbed' || b.type === 'bridge' || prev?.type === 'flowerbed' || prev?.type === 'bridge') { this.city.mark(b.x, b.y); if (prev) this.city.mark(prev.x, prev.y); }
       if (prev && prev.built < 1 && b.built >= 1) this.fx.ripple(b.x + b.size / 2 - 0.5, b.y + b.size / 2 - 0.5, 0xfff2b0, b.size * 1.2);
     };
     m.onBuildingRemoved = (id) => {
+      const gone = this.buildings.get(id) as (BuildingView & { at?: [number, number] }) | undefined;
+      if (gone?.at) this.city.mark(gone.at[0], gone.at[1]);
       this.settleDirty = true; this.buildings.get(id)?.sprite.destroy(); this.buildings.get(id)?.bar.destroy(); this.buildings.delete(id); };
     // A resource inside a settlement changed (felled, mined, regrown): its civilized form follows.
     m.onNodeChange = (n) => { this.syncNode(n); if (this.groundMap.has(key(n.x, n.y))) this.settleDirty = true; };
     // Forgotten with its chunk: drop the sprite too (they used to pile up as you panned).
     m.onNodeDropped = (k) => { const s = this.nodes.get(k); if (s) { s.destroy(); this.nodes.delete(k); } };
-    m.onPaved = (x, y) => this.markTraffic(x, y);
+    m.onPaved = (x, y) => { this.markTraffic(x, y); this.city.mark(x, y); };
     m.onChunk = (cx, cy) => {
       for (const n of m.nodes.values()) if (Math.floor(n.x / CHUNK) === cx && Math.floor(n.y / CHUNK) === cy) this.syncNode(n);
       const v = this.chunkViews.get(chunkKey(cx, cy));
       if (v) v.dirty = true;
       this.settleDirty = true;
+      this.city.markChunk(cx, cy);
     };
   }
 
@@ -486,6 +495,8 @@ export class Scene {
     }
     this.objects.visible = !this.far;
     this.wallsG.visible = !this.far;
+    this.city.layer.visible = !this.far;
+    this.city.update();
     for (const t of this.kingLabels.values()) if (this.far) t.visible = false;
     this.bubbles.update(now, counter, view);
     this.farIcons.update(now, counter, view);
@@ -514,6 +525,48 @@ export class Scene {
     void v;
   }
 
+  /**
+   * A player's decoration (citybuilding.md §4). Ground ones (flowerbeds, bridges) are drawn by
+   * the city layer. Walls, fences and hedges join their neighbours (the mask is turned to the
+   * screen, since the sprite stays upright as the camera turns). The rest are single props.
+   */
+  private drawDecor(b: Building, v: BuildingView, color: string, zsort: (x: number, y: number) => number, counter: number) {
+    v.bar.clear();
+    if (b.type === 'flowerbed' || b.type === 'bridge') { v.sprite.visible = false; return; }
+    v.sprite.visible = true;
+    const th = this.theta, cos = Math.cos(th), sin = Math.sin(th);
+    const cx = (b.x + b.size / 2) * S, cy = (b.y + b.size / 2) * S;
+    let k: string;
+    if (b.type === 'wall' || b.type === 'fence' || b.type === 'hedge') {
+      // Joined to the same kind on each side; turned to screen directions.
+      let mask = 0;
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        const id = this.mirror.buildingAt.get(key(b.x + dx, b.y + dy));
+        if (id == null || this.mirror.buildings.get(id)?.type !== b.type) continue;
+        const sx = dx * cos - dy * sin, sy = dx * sin + dy * cos;
+        mask |= Math.abs(sx) > Math.abs(sy) ? (sx > 0 ? EB : WB) : (sy > 0 ? SB : NB);
+      }
+      k = `line:${b.type}:${mask}:${!!b.gate}:${color}`;
+      if (k !== v.texKey) { v.sprite.texture = lineTile(b.type, mask, !!b.gate, color); v.texKey = k; }
+      v.sprite.anchor.set(0.5, 0.5);
+      v.sprite.width = S; v.sprite.height = S;
+      v.sprite.position.set(cx, cy);
+      v.sprite.zIndex = zsort(cx, cy);
+    } else {
+      k = `decor:${b.type}:${color}`;
+      if (k !== v.texKey) { const tex = decorTexture(b.type, color, undefined, undefined, b.size > 1 ? 192 : 96); if (tex) { v.sprite.texture = tex; v.texKey = k; } }
+      v.sprite.anchor.set(0.5, 0.88);
+      const w = b.size * S * (b.size > 1 ? 1.08 : 0.95);
+      v.sprite.width = w; v.sprite.height = w;
+      const drop = b.size * S * 0.44;
+      v.sprite.position.set(cx + Math.sin(th) * drop, cy + Math.cos(th) * drop);
+      v.sprite.zIndex = zsort(cx + Math.sin(th) * drop * 0.9, cy + Math.cos(th) * drop * 0.9);
+    }
+    v.sprite.rotation = counter;
+    v.sprite.alpha = b.built < 1 ? 0.45 + 0.5 * b.built : 1;
+    v.sprite.tint = 0xffffff;
+  }
+
   private drawBuilding(b: Building, zsort: (x: number, y: number) => number, counter: number, now: number) {
     let v = this.buildings.get(b.id);
     if (!v) {
@@ -522,7 +575,9 @@ export class Scene {
       this.objects.addChild(v.sprite);
       this.objects.addChild(v.bar);
     }
+    (v as BuildingView & { at?: [number, number] }).at = [b.x, b.y];
     const color = this.colorOf(b.owner);
+    if (isDecor(b.type)) { this.drawDecor(b, v, color, zsort, counter); return; }
     const civ = this.civOf(b.owner);
     const biome = b.type === 'altar' ? biomeAt(this.mirror.seed, b.x, b.y) : undefined;
     const k = b.camp ? `camp:${b.camp.art}:${b.camp.faction}` : `${b.type}:${color}:${civ ?? ''}:${biome ?? ''}`;
@@ -682,8 +737,9 @@ export class Scene {
     const ui = useUI.getState();
     if (ui.buildType && ui.ghost) {
       const size = BUILDINGS[ui.buildType].size;
-      const { x, y, ok } = ui.ghost;
-      const good = ok ? 0x95e05a : 0xff5a45, light = ok ? 0xe8ffc8 : 0xffc2b8;
+      const { x, y, ok, warn } = ui.ghost;
+      // Green: good. Amber: allowed, but it won't produce here (citybuilding.md §3). Red: no.
+      const good = !ok ? 0xff5a45 : warn ? 0xf0b43c : 0x95e05a, light = !ok ? 0xffc2b8 : warn ? 0xffe2a8 : 0xe8ffc8;
       const king = m.myKings().filter((k) => k.state !== 'battle').sort((a, b) => cheb(a.x, a.y, x, y) - cheb(b.x, b.y, x, y))[0];
       if (king) {
         const r = [(king.x - REACH) * S, (king.y - REACH) * S, (REACH * 2 + 1) * S, (REACH * 2 + 1) * S] as const;
@@ -701,8 +757,19 @@ export class Scene {
           g.circle((n.x + 0.5) * S, (n.y + 0.5) * S, S * 0.42).stroke({ width: lw(3.5), color: 0xfff2b0, alpha: 1 });
         }
     }
+    // A drawing stroke (citybuilding.md §8): the squares it will paint, or erase.
+    if (ui.stroke?.length && ui.tool) {
+      const col = ui.toolErase ? 0xff6b5a : 0xfff2b0;
+      for (const [cx, cy] of ui.stroke) {
+        g.rect(cx * S + 3, cy * S + 3, S - 6, S - 6).fill({ color: col, alpha: ui.toolErase ? 0.28 : 0.32 });
+        g.rect(cx * S + 3, cy * S + 3, S - 6, S - 6).stroke({ width: lw(3), color: col, alpha: 0.95 });
+      }
+    } else if (ui.tool && this.hover) {
+      const col = ui.toolErase ? 0xff6b5a : 0xfff2b0;
+      g.rect(this.hover[0] * S + 3, this.hover[1] * S + 3, S - 6, S - 6).stroke({ width: lw(3), color: col, alpha: 0.9 });
+    }
     // Hover square on desktop
-    if (this.hover && !ui.buildType) g.rect(this.hover[0] * S, this.hover[1] * S, S, S).stroke({ width: lw(2.5), color: 0xffffff, alpha: 0.5 });
+    if (this.hover && !ui.buildType && !ui.tool) g.rect(this.hover[0] * S, this.hover[1] * S, S, S).stroke({ width: lw(2.5), color: 0xffffff, alpha: 0.5 });
   }
 
   settlementAt(x: number, y: number) { return this.settlements.find((st) => st.ground.has(key(x, y)))?.id ?? -1; }
@@ -715,6 +782,8 @@ export class Scene {
     this.settlements = computeSettlements(m);
     const next = new Map<number, number>();
     for (const st of this.settlements) for (const [k, t] of st.ground) next.set(k, Math.max(next.get(k) ?? 0, t));
+    // A city's heart (citybuilding.md §9): the framed chessboard plaza, only near its centre.
+    for (const st of this.settlements) if (st.tier >= 4) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const hk = key(st.cx + dx, st.cy + dy); if (st.ground.has(hk)) next.set(hk, 5); }
     const touched = new Set<string>();
     const mark = (k: number) => { const x = Math.round(k / 134217728), y = k - x * 134217728; touched.add(chunkKey(Math.floor(x / CHUNK), Math.floor(y / CHUNK))); };
     for (const [k, t] of next) if (this.groundMap.get(k) !== t) mark(k);
@@ -722,7 +791,10 @@ export class Scene {
     this.groundMap = next;
     for (const ck of touched) { const v = this.chunkViews.get(ck); if (v) v.dirty = true; }
     const traffic = (x: number, y: number) => m.traffic.get(key(x, y)) ?? 0;
-    this.decor = this.settlements.flatMap((st) => decorate(m, st, this.colorOf(st.owner), traffic));
+    // How many decorations each owner placed in each settlement (auto-decor thins out past 8).
+    const placed = new Map<number, number>();
+    for (const b of m.buildings.values()) if (isDecor(b.type)) for (const st of this.settlements) if (st.owner === b.owner && st.ground.has(key(b.x, b.y))) { placed.set(st.id, (placed.get(st.id) ?? 0) + 1); break; }
+    this.decor = this.settlements.flatMap((st) => decorate(m, st, this.colorOf(st.owner), traffic, (placed.get(st.id) ?? 0) >= 8));
     // Walls for settlements that have been besieged; gates shut while they're under attack.
     this.walls = [];
     for (const st of this.settlements) {

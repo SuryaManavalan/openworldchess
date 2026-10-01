@@ -95,8 +95,11 @@ export function computeSettlements(m: Mirror): Settlement[] {
 }
 
 /** Decorations for a settlement, deterministic from the seed and its state. */
-export function decorate(m: Mirror, s: Settlement, color: string, traffic: (x: number, y: number) => number): Decor[] {
+export function decorate(m: Mirror, s: Settlement, color: string, traffic: (x: number, y: number) => number, sparse = false): Decor[] {
   const out: Decor[] = [];
+  // Once a player decorates a town themselves (8+ pieces), its automatic props step back so their
+  // choices read clearly (citybuilding.md §9): the centrepiece and banners stay.
+  const THIN = new Set(['bench', 'stall', 'lamp', 'shrub', 'planter']);
   const taken = new Set<number>();
   const blocked = (x: number, y: number) => {
     const k = key(x, y);
@@ -106,6 +109,7 @@ export function decorate(m: Mirror, s: Settlement, color: string, traffic: (x: n
     return false;
   };
   const put = (x: number, y: number, kind: string, extra: Partial<Decor> = {}) => {
+    if (sparse && THIN.has(kind)) return false;
     if (blocked(x, y) || traffic(x, y) >= 12) return false;
     taken.add(key(x, y));
     out.push({ x, y, kind, ...extra });

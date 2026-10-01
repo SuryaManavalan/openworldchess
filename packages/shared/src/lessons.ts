@@ -14,7 +14,7 @@ import {
   BUILD_SPACING, BUILDINGS, BUILDINGS_PER_KING, CANCEL_COOLDOWN_MS, CANCEL_PROTECT_MS, CLAIM_RANGE, CLEAR_CREW, CLEAR_MAX, CLEAR_TURNS, CLOCK_BASE_MS, CLOCK_INC_MS,
   COUNTDOWN_FIELD_MS, COUNTDOWN_SIEGE_MS, DECAY_EVERY_MS, ENGAGE_RANGE, FRESH_ACCOUNT_MS, KING_TIME_PER_KING, MASTERLESS_MS, MIN_BATTLE_COOLDOWN_MS, PAVE_CREW, PAVE_MAX,
   PAVE_TURNS, PLAYER_BUILDING_CAP, PLAYER_KING_CAP, PLAYER_PIECE_CAP, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, RUIN_LIFETIME_MS,
-  SPAWN_SHIELD_MS, TROOP_CITY_R, TROOP_JOIN_MIN_MS, TROOP_JOIN_R, TROOP_LEASH, TURN_MS, WORK_AREA, type BuildingType,
+  SPAWN_SHIELD_MS, DECOR_BASE, DECOR_CAP, DECOR_CLEAR_R, DECOR_PER_BUILDING, HAUL_LOAD, PLANT_FIELD_COST, PLANT_FIELD_MS, PLANT_TREE_MS, TROOP_CITY_R, TROOP_JOIN_MIN_MS, TROOP_JOIN_R, TROOP_LEASH, TURN_MS, WORK_AREA, type BuildingType,
 } from './constants.ts';
 import { HOLD_MS, KING_OF_NEED_MIN, TITLES, RENOWN } from './chronicle.ts';
 
@@ -31,7 +31,7 @@ export interface Lesson {
 const dur = (ms: number) => ms >= 7_200_000 ? `${Math.round(ms / 3_600_000)} hours` : ms >= 3_600_000 ? '1 hour' : ms >= 120_000 ? `${Math.round(ms / 60_000)} minutes` : `${Math.round(ms / 1000)} seconds`;
 const cost = (t: BuildingType) => Object.entries(BUILDINGS[t].cost).map(([k, n]) => `${n} ${k === 'tree' ? 'wood' : k === 'rock' ? 'stone' : k}`).join(' + ') || 'free';
 const works = (t: BuildingType) => BUILDINGS[t].needs.map((n) => (n === 'tree' ? 'trees' : n === 'rock' ? 'rock' : n === 'ore' ? 'ore' : 'crops')).join(' and ') || 'nothing';
-const makes = (t: BuildingType) => ({ house: 'a pawn', stable: 'a knight', temple: 'a bishop', barracks: 'a war elephant', palace: 'a king or a queen', altar: 'nothing', wonder: 'nothing' }[t]);
+const makes = (t: BuildingType) => ({ house: 'a pawn', stable: 'a knight', temple: 'a bishop', barracks: 'a war elephant', palace: 'a king or a queen' } as Partial<Record<BuildingType, string>>)[t] ?? 'nothing';
 const bline = (t: BuildingType) => `${t[0].toUpperCase() + t.slice(1)} (${BUILDINGS[t].size}×${BUILDINGS[t].size}): costs ${cost(t)}; works ${works(t)}; makes ${makes(t)} every ${dur(BUILDINGS[t].baseMs)} on ordinary land.`;
 const set = '8 pawns, 2 knights, 2 bishops, 2 war elephants, 1 queen and the king';
 
@@ -305,6 +305,31 @@ export const LESSONS: Record<string, Lesson> = {
     text: 'Two of your towns near each other send merchants between them, and both work faster.',
     fine: ['About one pawn in six in an empire with more than one town becomes a merchant, walking between towns up to 80 squares apart.', 'With Trade (chapter 6), each town linked by a merchant in the last half hour works 15% faster (up to +30%).'],
     tips: ['Keep your towns within a merchant\'s walk of each other, and pave the road between them.'],
+  },
+  // ================= city building =================
+  citybuilding: {
+    title: 'Building your town your way',
+    text: 'Put buildings anywhere near a king, move or demolish them, and draw streets, walls, bridges and gardens.',
+    fine: [
+      'Buildings go anywhere within reach of one of your kings. A producer with nothing to draw from nearby (no crops for a house, no ore for a temple) still stands and counts for your town; it just makes nothing until it has its resource. The ghost turns amber to warn you.',
+      'Move (a building\'s panel): it is rebuilt free at the new spot, out of action while it goes up again. Demolish: it is torn down and half its wood and stone are left beside it as piles. Not during a battle at that town. Altars and the Wonder stay put.',
+      'Streets and squares are free, on your own town ground. A wider brush lays a square. A street across water is a bridge (10 wood a square), which anyone can walk on. A street through your wall, fence or hedge is a gate.',
+      'Decorations (walls, fences, hedges, flowerbeds, lamps, benches, banners, planters, wells, stalls, statues, fountains, taverns) cost a little wood or stone from nearby. They never count toward your town\'s tier, the building caps, production or room.',
+      `You may hold ${DECOR_BASE} decorations and plantings, plus ${DECOR_PER_BUILDING} for each real building (at most ${DECOR_CAP}). Decorations with none of your buildings within ${DECOR_CLEAR_R} squares are cleared.`,
+      `Plant a field (${PLANT_FIELD_COST} wood; it fills in over ${dur(PLANT_FIELD_MS)}) or a sapling (free; a tree in ${dur(PLANT_TREE_MS)}) in reach of a king. They become ordinary crops and woods. Rock and ore can't be planted.`,
+      'Walls, fences, hedges, wells, statues, stalls and taverns block walking; flowerbeds, streets and bridges don\'t.',
+    ],
+    tips: ['Plant a field beside a house you placed for looks, and it starts making pawns.', 'A wall with one gate funnels raiders onto your street.'],
+  },
+  hauling: {
+    title: 'Elephants haul stone and ore',
+    text: 'Select only war elephants, tap Haul, tap a rock or ore deposit, then tap where to set it down.',
+    fine: [
+      `Each elephant lifts up to ${HAUL_LOAD} at a time, walks it to the spot (within reach of one of your kings), and sets it down as a pile, then goes back until the deposit is spent. Up to ${CLEAR_CREW} elephants per order.`,
+      'The load rides on the elephant. Any new order, or a battle, takes it off the job, and it sets its load down where it stands, as a pile anyone nearby can use.',
+      'Piles are ordinary resources: buildings in reach build with them, and a pile of ore or rock beside a temple, barracks or palace feeds it.',
+    ],
+    tips: ['Carry ore and stone together to found a palace where you want it.'],
   },
   // ================= works =================
   clearing: {

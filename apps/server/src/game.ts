@@ -2,7 +2,7 @@
 import {
   setWorth, ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, ALTAR_TEND, ALTAR_TYPES, ALTARS_PER_PLAYER, BUILDINGS, PAVED, BUBBLE_GOLD_CHANCE, BUBBLE_MAX, bubbleEveryMs, bubbleWorth, BUILD_SPACING, CHUNK, CLAIM_RANGE, chunkKey, HOLD_MS, ENGAGE_RANGE, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, PLAYER_PIECE_CAP, PLAYER_KING_CAP, KING_TIME_PER_KING,
   BUILDINGS_PER_KING, PLAYER_BUILDING_CAP, RUIN_LIFETIME_MS, MASTERLESS_MS, REACH, SPAWN_SHIELD_MS, TEAM_COLORS,
-  ANCHOR_GRACE_MS, DECAY_EVERY_MS, BUILDING_MAX_HP, WORK_AREA, cheb, distToRect, isLight,
+  ANCHOR_GRACE_MS, DECAY_EVERY_MS, BUILDING_MAX_HP, WORK_AREA, cheb, distToRect, isDecor, isLight,
   type Building, type BuildingType, type Facing, type NodeKind, type Piece, type PieceKind, type PlayerPublic, type PlayerSelf, type Troop, type TurnMove,
 } from '@owc/shared';
 import { LAND_CELL, landKey, landUnkey } from '@owc/worldgen';
@@ -16,6 +16,7 @@ import { perf } from './perf.ts';
 import { Chronicle, type ChronState } from './chronicle.ts';
 import { Works } from './works.ts';
 import { Troops } from './troops.ts';
+import { CityBuild } from './citybuild.ts';
 import { stats } from './stats.ts';
 import { shopOpen } from './shop.ts';
 import type { TikTokLink } from './tiktok.ts';
@@ -125,6 +126,7 @@ export class Game {
   /** Knights paving and elephants clearing (movement.md §9). */
   works: Works;
   troops: Troops;
+  city: CityBuild;
   wilds: Wilds;
   chronicle: Chronicle;
   turn = 0;
@@ -164,6 +166,7 @@ export class Game {
     this.routines = new Routines(this);
     this.works = new Works(this);
     this.troops = new Troops(this);
+    this.city = new CityBuild(this);
     this.wilds = new Wilds(this);
     this.chronicle = new Chronicle(this);
     this.wilds.enabled = opts.wilds ?? true;
@@ -538,6 +541,7 @@ export class Game {
 
   /** Place a building (economy.md §2). Construction draws from nodes within reach of the site. */
   build(player: string, type: BuildingType, at: [number, number]): string | null {
+    if (isDecor(type)) return this.city.placeDecor(player, type, [at]).err;
     const spec = BUILDINGS[type];
     const [x, y] = at, w = this.world;
     const size = spec.size;
@@ -571,9 +575,9 @@ export class Game {
     }
     // Building caps (safeguards.md §3): per king in reach, and per player.
     let owned = 0;
-    for (const bl of w.buildings.values()) if (bl.owner === player && bl.type !== 'ruin') owned++;
+    for (const bl of w.buildings.values()) if (bl.owner === player && bl.type !== 'ruin' && !isDecor(bl.type)) owned++;
     if (owned >= PLAYER_BUILDING_CAP) return `You have the maximum of ${PLAYER_BUILDING_CAP} buildings`;
-    if (kings.length && kings.every((k) => w.buildingsNear(k.x, k.y, REACH).filter((bl) => bl.owner === player && bl.type !== 'ruin' && distToRect(k.x, k.y, bl.x, bl.y, bl.size) <= REACH).length >= BUILDINGS_PER_KING))
+    if (kings.length && kings.every((k) => w.buildingsNear(k.x, k.y, REACH).filter((bl) => bl.owner === player && bl.type !== 'ruin' && !isDecor(bl.type) && distToRect(k.x, k.y, bl.x, bl.y, bl.size) <= REACH).length >= BUILDINGS_PER_KING))
       return `A king can hold at most ${BUILDINGS_PER_KING} buildings: bring another king`;
     if (type === 'palace' && w.buildingsNear(x, y, REACH).some((b) => b.owner === player && b.type === 'palace' && kings.some((k) => distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH)))
       return 'One palace per king';
@@ -801,6 +805,7 @@ export class Game {
     // Idle life in settlements (visuals.md §2), and in the wilds' camps.
     perf.time('turn.works', () => this.works.step(record));
     if (this.turn % 2 === 0) perf.time('turn.troops', () => this.troops.step());
+    if (this.turn % 97 === 0) perf.time('turn.decor', () => this.city.sweep());
     perf.time('turn.routines', () => this.routines.step(record));
     perf.time('turn.wilds', () => this.wilds.step(record));
   }
@@ -895,6 +900,11 @@ export class Game {
       if (b.type === 'ruin') {
         b.ruinedAt ??= now;
         if (now - b.ruinedAt > RUIN_LIFETIME_MS) w.removeBuilding(b.id);
+        continue;
+      }
+      // Decorations (citybuilding.md) just finish going up: no anchor, decay or production.
+      if (isDecor(b.type)) {
+        if (b.built < 1) { b.built = Math.min(1, b.built + (dt * this.speed) / BUILDINGS[b.type].buildMs); b.blocked = b.built < 1 ? 'building' : null; w.dirtyBuildings.add(b.id); }
         continue;
       }
       const before = JSON.stringify([b.hp, b.built, Math.round(b.prod * 50), b.blocked, b.owner, b.bubbles, b.outpost]);
