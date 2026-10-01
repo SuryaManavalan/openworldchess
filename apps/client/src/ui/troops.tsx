@@ -37,6 +37,7 @@ function where(at: [number, number], home?: boolean): string {
 /** What the troop is doing, in a few words. */
 export function status(t: Troop): string {
   const ps = t.members.map((id) => mirror.pieces.get(id)).filter(Boolean) as Piece[];
+  if (t.auto === 'pilgrims') return t.home ? 'Pilgrims, heading home' : t.arrived ? `Pilgrims, at ${t.dest ?? 'the shrine'}` : `Pilgrims, on the way to ${t.dest ?? 'a shrine'}`;
   if (t.home) return 'Heading home';
   if (ps.some((p) => p.state === 'battle')) return 'In battle';
   if (ps.some((p) => p.state === 'moving')) return 'Marching';
@@ -82,7 +83,7 @@ function TroopRow({ t, n }: { t: Troop; n: number }) {
   return (
     <div className="troop-row">
       <button className="troop-main" onClick={() => selectTroop(t)} title="Select this troop and go to it">
-        <span className="troop-name"><Icon name="troop" size={15} /> Troop {n}</span>
+        <span className="troop-name"><Icon name="troop" size={15} /> {t.auto === 'pilgrims' ? 'Pilgrims' : `Troop ${n}`}</span>
         <Makeup ids={t.members} joining={t.joining.map((j) => j.id)} />
         <span className="troop-where">{status(t)}{where(t.at, t.home) ? ` · ${where(t.at, t.home)}` : ''}</span>
       </button>

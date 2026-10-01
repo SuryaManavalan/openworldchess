@@ -20,7 +20,7 @@ interface Scheduled { at: number; run: () => void }
 interface Floater { t: Text; x: number; y: number; t0: number; dur: number; rise: number; big: number }
 
 /** Day length: 40 real minutes, the same for everyone (visuals.md §4). */
-const DAY_MS = 40 * 60_000;
+import { DAY_MS } from '@owc/shared';
 
 export class Fx {
   layer = new Container();

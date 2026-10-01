@@ -67,9 +67,10 @@ export class Mirror {
 
   private setPiece(p: Piece) {
     const prev = this.pieces.get(p.id);
-    if (prev) this.pieceAt.delete(key(prev.x, prev.y));
+    if (prev && this.pieceAt.get(key(prev.x, prev.y)) === p.id) this.pieceAt.delete(key(prev.x, prev.y));
     this.pieces.set(p.id, p);
-    if (p.state !== 'battle') this.pieceAt.set(key(p.x, p.y), p.id);
+    // Indoors (citylife.md §1): not on the board.
+    if (p.state !== 'battle' && p.inside == null) this.pieceAt.set(key(p.x, p.y), p.id);
     if (p.owner === this.me) this.minePieces.add(p.id); else this.minePieces.delete(p.id);
     this.onPieceChange(p, prev);
   }

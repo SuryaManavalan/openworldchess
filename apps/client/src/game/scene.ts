@@ -282,6 +282,10 @@ export class Scene {
         this.pieces.set(p.id, v);
         this.objects.addChild(v.sprite);
         if (p.routine === 'born') { v.born = performance.now(); this.fx.birth(p.x, p.y, this.colorOf(p.owner)); }
+      } else if (prev && (prev.inside != null) !== (p.inside != null)) {
+        // In or out of doors (citylife.md §1): a little puff at the door, no slide through the wall.
+        if (p.inside == null) { v.x = p.x; v.y = p.y; v.anim = null; v.born = performance.now(); }
+        this.fx.dust(p.inside == null ? p.x : v.x, p.inside == null ? p.y : v.y, 4);
       } else if (!v.anim && (Math.abs(v.x - p.x) > 0.01 || Math.abs(v.y - p.y) > 0.01)) {
         if (Math.abs(v.x - p.x) + Math.abs(v.y - p.y) > 6) { v.x = p.x; v.y = p.y; }
         else v.anim = { fx: v.x, fy: v.y, tx: p.x, ty: p.y, t0: performance.now(), dur: m.turnMs * 0.9, turn: false };
@@ -392,7 +396,7 @@ export class Scene {
       const p = m.pieces.get(id);
       if (!p) continue;
       // Off screen: not drawn (performance.md §7). It still animates, so it's in place when it comes into view.
-      const hidden = p.state === 'battle' || p.x < view.x0 || p.x > view.x1 || p.y < view.y0 || p.y > view.y1;
+      const hidden = p.state === 'battle' || p.inside != null || p.x < view.x0 || p.x > view.x1 || p.y < view.y0 || p.y > view.y1;
       v.sprite.visible = !hidden;
       if (hidden && v.anim) { v.x = v.anim.tx; v.y = v.anim.ty; v.anim = null; }
       if (hidden && v.cargo) v.cargo.visible = false;
@@ -977,7 +981,7 @@ export class Scene {
     let best: Piece | undefined, bd = radius;
     for (const [id, v] of this.pieces) {
       const p = this.mirror.pieces.get(id);
-      if (!p || p.state === 'battle') continue;
+      if (!p || p.state === 'battle' || p.inside != null) continue;
       const d = Math.hypot(v.x - x, v.y - y);
       if (d < bd) { bd = d; best = p; }
     }

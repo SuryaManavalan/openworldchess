@@ -206,6 +206,8 @@ export class Battles {
     r.black.ids = bs.map((p) => p.id);
     for (const id of [...r.white.ids, ...r.black.ids]) {
       const p = w.pieces.get(id)!;
+      // The alarm: anyone called from indoors steps out first (citylife.md §1).
+      if (p.inside != null) w.exit(p);
       r.origin.set(id, [p.x, p.y]);
       if (p.groupId) g.leaveGroup(p);
       p.state = 'battle';

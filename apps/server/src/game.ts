@@ -17,6 +17,7 @@ import { Chronicle, type ChronState } from './chronicle.ts';
 import { Works } from './works.ts';
 import { Troops } from './troops.ts';
 import { CityBuild } from './citybuild.ts';
+import { CityLife } from './citylife.ts';
 import { stats } from './stats.ts';
 import { shopOpen } from './shop.ts';
 import type { TikTokLink } from './tiktok.ts';
@@ -127,6 +128,7 @@ export class Game {
   works: Works;
   troops: Troops;
   city: CityBuild;
+  life: CityLife;
   wilds: Wilds;
   chronicle: Chronicle;
   turn = 0;
@@ -167,6 +169,7 @@ export class Game {
     this.works = new Works(this);
     this.troops = new Troops(this);
     this.city = new CityBuild(this);
+    this.life = new CityLife(this);
     this.wilds = new Wilds(this);
     this.chronicle = new Chronicle(this);
     this.wilds.enabled = opts.wilds ?? true;
@@ -191,6 +194,7 @@ export class Game {
     for (const pl of this.players.values()) if (pl.emperorId === id) pl.emperorId = null;
   }
   setOwner(p: Piece, owner: string | null) {
+    if (p.inside != null) this.world.exit(p); // changing hands brings it out of doors
     this.indexKing(p, false);
     if (p.groupId) this.leaveGroup(p);
     p.owner = owner;
@@ -414,9 +418,11 @@ export class Game {
   // ---------- orders ----------
 
   orderable(player: string, ids: number[]): Piece[] {
-    return ids.map((id) => this.world.pieces.get(id)!).filter((p) =>
+    const ok = ids.map((id) => this.world.pieces.get(id)!).filter((p) =>
       // Routed pieces (outside every king's reach) can be ordered too: you can always bring them home.
       p && p.owner === player && (p.state === 'idle' || p.state === 'moving' || p.state === 'routed') && !this.battles.frozen(p));
+    // Ordered out: pieces indoors step out first (citylife.md §1); one with no room yet waits.
+    return ok.filter((p) => this.world.exit(p));
   }
 
   leaveGroup(p: Piece) {
@@ -488,6 +494,9 @@ export class Game {
 
   orderAttack(player: string, ids: number[], targetId: number): string | null {
     const target = this.defenderOf(this.world.pieces.get(targetId));
+    // Pilgrims travel under the peace of the road (citylife.md §4).
+    const clicked = this.world.pieces.get(targetId);
+    if (target && (this.troops.pilgrim(target.owner, target.id) || (clicked && this.troops.pilgrim(clicked.owner, clicked.id)))) return 'Pilgrims travel under the peace of the road: they can\'t be attacked';
     if (!target || !target.owner || target.owner === player) return 'Pick an enemy king or troop';
     const pieces = this.orderable(player, ids);
     let king = pieces.find((p) => p.kind === 'K');

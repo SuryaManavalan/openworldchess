@@ -2,7 +2,7 @@
 // live their own lives. Real, cheap moves that stay inside the rules: they
 // keep within a king's reach and give way to any order. They never change
 // outcomes: idle pieces are only moved where they'd be free to stand anyway.
-import { REACH, cheb, type Piece, type PieceKind } from '@owc/shared';
+import { REACH, cheb, distToRect, type Piece, type PieceKind } from '@owc/shared';
 import { bestGaitMove, findPath } from '@owc/rules';
 import { hash01 } from '@owc/worldgen';
 import type { Game } from './game.ts';
@@ -92,7 +92,30 @@ export class Routines {
         continue;
       }
       // Merchants carry goods between their owner's towns (visuals.md §10).
-      if (p.kind === 'P' && hash01(w.seed, p.id, 3, 75) < MERCHANT_SHARE && this.trade(p, life, record)) continue;
+      if (p.kind === 'P' && hash01(w.seed, p.id, 3, 75) < MERCHANT_SHARE && p.inside == null && this.trade(p, life, record)) continue;
+      // City life (citylife.md): home at night, out by day, and no more outdoors than the town holds.
+      const d = g.life.decide(p);
+      if (d?.t) g.life.maybePilgrims(d.t);
+      if (d?.act === 'stay') continue;
+      if (d?.act === 'out') { const from = w.buildings.get(p.inside ?? -1); if (w.exit(p)) { g.life.went(d.t!, from, -1); life.home = [p.x, p.y]; } continue; }
+      if (d?.act === 'home' && d.b) {
+        const b = d.b;
+        if (distToRect(p.x, p.y, b.x, b.y, b.size) <= 1) { w.enter(p, b); g.life.went(d.t!, b, 1); continue; }
+        this.moves--;
+        const m = bestGaitMove(p, b.x + (b.size >> 1), b.y + b.size, (x, y) => w.free(x, y, p.id), 70, 8);
+        if (p.routine !== 'home') { p.routine = 'home'; w.touch(p); }
+        if (m) { const fx = p.x, fy = p.y; p.facing = m.facing; if (!m.turn) w.movePiece(p, m.x, m.y); else w.touch(p); record(p, fx, fy); }
+        else if (++life.blocked >= 6) { life.blocked = 0; w.enter(p, b); g.life.went(d.t!, b, 1); } // (a door hemmed in: it squeezes past)
+        continue;
+      }
+      if (d?.act === 'edge' && d.to) {
+        this.moves--;
+        const m = bestGaitMove(p, d.to[0], d.to[1], (x, y) => w.free(x, y, p.id) && g.inReach(p.owner!, x, y), 70, 8);
+        if (p.routine !== 'rest') { p.routine = 'rest'; w.touch(p); }
+        if (m) { const fx = p.x, fy = p.y; p.facing = m.facing; if (!m.turn) w.movePiece(p, m.x, m.y); else w.touch(p); record(p, fx, fy); life.home = [p.x, p.y]; }
+        continue;
+      }
+      if (p.inside != null) continue;
       // Otherwise, idle life only happens inside a settlement.
       if (!inSettlement) continue;
       switch (p.kind) {

@@ -273,7 +273,8 @@ export class World {
   }
 
   private placeIndex(p: Piece) {
-    this.pieceAt.set(key(p.x, p.y), p.id);
+    // A piece indoors keeps its place in town (piecesNear finds it) but frees its square.
+    if (p.inside == null) this.pieceAt.set(key(p.x, p.y), p.id);
     const ck = chunkKey(...chunkOf(p.x, p.y));
     let s = this.piecesByChunk.get(ck);
     if (!s) this.piecesByChunk.set(ck, (s = new Set()));
@@ -287,6 +288,7 @@ export class World {
   }
 
   movePiece(p: Piece, x: number, y: number) {
+    if (p.inside != null) p.inside = undefined; // (walking: it's outdoors)
     this.unindex(p);
     p.x = x; p.y = y;
     this.placeIndex(p);
@@ -312,6 +314,27 @@ export class World {
   }
 
   touch(p: Piece) { this.dirtyPieces.add(p.id); }
+
+  /** Go indoors (citylife.md §1): off the board, standing at the building, its square freed. */
+  enter(p: Piece, b: Building) {
+    this.unindex(p);
+    p.inside = b.id; p.x = b.x; p.y = b.y; p.routine = undefined;
+    this.placeIndex(p);
+    this.dirtyPieces.add(p.id);
+  }
+  /** Come out of doors, onto a free square by the building (false if there's no room yet). */
+  exit(p: Piece): boolean {
+    if (p.inside == null) return true;
+    const b = this.buildings.get(p.inside);
+    const bx = b ? b.x : p.x, by = b ? b.y : p.y, size = b?.size ?? 1;
+    const at = this.nearestFree(bx + (size >> 1), by + size, 6, (x, y) => !b || distToRect(x, y, b.x, b.y, b.size) > 0);
+    if (!at) return false;
+    this.unindex(p);
+    p.inside = undefined; p.x = at[0]; p.y = at[1];
+    this.placeIndex(p);
+    this.dirtyPieces.add(p.id);
+    return true;
+  }
 
   piecesInChunk(cx: number, cy: number): Piece[] {
     const s = this.piecesByChunk.get(chunkKey(cx, cy));
@@ -355,6 +378,8 @@ export class World {
   removeBuilding(id: number) {
     const b = this.buildings.get(id);
     if (!b) return;
+    // Anyone indoors steps out first.
+    for (const p of this.piecesNear(b.x, b.y, b.size + 1)) if (p.inside === id) this.exit(p);
     for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) { this.buildingAt.delete(key(b.x + dx, b.y + dy)); this.dirtyWalk(b.x + dx, b.y + dy); }
     this.buildingsByChunk.get(chunkKey(...chunkOf(b.x, b.y)))?.delete(id);
     this.buildings.delete(id);

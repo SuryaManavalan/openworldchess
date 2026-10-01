@@ -2,7 +2,7 @@
 // together. Moving a whole troop moves it; moving part of it splits that part off. A troop
 // can be reinforced (the nearest piece of a kind walks out to join it) and called home,
 // where it disbands. A member stranded far from its post walks home on its own.
-import { TROOP_CITY_R, TROOP_JOIN_MIN_MS, TROOP_JOIN_R, TROOP_LEASH, TURN_MS, cheb, type Piece, type Troop } from '@owc/shared';
+import { PILGRIM_STAY_MS, TROOP_CITY_R, TROOP_JOIN_MIN_MS, TROOP_JOIN_R, TROOP_LEASH, TURN_MS, cheb, type Piece, type Troop } from '@owc/shared';
 import type { Game, PlayerRec } from './game.ts';
 
 export class Troops {
@@ -111,12 +111,38 @@ export class Troops {
     return err;
   }
 
+  /** Is this piece on a pilgrimage (citylife.md §4)? Pilgrims travel under the peace of the road. */
+  pilgrim(owner: string | null | undefined, id: number): boolean {
+    const p = owner ? this.game.players.get(owner) : undefined;
+    return !!p?.troops?.some((t) => t.auto === 'pilgrims' && t.members.includes(id));
+  }
+
+  /**
+   * Send pilgrims (citylife.md §4): these pieces walk from their town to `to` (an altar, another
+   * of the player's towns), stay a while, and come home, as an automatic troop.
+   */
+  pilgrimage(owner: string, ids: number[], to: [number, number], dest: string, from: [number, number]): boolean {
+    const p = this.game.players.get(owner);
+    if (!p || !ids.length) return false;
+    if (this.game.orderMove(owner, ids, to, undefined, 60, undefined, true)) return false;
+    const t = this.of(p).find((x) => ids.some((id) => x.members.includes(id)));
+    if (!t) return false;
+    t.auto = 'pilgrims'; t.from = [from[0], from[1]]; t.dest = dest;
+    return true;
+  }
+
   /** Each turn: arrivals join, stragglers go home, troops home again disband. */
   step() {
     const g = this.game, w = this.w;
     for (const p of g.players.values()) {
       if (!p.troops?.length) continue;
       for (const t of p.troops) {
+        // Pilgrims: once everyone has reached the shrine, they stay a while, then walk home.
+        if (t.auto === 'pilgrims' && !t.home) {
+          const there = t.members.every((id) => { const q = w.pieces.get(id); return !q || (!q.groupId && cheb(q.x, q.y, t.at[0], t.at[1]) <= 4); });
+          if (there) t.arrived ??= g.now;
+          if (t.arrived && g.now - t.arrived > PILGRIM_STAY_MS) { if (this.callHome(p.id, t.id, t.from)) this.callHome(p.id, t.id); }
+        }
         const lost: number[] = [];
         t.members = t.members.filter((id) => {
           const q = w.pieces.get(id);
@@ -134,7 +160,7 @@ export class Troops {
         });
         // Called home (or its post is now inside a city, say a town it just took): once everyone
         // has stopped, they're home, and the troop is done.
-        if ((t.home || this.inCity(p.id, t.at[0], t.at[1])) && t.members.every((id) => { const q = w.pieces.get(id); return !q || (q.state !== 'moving' && !q.groupId); })) {
+        if ((t.home || (!t.auto && this.inCity(p.id, t.at[0], t.at[1]))) && t.members.every((id) => { const q = w.pieces.get(id); return !q || (q.state !== 'moving' && !q.groupId); })) {
           for (const id of t.members) { const q = w.pieces.get(id); if (q && q.routine !== 'tend') this.post(q, false); }
           t.members = []; t.joining = [];
         }

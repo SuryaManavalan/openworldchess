@@ -12,6 +12,21 @@ export const REACH = 10;
 // ---- Troops (movement.md §10) ----
 /** A destination this close to one of your buildings is inside your city: pieces sent there are home. */
 export const TROOP_CITY_R = 8;
+
+// ---- City life (citylife.md) ----
+/** The world's day: one shared 40-minute cycle (dawn bells, night lamps, pieces going home). */
+export const DAY_MS = 40 * 60_000;
+/** The sun's height now, -1 (midnight) to 1 (noon), the same everywhere. */
+export const sunAt = (now: number) => Math.sin(((((now % DAY_MS) + DAY_MS) % DAY_MS) / DAY_MS) * Math.PI * 2);
+/** How many of its owner's pieces a building houses, and which kinds (citylife.md §1). */
+export const HOMES: Partial<Record<string, { n: number; kinds: string }>> = {
+  house: { n: 4, kinds: 'P' }, stable: { n: 3, kinds: 'N' }, temple: { n: 3, kinds: 'B' }, barracks: { n: 3, kinds: 'R' },
+  palace: { n: 4, kinds: 'KQ' }, tavern: { n: 8, kinds: 'PNBRQK' }, wonder: { n: 8, kinds: 'PNBRQK' },
+};
+/** Daytime: how many idle pieces a town keeps outdoors, a base plus some per building (citylife.md §2). */
+export const OUTDOORS_BASE = 6, OUTDOORS_PER_BUILDING = 1.5;
+/** Pilgrimages (citylife.md §4): at most this many pilgrims in one, staying this long at the shrine. */
+export const PILGRIMS_MAX = 8, PILGRIM_STAY_MS = 3 * 60_000;
 /** A member left farther than this from its troop's post (and not marching or fighting) is sent home. */
 export const TROOP_LEASH = 16;
 /** A reinforcement joins its troop once it's this close to the post. */

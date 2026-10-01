@@ -201,7 +201,7 @@ function DOING(p: Piece): string | null {
   const load: Record<string, string> = { wheat: 'Bringing in the harvest', tree: 'Carrying timber', rock: 'Carrying stone', ore: 'Carrying ore' };
   if (r.startsWith('haul:')) return load[r.slice(5)] ?? 'Carrying goods';
   return ({
-    haul: p.kind === 'R' ? 'Hauling' : 'Off to gather', drill: 'Drilling in the square', rest: 'Resting', merchant: 'Trading with another town', 'merchant:back': 'Coming home from market',
+    home: 'Heading home', haul: p.kind === 'R' ? 'Hauling' : 'Off to gather', drill: 'Drilling in the square', rest: 'Resting', merchant: 'Trading with another town', 'merchant:back': 'Coming home from market',
     trade: 'At market', circuit: 'Riding the bounds', patrol: 'On patrol', procession: 'In procession', survey: 'Surveying the land', pace: 'Keeping watch',
     watch: 'Watching a battle', pave: 'Paving a road', clear: 'Clearing land', tend: 'Tending the altar', born: 'Just arrived',
   } as Record<string, string>)[r] ?? (p.posted ? 'Holding its post' : null);
@@ -269,7 +269,7 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
     <div className="action-row sel-bar">
       <div className="sel-top">
         <span className="sel-title">
-          {troop ? <><Icon name="troop" size={16} /> Troop {troopNo}</> : 'Selected'}
+          {troop ? <><Icon name="troop" size={16} /> {troop.auto === 'pilgrims' ? 'Pilgrims' : `Troop ${troopNo}`}</> : 'Selected'}
           <b className="sel-count">{troop ? `· ${sel.length}` : sel.length}</b>
           {joining.size > 0 && <span className="sel-otw">{joining.size} on the way</span>}
           {doing && <span className="sel-doing">{doing}</span>}
@@ -468,7 +468,7 @@ function Details() {
       <div className="meter"><span style={{ width: `${(b.built < 1 ? b.built : b.prod) * 100}%` }} /></div>
       <p>{b.blocked ? why[b.blocked] : b.type === 'altar' ? `Tended by a bishop: it holds the land within ${ALTAR_REACH} squares, where up to ${ALTAR_BUILDINGS} houses, stables or temples can stand without a king.` : `Producing ${spec.produces.map((k) => PIECE_NAME[k]).join('/')} · ${b.rate ?? 1}× speed from local richness`}</p>
       {b.outpost && <p className="muted">Held by an altar, not a king: it works at {Math.round(ALTAR_RATE * 100)}% speed.</p>}
-      <p className="muted">Condition {b.hp}/100</p>
+      <p className="muted">Condition {b.hp}/100{(() => { const n = mirror.myPieces().filter((q) => q.inside === b.id).length; return n ? ` · ${n} at home inside` : ''; })()}</p>
       {b.type !== 'altar' && <button className="btn ghost small" onClick={() => commands.pause(b.id, !b.paused)}>{b.paused ? <><Icon name="play" size={14} /> Resume production</> : <><Icon name="pause" size={14} /> Pause production</>}</button>}
       {mirror.self?.chronicle?.abilities.includes('capital') && (
         mirror.self.chronicle.capital && Math.max(Math.abs(mirror.self.chronicle.capital[0] - b.x), Math.abs(mirror.self.chronicle.capital[1] - b.y)) <= 10

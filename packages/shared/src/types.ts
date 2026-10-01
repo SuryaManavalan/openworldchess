@@ -32,6 +32,8 @@ export interface Piece {
   routine?: string;
   /** Sent there by its player without a king (movement.md §4): it stays, instead of drifting home. */
   posted?: boolean;
+  /** Indoors (citylife.md §1): the building it's in. It's off the board (its square is free) but still in town. */
+  inside?: number;
   /** Part of a starting kit: never changes hands (it perishes instead). */
   kit?: boolean;
   /** A creature of the wilds: its faction id (docs/specs/wilds.md). */
@@ -125,6 +127,12 @@ export interface Troop {
   joining: { id: number; until: number }[];
   /** Called home to a city: it disbands once everyone is there. */
   home?: boolean;
+  /** An automatic pilgrimage (citylife.md §4): where it set out from, and when it reached its shrine. */
+  auto?: 'pilgrims';
+  from?: [number, number];
+  arrived?: number;
+  /** What it's walking to, for the Troops list ("Pilgrims · to the altar"). */
+  dest?: string;
 }
 
 export interface PlayerSelf extends PlayerPublic {
