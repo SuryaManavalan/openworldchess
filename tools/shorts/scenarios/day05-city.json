@@ -1,0 +1,18 @@
+{
+ "name": "day05",
+ "seed": 1,
+ "near": [300, 300],
+ "turnMs": 600,
+ "countdownScale": 1,
+ "river": true,
+ "hoards": [
+  { "kind": "tree", "at": [-11, -5], "amount": 900 },
+  { "kind": "rock", "at": [-11, 4], "amount": 900 },
+  { "kind": "rock", "at": [-15, 9], "amount": 140 }
+ ],
+ "players": [
+  { "name": "Aurelian", "color": "#3d6fd1", "at": [-3, 0], "facing": 2,
+    "buildings": ["house", "stable", "house", "temple", "house", "house"],
+    "pieces": { "K": 1, "P": 4, "R": 2 } }
+ ]
+}

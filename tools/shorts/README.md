@@ -90,6 +90,14 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-10-01: **drawing on camera.**
+  - `stroke` events grow a stroke frame by frame through the real input, under a fingertip
+    dot, and commit it ("to": "bridge" crosses the scenario's river); `tap` events tap the map.
+  - Scenarios take `river` (a narrow river just east of the spot; env.river) and `hoards`.
+  - Filming as a player turns off idle watch mode.
+
+  First used for Day 5, the City Builder showcase.
+
 - 2026-10-01: two render fixes:
   - an overlay that turns fully opaque (a full-screen `board` layer) no longer throws the base
     video's timing off (`-reinit_filter 0`: the PNGs' pixel format changed mid-stream and

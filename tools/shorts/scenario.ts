@@ -11,6 +11,9 @@
 //                                      // because capture takes ~175 ms a frame (0.6 s turns look 5× fast)
 //     "countdownScale": 0.1,           // battle countdowns (a siege's 60 s × this)
 //     "needs": { "wheat": 6, "tree": 12 }, // resources within 12 squares of the spot (for building on camera)
+//     "river": true,                    // a narrow river (2–5 wide) starting 7–10 squares east of the spot
+//                                       // (env.river = [squares east to the water, its width])
+//     "hoards": [ { "kind": "rock", "at": [-12, 6], "amount": 120 } ],   // piles near the spot
 //     "players": [
 //       { "name": "Aurelian", "color": "#3d6fd1", "at": [0, 0],          // offset from the spot
 //         "pieces": { "K": 1, "Q": 1, "R": 2, "P": 6 },                   // around their king
@@ -39,11 +42,25 @@ const w = game.world;
 // An open spot: 30×30 squares of buildable ground with little in the way.
 const [nx, ny] = spec.near ?? [0, 0];
 let spot: [number, number] | null = null;
-for (let r = 0; r < 600 && !spot; r += 20)
-  for (let a = 0; a < 16 && !spot; a++) {
-    const x = Math.round(nx + Math.cos((a / 16) * Math.PI * 2) * r), y = Math.round(ny + Math.sin((a / 16) * Math.PI * 2) * r);
+let riverAt: [number, number] | null = null;
+// (A river is rarer: look farther, and more finely.)
+const R = spec.river ? 4000 : 600, STEP = spec.river ? 12 : 20, ANG = spec.river ? 48 : 16;
+for (let r = 0; r < R && !spot; r += STEP)
+  for (let a = 0; a < ANG && !spot; a++) {
+    const x = Math.round(nx + Math.cos((a / ANG) * Math.PI * 2) * r), y = Math.round(ny + Math.sin((a / ANG) * Math.PI * 2) * r);
     let ok = 0;
-    for (let dy = -15; dy <= 15; dy += 3) for (let dx = -15; dx <= 15; dx += 3) if (w.buildable(x + dx, y + dy) && !w.nodeAt(x + dx, y + dy)) ok++;
+    // With a river, the town is judged on the land west of it.
+    const [xa, xb] = spec.river ? [-15, 5] : [-15, 15];
+    for (let dy = -15; dy <= 15; dy += 3) for (let dx = xa; dx <= xb; dx += 3) if (w.buildable(x + dx, y + dy) && !w.nodeAt(x + dx, y + dy)) ok++;
+    if (spec.river) {
+      ok = ok >= 62 ? 999 : 0; // 80% of the land west of it open (by a river, trees and crops crowd in)
+      const water = (dx: number, dy = 0) => w.terrain(x + dx, y + dy) === 'water';
+      let a = 7; while (a <= 10 && !water(a)) a++;
+      if (a > 10 || water(a - 1)) continue;
+      let wd = 0; while (wd < 7 && water(a + wd)) wd++;
+      if (wd < 2 || wd > 5 || !w.buildable(x + a + wd, y) || !w.buildable(x + a - 1, y)) continue;
+      riverAt = [a, wd];
+    }
     // A town to grow on camera needs crops and trees close by (and so a little less open ground).
     const near = spec.needs ? w.nodesNear(x, y, 1, 12) : [];
     const has = Object.entries(spec.needs ?? {}).every(([k, n]) => near.filter((q) => q.kind === k && q.remaining > 0).length >= (n as number));
@@ -62,7 +79,13 @@ for (const ps of spec.players) {
   tokens[ps.name] = p.token;
   // The starting kit goes far away: the Emperor stays home, everything else is removed.
   for (const q of game.holdings(p.id).pieces) {
-    if (q.emperor) { const far = w.nearestFree(spot[0] + 300 + Object.keys(tokens).length * 40, spot[1] + 300, 30)!; w.movePiece(q, far[0], far[1]); }
+    if (q.emperor) {
+      // Somewhere dry, far away (try a few directions: it may be sea out there).
+      const n = Object.keys(tokens).length;
+      let far: [number, number] | null = null;
+      for (const [dx, dy] of [[300, 300], [-300, 300], [300, -300], [-300, -300], [500, 0], [0, 500], [-500, 0], [0, -500]]) if (!far) far = w.nearestFree(spot[0] + dx + n * 40, spot[1] + dy, 40);
+      w.movePiece(q, far![0], far![1]);
+    }
     else game.removePiece(q.id);
   }
   const [cx, cy] = [spot[0] + (ps.at?.[0] ?? 0), spot[1] + (ps.at?.[1] ?? 0)];
@@ -82,6 +105,10 @@ for (const ps of spec.players) {
   for (const [kind, n] of Object.entries(ps.pieces ?? {}) as [PieceKind, number][]) for (let i = 0; i < n; i++) add(kind, cx + (i % 4) - 1, cy + Math.floor(i / 4) + (kind === 'K' ? 0 : 1), 3);
   for (const [kind, n] of Object.entries(ps.reserves ?? {}) as [PieceKind, number][]) for (let i = 0; i < n; i++) add(kind, cx - 4 + i * 2, cy - 5, 4);
 }
+for (const h of spec.hoards ?? []) {
+  const at = w.nearestFree(spot[0] + h.at[0], spot[1] + h.at[1], 4, (x, y) => w.buildable(x, y) && !w.nodeAt(x, y) && w.buildingIdAt(x, y) == null)!;
+  w.addHoard(at[0], at[1], h.kind, h.amount);
+}
 game.chronicle.refreshSettlements(Date.now(), true);
 const data = resolve(dir, 'world.json');
 save(game, data);
@@ -99,7 +126,7 @@ for (let i = 0; i < 120; i++) {
   if (readFileSync(resolve(dir, 'server.log'), 'utf8').includes('server on')) break;
   await new Promise((r) => setTimeout(r, 500));
 }
-const env = { port, base: `http://localhost:${port}`, pid: server.pid, center: spot, tokens };
+const env = { port, base: `http://localhost:${port}`, pid: server.pid, center: spot, tokens, river: riverAt };
 writeFileSync(resolve(dir, 'scenario.env.json'), JSON.stringify(env, null, 1));
 mkdirSync(dirname(data), { recursive: true });
 console.log(`server on :${port} (pid ${server.pid}); env ${resolve(dir, 'scenario.env.json')}`);

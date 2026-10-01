@@ -22,6 +22,12 @@
 //     "events": [ { "t": 1.8, "act": "battle.mjs#mate", "args": {...} },               // during the shot
 //                 { "t": 0, "eval": "window.__owc.ui.getState().set({ battleFocus: ... })" } ]
 //   }
+// Drawing on camera (city building, citybuilding.md §8), in events:
+//   { "t": 4, "stroke": { "dur": 1.6, "tool": { "kind": "pave", "style": 1 }, "width": 1, "erase": false,
+//                         "from": [-6, 0], "to": [2, 0] | "bridge" } }
+// draws through the real input (the stroke grows frame by frame under a fingertip dot) and commits
+// on its last frame. Squares are relative to the scenario's spot; "to": "bridge" runs east from
+// "from" across the scenario's river. { "t": 9, "tap": [dx, dy] } taps the map there (a ripple).
 // Acts live in tools/shorts/acts/ (players signed in with the scenario's tokens, moves from our
 // engine). An eval runs in the camera's page; it may use `B` = the staged battle's id.
 // Camera keys interpolate zoom exponentially (so a zoom-out feels even), and
@@ -73,7 +79,7 @@ page.on('pageerror', (e) => console.log('page error:', e.message));
 if (spec.as) {
   // Signed in as a staged player, with the interface: what a player sees on their phone.
   await page.goto(`${spec.base.replace(/\/$/, '')}/`);
-  await page.evaluate((t) => { localStorage.clear(); localStorage.setItem('owc.token', t); localStorage.setItem('owc.onboarded', '1'); localStorage.setItem('owc.storySeen', '99'); }, env.tokens[spec.as]);
+  await page.evaluate((t) => { localStorage.clear(); localStorage.setItem('owc.token', t); localStorage.setItem('owc.onboarded', '1'); localStorage.setItem('owc.storySeen', '99'); localStorage.setItem('owc.settings', JSON.stringify({ watchMode: false })); }, env.tokens[spec.as]);
   await page.goto(`${spec.base.replace(/\/$/, '')}/`);
   await page.waitForFunction(() => window.__owc?.scene && window.__owc.mirror.self, null, { timeout: 30_000 });
 } else {
@@ -82,13 +88,45 @@ if (spec.as) {
   await page.waitForFunction(() => window.__owc?.scene && window.__owc.mirror.me === 'watcher', null, { timeout: 30_000 });
 }
 if (spec.css) await page.addStyleTag({ content: spec.css });
+if (spec.as) await page.addStyleTag({ content: '.watch-pill { display: none !important; }' }); // (no one's idle on camera)
 await page.waitForTimeout(2500);
 
 // Acts: staged players doing things (setup before filming, or events during it).
 const acts = new Map();
 const ctx = { browser, page, env, args: {} };
+// Strokes being drawn (see above), advanced every frame.
+const strokes = [];
+const rel = (d) => [env.center[0] + d[0], env.center[1] + d[1]];
+async function finger(at, on, ripple = false) {
+  await page.evaluate(([at, on, ripple]) => {
+    let f = document.getElementById('film-finger');
+    if (!f) { f = document.createElement('div'); f.id = 'film-finger'; f.style.cssText = 'position:fixed;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(255,255,255,0.55);border:3px solid rgba(255,255,255,0.95);box-shadow:0 2px 10px rgba(0,0,0,0.35);pointer-events:none;z-index:9999;transition:transform 0.15s,opacity 0.2s'; document.body.appendChild(f); }
+    if (!at) { f.style.opacity = '0'; return; }
+    const [sx, sy] = window.__owc.scene.toScreen(at[0], at[1]);
+    f.style.left = sx + 'px'; f.style.top = sy + 'px'; f.style.opacity = on ? '1' : '0';
+    f.style.transform = ripple ? 'scale(1.6)' : 'scale(1)';
+  }, [at, on, ripple]);
+}
 async function run(step) {
   if (step.wait) return page.waitForTimeout(step.wait);
+  if (step.stroke) {
+    const s = step.stroke, a = rel(s.from);
+    const b = s.to === 'bridge' ? [env.center[0] + env.river[0] + env.river[1] - 1, a[1]] : rel(s.to);
+    const cells = [];
+    let [x, y] = a; cells.push([x, y]);
+    while (x !== b[0] || y !== b[1]) { if (x !== b[0]) x += Math.sign(b[0] - x); else y += Math.sign(b[1] - y); cells.push([x, y]); }
+    await page.evaluate((s) => window.__owc.ui.getState().set({ tool: s.tool, toolErase: !!s.erase, toolWidth: s.width ?? 1, sheet: null, stroke: null, selection: [] }), s);
+    strokes.push({ t0: step.t, dur: s.dur ?? 1.5, cells, done: 0 });
+    return;
+  }
+  if (step.tap) {
+    const at = rel(step.tap);
+    await finger(at, true, true);
+    await page.evaluate((at) => window.__owc.input.tap(at, 'touch'), at);
+    setTimeout(() => {}, 0);
+    strokes.push({ t0: step.t, dur: 0.35, cells: [], done: 0, hide: true });
+    return;
+  }
   if (step.eval) return page.evaluate((code) => { const m = window.__owc.mirror; const B = [...m.battles.values()].reverse().find((b) => b.phase !== 'over')?.id ?? [...m.battles.values()].at(-1)?.id; return new Function('B', code)(B); }, step.eval);
   const [file, fn] = step.act.split('#');
   if (!acts.has(file)) acts.set(file, await import(new URL(`./acts/${file}`, import.meta.url).href));
@@ -139,6 +177,14 @@ const events = [...(spec.events ?? [])].sort((a, b) => a.t - b.t);
 for (let i = 0; i < frames; i++) {
   const t = i / FPS, c = camAt(t);
   while (events.length && events[0].t <= t) await run(events.shift());
+  for (const s of [...strokes]) {
+    const k = Math.min(1, (t - s.t0) / s.dur);
+    if (s.hide) { if (k >= 1) { await finger(null, false); strokes.splice(strokes.indexOf(s), 1); } continue; }
+    const n = Math.max(1, Math.ceil(k * s.cells.length));
+    for (; s.done < n; s.done++) await page.evaluate(([c, first]) => window.__owc.input.strokeTo(c, first), [s.cells[s.done], s.done === 0]);
+    await finger(s.cells[n - 1], true);
+    if (k >= 1) { await page.evaluate(() => window.__owc.input.commitStroke()); await finger(null, false); strokes.splice(strokes.indexOf(s), 1); }
+  }
   await page.evaluate(([x, y, z, rot]) => {
     const s = window.__owc.scene;
     s.fly = null; s.cam.x = x; s.cam.y = y; s.cam.zoom = z;

@@ -1,0 +1,215 @@
+{
+ "out": "out/day05/day05.mp4",
+ "seconds": 50,
+ "base": {
+  "video": "out/day05/city.mp4"
+ },
+ "layers": [
+  {
+   "type": "vignette",
+   "t0": 0,
+   "t1": 50,
+   "strength": 0.4
+  },
+  {
+   "type": "label",
+   "t0": 8.6,
+   "t1": 43,
+   "text": "Sped up",
+   "y": 1400
+  },
+  {
+   "type": "text",
+   "t0": 0,
+   "t1": 4.1,
+   "lines": [
+    "OPEN WORLD CHESS"
+   ],
+   "y": 400,
+   "size": 56,
+   "font": "bold",
+   "color": "#ece6da",
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "this is the city builder update",
+   "lead": 0.6,
+   "hold": 0.9,
+   "lines": [
+    "THE CITY",
+    "BUILDER UPDATE"
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 620,
+   "size": 132,
+   "anim": "slam",
+   "glow": "rgba(227,178,60,0.4)"
+  },
+  {
+   "type": "text",
+   "t0": 4.2,
+   "t1": 43.2,
+   "lines": [
+    "THE CITY BUILDER UPDATE"
+   ],
+   "y": 205,
+   "size": 34,
+   "font": "bold",
+   "color": "#e3b23c",
+   "anim": "fade",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "cue": "it is something you draw",
+   "hold": 0.45,
+   "lines": [
+    "Draw your town."
+   ],
+   "y": 330,
+   "size": 96,
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "cue": "lay streets",
+   "lines": [
+    "STREETS"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "widen them into squares",
+   "lines": [
+    "SQUARES"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "where the road meets the river",
+   "lines": [
+    "BRIDGES"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "raise walls",
+   "lines": [
+    "WALLS"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "a gate opens on its own",
+   "lines": [
+    "& GATES"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "plant gardens and hedges",
+   "lines": [
+    "GARDENS"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "set lamps along the way",
+   "lines": [
+    "& LAMPS"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "sow fields",
+   "lines": [
+    "FIELDS"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "move any building",
+   "lines": [
+    "MOVE ANYTHING"
+   ],
+   "y": 330,
+   "size": 106,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "your war elephants",
+   "lines": [
+    "HAULING"
+   ],
+   "y": 330,
+   "size": 120,
+   "anim": "slam"
+  },
+  {
+   "type": "text",
+   "cue": "every piece fits every other",
+   "lines": [
+    "Every piece",
+    "fits."
+   ],
+   "colors": [
+    "#ece6da",
+    "#e3b23c"
+   ],
+   "y": 400,
+   "size": 116,
+   "anim": "pop"
+  },
+  {
+   "type": "endcard",
+   "cue": "open world chess the city builder",
+   "sub": "The City Builder Update · out now",
+   "url": "openworldchess.com",
+   "dim": 0.6,
+   "y": 560
+  }
+ ],
+ "audio": {
+  "bpm": 92,
+  "musicGain": 0.5,
+  "sfxGain": 0.55
+ },
+ "voice": [
+  {
+   "at": 0.6,
+   "voice": "chronicler",
+   "timed": true,
+   "text": "This is the City Builder update for Open World Chess. Your town is no longer something that happens to you. It is something you draw. Lay streets with a stroke of your finger, and widen them into squares where your people gather. Where the road meets the river, it becomes a bridge. Raise walls around what you love, and where a street runs through them, a gate opens on its own. Plant gardens and hedges, and set lamps along the way. Sow fields wherever you want the harvest. Move any building, tear one down, and build again. Your war elephants can even haul stone and ore to wherever you need it. Every piece fits every other, so whatever you draw looks like it was always meant to be there. Open World Chess, the City Builder update. Free in your browser."
+  }
+ ]
+}

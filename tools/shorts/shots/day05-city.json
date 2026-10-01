@@ -1,0 +1,351 @@
+{
+ "scenario": "out/day05/scenario.env.json",
+ "as": "Aurelian",
+ "viewport": 405,
+ "css": ".tracker, .alerts, .guide, .markers, .toasts { display: none !important; }",
+ "out": "out/day05/city.mp4",
+ "seconds": 54,
+ "offset": [
+  0,
+  0
+ ],
+ "ease": "inOut",
+ "path": [
+  {
+   "t": 0,
+   "zoom": 0.3,
+   "dx": 1,
+   "dy": 0
+  },
+  {
+   "t": 4.0,
+   "zoom": 0.36,
+   "dx": 0,
+   "dy": 0
+  },
+  {
+   "t": 8.6,
+   "zoom": 0.5,
+   "dx": -2,
+   "dy": 1
+  },
+  {
+   "t": 11.2,
+   "zoom": 0.5,
+   "dx": -3,
+   "dy": 0
+  },
+  {
+   "t": 14.0,
+   "zoom": 0.5,
+   "dx": -3,
+   "dy": 0
+  },
+  {
+   "t": 15.2,
+   "zoom": 0.48,
+   "dx": 7,
+   "dy": 0
+  },
+  {
+   "t": 17.2,
+   "zoom": 0.48,
+   "dx": 7,
+   "dy": 0
+  },
+  {
+   "t": 18.2,
+   "zoom": 0.48,
+   "dx": 0,
+   "dy": -6
+  },
+  {
+   "t": 23.4,
+   "zoom": 0.52,
+   "dx": 1,
+   "dy": -5
+  },
+  {
+   "t": 27.4,
+   "zoom": 0.52,
+   "dx": 2,
+   "dy": -4
+  },
+  {
+   "t": 28.6,
+   "zoom": 0.52,
+   "dx": 5,
+   "dy": -2
+  },
+  {
+   "t": 30.2,
+   "zoom": 0.52,
+   "dx": 5,
+   "dy": -2
+  },
+  {
+   "t": 31.0,
+   "zoom": 0.52,
+   "dx": -3,
+   "dy": 4
+  },
+  {
+   "t": 33.6,
+   "zoom": 0.5,
+   "dx": -4,
+   "dy": 4
+  },
+  {
+   "t": 34.8,
+   "zoom": 0.55,
+   "dx": -10,
+   "dy": 6
+  },
+  {
+   "t": 38.4,
+   "zoom": 0.55,
+   "dx": -9,
+   "dy": 6
+  },
+  {
+   "t": 43.5,
+   "zoom": 0.27,
+   "dx": 1,
+   "dy": 0
+  },
+  {
+   "t": 54,
+   "zoom": 0.24,
+   "dx": 1,
+   "dy": 0
+  }
+ ],
+ "before": [
+  {
+   "eval": "const o = window.__owc, k = o.mirror.myKings().find((q) => !q.emperor); o.ui.getState().select([k.id]); o.input.issue([k.x + 8, k.y + 1]); o.ui.getState().select([]);"
+  },
+  {
+   "wait": 9000
+  }
+ ],
+ "events": [
+  {
+   "t": 4.9,
+   "eval": "window.__owc.ui.getState().set({ sheet: 'build', buildTab: 'streets' })"
+  },
+  {
+   "t": 6.6,
+   "eval": "window.__owc.ui.getState().set({ buildTab: 'adorn' })"
+  },
+  {
+   "t": 8.2,
+   "eval": "window.__owc.ui.getState().set({ sheet: null })"
+  },
+  {
+   "t": 9.3,
+   "stroke": {
+    "dur": 1.6,
+    "tool": {
+     "kind": "pave",
+     "style": 1
+    },
+    "from": [
+     -9,
+     2
+    ],
+    "to": [
+     6,
+     2
+    ]
+   }
+  },
+  {
+   "t": 11.5,
+   "stroke": {
+    "dur": 1.2,
+    "tool": {
+     "kind": "pave",
+     "style": 2
+    },
+    "width": 3,
+    "from": [
+     -7,
+     -1
+    ],
+    "to": [
+     -2,
+     -1
+    ]
+   }
+  },
+  {
+   "t": 14.8,
+   "stroke": {
+    "dur": 1.8,
+    "tool": {
+     "kind": "pave",
+     "style": 1
+    },
+    "from": [
+     3,
+     0
+    ],
+    "to": "bridge"
+   }
+  },
+  {
+   "t": 17.7,
+   "stroke": {
+    "dur": 1.6,
+    "tool": {
+     "kind": "decor",
+     "type": "wall"
+    },
+    "from": [
+     -6,
+     -8
+    ],
+    "to": [
+     6,
+     -8
+    ]
+   }
+  },
+  {
+   "t": 20.0,
+   "stroke": {
+    "dur": 1.4,
+    "tool": {
+     "kind": "pave",
+     "style": 3
+    },
+    "from": [
+     -3,
+     -10
+    ],
+    "to": [
+     -3,
+     -3
+    ]
+   }
+  },
+  {
+   "t": 23.9,
+   "stroke": {
+    "dur": 0.9,
+    "tool": {
+     "kind": "decor",
+     "type": "flowerbed"
+    },
+    "from": [
+     -2,
+     -6
+    ],
+    "to": [
+     0,
+     -5
+    ]
+   }
+  },
+  {
+   "t": 24.9,
+   "stroke": {
+    "dur": 0.8,
+    "tool": {
+     "kind": "decor",
+     "type": "hedge"
+    },
+    "from": [
+     3,
+     -4
+    ],
+    "to": [
+     6,
+     -4
+    ]
+   }
+  },
+  {
+   "t": 25.9,
+   "stroke": {
+    "dur": 0.3,
+    "tool": {
+     "kind": "decor",
+     "type": "lamp"
+    },
+    "from": [
+     -1,
+     -3
+    ],
+    "to": [
+     -1,
+     -3
+    ]
+   }
+  },
+  {
+   "t": 26.4,
+   "stroke": {
+    "dur": 0.3,
+    "tool": {
+     "kind": "decor",
+     "type": "lamp"
+    },
+    "from": [
+     2,
+     -2
+    ],
+    "to": [
+     2,
+     -2
+    ]
+   }
+  },
+  {
+   "t": 28.1,
+   "stroke": {
+    "dur": 1.0,
+    "tool": {
+     "kind": "plant",
+     "plant": "wheat"
+    },
+    "from": [
+     5,
+     -3
+    ],
+    "to": [
+     8,
+     -3
+    ]
+   }
+  },
+  {
+   "t": 29.6,
+   "eval": "window.__owc.ui.getState().set({ tool: null, stroke: null })"
+  },
+  {
+   "t": 30.8,
+   "eval": "const o = window.__owc, s = window.__owc.scene; const c = o.mirror.self.chronicle; const h = o.mirror.myBuildings().filter((b) => b.type === 'house').sort((a, b) => (b.y - a.y) || (a.x - b.x))[0]; window.__mv = h; o.ui.getState().set({ moving: h.id, buildType: 'house', tool: null }); o.input.updateGhost([h.x + 2, h.y + 1]);"
+  },
+  {
+   "t": 31.4,
+   "eval": "const h = window.__mv; window.__owc.input.updateGhost([h.x + 2, h.y + 2]);"
+  },
+  {
+   "t": 32.0,
+   "eval": "window.__owc.input.placeBuilding()"
+  },
+  {
+   "t": 34.0,
+   "eval": "const o = window.__owc; const r = o.mirror.myPieces().filter((q) => q.kind === 'R'); o.ui.getState().select(r.map((q) => q.id)); o.ui.getState().set({ orderMode: 'haul' });"
+  },
+  {
+   "t": 34.6,
+   "eval": "const o = window.__owc; const n = [...o.mirror.nodes.values()].filter((n) => n.hoard && n.kind === 'rock' && n.remaining <= 140)[0]; window.__dep = n; o.input.tap([n.x, n.y], 'touch');"
+  },
+  {
+   "t": 35.3,
+   "eval": "const o = window.__owc, n = window.__dep; o.input.tap([n.x + 9, n.y - 3], 'touch'); setTimeout(() => o.ui.getState().select([]), 600);"
+  }
+ ]
+}
