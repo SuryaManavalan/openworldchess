@@ -2,6 +2,7 @@
 // who keep coming back (on the 3rd day they play, then every 3 days, until they join).
 import { useEffect, useState } from 'react';
 import { useUI } from '../store.ts';
+import { mirror } from '../net.ts';
 
 export const DISCORD_URL = 'https://discord.gg/B6kPjrakW';
 
@@ -32,8 +33,9 @@ export function DiscordButton({ label = 'Join our Discord' }: { label?: string }
 }
 
 /**
- * The invitation: from the 3rd different day someone plays, then every 3 days, until they
- * join. It waits for a quiet moment (no battle, sheet or welcome screen open).
+ * The invitation: for anyone who has played on 3 or more different days (the server's count,
+ * or this browser's, whichever is more), then every 3 days, until they join. It waits for a
+ * quiet moment (no battle, sheet or welcome screen open).
  */
 export function DiscordNudge() {
   const ui = useUI();
@@ -42,11 +44,13 @@ export function DiscordNudge() {
     const d = today();
     const days = read<string[]>('owc.visitDays', []);
     if (!days.includes(d)) write('owc.visitDays', [...days, d].slice(-30));
-    const seen = days.includes(d) ? days.length : days.length + 1;
+    const local = days.includes(d) ? days.length : days.length + 1;
     const last = read<string | null>('owc.discordShown', null);
-    if (read('owc.discordJoined', false) || seen < 3 || (last && daysBetween(last, d) < 3)) return;
+    if (read('owc.discordJoined', false) || (last && daysBetween(last, d) < 3)) return;
     let tries = 0;
     const t = setInterval(() => {
+      // Played on 3+ days? (The server knows about other devices and days before this browser.)
+      if (Math.max(local, mirror.self?.daysPlayed ?? 0) < 3) { if (mirror.self) clearInterval(t); return; }
       const s = useUI.getState();
       const busy = s.sheet || s.battleFocus != null || s.questHelp || s.riddle != null || s.buildType || document.querySelector('.welcome-backdrop, .story-backdrop');
       if (busy) { if (++tries > 30) clearInterval(t); return; }

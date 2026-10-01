@@ -16,6 +16,7 @@ import { perf } from './perf.ts';
 import { Chronicle, type ChronState } from './chronicle.ts';
 import { Works } from './works.ts';
 import { Troops } from './troops.ts';
+import { stats } from './stats.ts';
 import { shopOpen } from './shop.ts';
 import type { TikTokLink } from './tiktok.ts';
 
@@ -267,7 +268,7 @@ export class Game {
     return { id: p.id, name: p.name, color: p.color, emblem: p.emblem, rating: Math.round(p.rating), provisional: !p.wild && rdAfter(p.rd, p.ratedAt ? (this.now - p.ratedAt) / 86_400_000 : 0) > RD_PROVISIONAL ? true : undefined, online: p.online, wild: p.wild?.faction, civ: p.civ, title: p.chron?.title, relics: p.chron?.relics.length ? p.chron.relics : undefined, capital: cap ? [cap.cx, cap.cy] : undefined };
   }
   selfPlayer(p: PlayerRec): PlayerSelf {
-    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), pop: this.popView(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, resetAt: p.resetAt, troops: p.troops?.length ? p.troops : undefined, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen(), chronicle: p.wild ? undefined : perf.time('self.chronicle', () => this.chronicle.view(p)), tiktok: p.tiktok ? { name: p.tiktok.name } : undefined };
+    return { ...this.publicPlayer(p), guest: this.isGuest(p), guestGraceMs: this.guestGraceMs, email: p.email, popCap: this.popCap(p.id), pop: this.popView(p.id), emperorId: p.emperorId, shieldUntil: p.shieldUntil, resetAt: p.resetAt, daysPlayed: stats.daysOf(p.id), troops: p.troops?.length ? p.troops : undefined, home: p.home, civsOwned: p.civs ?? [], crowns: p.crowns ?? 0, shopOpen: shopOpen(), chronicle: p.wild ? undefined : perf.time('self.chronicle', () => this.chronicle.view(p)), tiktok: p.tiktok ? { name: p.tiktok.name } : undefined };
   }
 
   isGuest(p: PlayerRec) { return !p.googleSub && !p.tiktokId && !p.isBot; }

@@ -48,6 +48,8 @@ class Stats {
   online = 0;
 
   private day(t = Date.now()) { return (this.d.days[dayOf(t)] ??= blankDay()); }
+  /** How many different days this player has been seen (since the stats began; older accounts start at 1). */
+  daysOf(id: string) { return this.d.players[id]?.n ?? 0; }
   private hour(t = Date.now()) {
     const h = (this.d.hours[hourOf(t)] ??= { visitors: 0, newPlayers: 0, peak: 0 });
     const keys = Object.keys(this.d.hours);

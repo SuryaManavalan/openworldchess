@@ -126,6 +126,8 @@ export interface Troop {
 export interface PlayerSelf extends PlayerPublic {
   /** Your troops out on excursions. */
   troops?: Troop[];
+  /** How many different days you've played (for the community invitation). */
+  daysPlayed?: number;
   /** Not signed in: the empire falls this long after the player leaves. */
   guest: boolean;
   guestGraceMs: number;
