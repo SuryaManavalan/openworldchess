@@ -22,6 +22,7 @@ import { SheetGrab } from './SheetGrab.tsx';
 import { LessonView } from './LessonView.tsx';
 import { Riddle } from './Riddle.tsx';
 import { QuestHelp } from './QuestHelp.tsx';
+import { DiscordButton, DiscordNudge } from './Discord.tsx';
 import { TroopList, nearestOf, troopOfSelection, troopsOf } from './troops.tsx';
 import { Celebrate } from './Celebrate.tsx';
 import { checkPlacement } from '../game/placement.ts';
@@ -61,6 +62,7 @@ export function HUD() {
       {ui.status !== 'open' && <div className="conn-pill">{ui.status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}</div>}
       <AwayReport />
       <SignInNudge />
+      <DiscordNudge />
       <CivShowcase />
       <SignIn />
       <ShareTikTok />
@@ -496,6 +498,10 @@ function Settings() {
   return (
     <div className="settings">
       <h3>Settings</h3>
+      <div className="discord-row">
+        <DiscordButton />
+        <span className="muted small">Allies, rivals, bug reports, and what's coming next.</span>
+      </div>
       <label className="row"><span>Sound</span><input id="set-sound" type="checkbox" checked={s.sound} onChange={(e) => ui.setSettings({ sound: e.target.checked })} /></label>
       {(['music', 'effects', 'ambience'] as const).map((k) => (
         <label key={k} className="row"><span>{k[0].toUpperCase() + k.slice(1)}</span><input id={`set-${k}`} type="range" min={0} max={1} step={0.05} value={s[k]} onChange={(e) => ui.setSettings({ [k]: Number(e.target.value) })} /></label>

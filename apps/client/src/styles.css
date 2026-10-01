@@ -671,3 +671,11 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 
 .marker.troop { --c: #f3d27a; }
 .dock > .toasts { position: static; transform: none; align-self: center; pointer-events: none; }
+/* The community Discord (Discord's blurple and logo). */
+.discord-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #5865f2; color: #fff; border: 0; border-radius: 12px; min-height: 44px; padding: 10px 18px; font-weight: 900; text-decoration: none; cursor: pointer; box-shadow: 0 3px 0 #3c45a5; }
+.discord-btn:hover { background: #4752c4; }
+.settings .discord-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 2px 0 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.discord-card { gap: 12px; }
+.discord-card .discord-mark { align-self: center; width: 64px; height: 64px; border-radius: 20px; background: #5865f2; color: #fff; display: grid; place-items: center; box-shadow: 0 4px 0 #3c45a5; }
+.discord-card .discord-btn { align-self: stretch; min-height: 50px; font-size: 16px; }
+.discord-card .btn.ghost { align-self: center; }
