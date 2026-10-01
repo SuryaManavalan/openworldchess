@@ -34,7 +34,7 @@ const post = {
   allowed_mentions: { parse: [] },
   embeds: [{
     title: `🏰 City of the Day: ${city.name}`,
-    description: `The ${tierName} of **${city.owner}**: ${city.buildings} buildings${city.decor ? `, and ${city.decor} pieces of the builder's own design` : ''}.\nCome and see it: https://openworldchess.com`,
+    description: `The ${tierName} of **${city.owner}**: ${city.buildings} buildings${city.decor ? `, and ${city.decor} pieces of the builder's own design` : ''}.\nCome and see it: https://openworldchess.com/?city=${encodeURIComponent(city.name)}&at=${city.at.join(',')}`,
     color: 0xe3b23c,
     image: { url: 'attachment://city.png' },
     footer: { text: 'Open World Chess · a new city every day' },

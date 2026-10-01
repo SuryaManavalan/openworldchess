@@ -57,7 +57,7 @@ const DESKTOP: Section[] = [
     ['Haul (elephants only)', 'Haul, click a rock or ore deposit, then click where to set it down'], ['Raise an altar (a bishop)', 'Raise altar'],
   ] },
   { id: 'battle', title: 'Battles', rows: [['Move a piece', 'Click it, then its square (or drag it)'], ['Leave', 'Resign, or wait for the end']] },
-  { id: 'keys', title: 'Other keys', rows: [['This guide', '?'], ['Build panel', 'B']] },
+  { id: 'keys', title: 'Other keys', rows: [['This guide', '?'], ['Find a ruler or city', '/'], ['Build panel', 'B']] },
 ];
 
 /** The controls for this device. `open`: the section to show open first (say, 'tools'). */

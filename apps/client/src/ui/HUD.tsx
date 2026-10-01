@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ALTAR_BUILDINGS, ALTAR_RATE, ALTAR_REACH, LESSONS, BUILDINGS, CLEAR_TURNS, TURN_MS, CHAPTERS, PIECE_NAME, POP_HOUSES_COUNTED, POP_PAWNS_PER_HOUSE, POP_PAWNS_PER_KING, POP_PER_BUILDING, REACH, TITLES, cheb, setWorth, type BuildingType, type Piece, type PieceKind } from '@owc/shared';
 import { terrainAt } from '@owc/worldgen';
-import { commands, conn, mirror } from '../net.ts';
+import { VISIT, commands, conn, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
 import { scene, input } from './GameView.tsx';
 import { buildingUrl, pieceUrl } from '../game/textures.ts';
@@ -26,6 +26,7 @@ import { DiscordButton, DiscordNudge } from './Discord.tsx';
 import { TroopList, nearestOf, troopOfSelection, troopsOf } from './troops.tsx';
 import { BuildPalette, ToolBar } from './BuildPalette.tsx';
 import { Controls } from './Controls.tsx';
+import { FindPanel, VisitBar } from './Find.tsx';
 import { controlsOpen, setControlsOpen } from '../store.ts';
 import { Celebrate } from './Celebrate.tsx';
 import { checkPlacement } from '../game/placement.ts';
@@ -39,6 +40,8 @@ const CINEMA = typeof location !== 'undefined' && new URLSearchParams(location.s
 export function HUD() {
   const ui = useUI();
   const battle = ui.battleFocus != null ? mirror.battles.get(ui.battleFocus) : undefined;
+  // A visitor from a shared link (social.md §2): the world, and a way in; nothing else.
+  if (VISIT) return <div className={`hud layout-${ui.layout}`}><Markers /><VisitBar /></div>;
   return (
     <div className={`hud layout-${ui.layout}${CINEMA ? ' cinema' : ''}`}>
       <Markers />
@@ -103,6 +106,7 @@ function TopBar() {
         <button className={`icon-btn ${ui.flagMode ? 'on' : ''}`} aria-label="Place a flag" title="Place a flag (F)" onClick={() => { ui.set({ flagMode: !ui.flagMode }); if (!ui.flagMode) ui.toast(ui.layout === 'phone' ? 'Tap the map to place a flag' : 'Click the map to place a flag', 'info', 'flag'); }}><Icon name="flag" size={19} /></button>
         <button className="icon-btn" aria-label="The Chronicle" title="The Chronicle" onClick={() => ui.set({ sheet: ui.sheet === 'chronicle' ? null : 'chronicle' })}><Icon name="book" size={19} />{(() => { const n = self?.chronicle?.sides.filter((q) => q.state === 'offered').length ?? 0; return n ? <span className="dot-badge" aria-label={`${n} quest${n > 1 ? 's' : ''} offered`}>{n}</span> : null; })()}</button>
         <button className="icon-btn shop-btn" aria-label="Civilizations shop" title="Civilizations" onClick={() => ui.set({ sheet: ui.sheet === 'shop' ? null : 'shop' })}><Coin size={19} /></button>
+        {ui.layout !== 'phone' && <button className="icon-btn" aria-label="Find a ruler or city" title="Find a ruler or city (/)" onClick={() => ui.set({ sheet: ui.sheet === 'find' ? null : 'find' })}><Icon name="search" size={19} /></button>}
         <button className="icon-btn" aria-label="Help" onClick={() => ui.set({ sheet: ui.sheet === 'help' ? null : 'help' })}><Icon name="help" size={19} /></button>
         <button className="icon-btn" aria-label="Settings" onClick={() => ui.set({ sheet: ui.sheet === 'settings' ? null : 'settings' })}><Icon name="menu" size={19} /></button>
       </div>
@@ -520,6 +524,7 @@ function Sheet() {
         {ui.sheet === 'chronicle' && <ChronicleBook />}
         {ui.sheet === 'troops' && <><h3>Troops out</h3><TroopList /></>}
         {ui.sheet === 'controls' && <Controls open={controlsOpen} />}
+        {ui.sheet === 'find' && <FindPanel />}
         {ui.layout === 'phone' && ui.sheet === 'build' && ui.buildTab === 'build' && <Minimap />}
       </div>
     </div>
@@ -552,6 +557,7 @@ function Settings() {
   return (
     <div className="settings">
       <h3>Settings</h3>
+      <button className="btn find-go" onClick={() => ui.set({ sheet: 'find' })}><Icon name="search" size={17} /> Find a ruler or city</button>
       <div className="row-actions guide-row">
         <button className="btn ghost" onClick={() => { setControlsOpen('map'); ui.set({ sheet: 'controls' }); }}><Icon name="help" size={16} /> Controls</button>
         <button className="btn ghost" onClick={() => ui.set({ sheet: 'help' })}><Icon name="book" size={16} /> Rulebook</button>

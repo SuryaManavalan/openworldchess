@@ -111,7 +111,8 @@ export class Herald {
       for (const st of g.chronicle.settlementsOf(p.id)) {
         if (st.tier < 4 || this.s.seen.cities.includes(st.id)) continue;
         this.s.seen.cities.push(st.id);
-        this.moment(`🏙️ **${clean(p.name)}**'s town **${townName(g.world.seed, st.id, st.cx, st.cy)}** grew into a **city**.`);
+        const nm = townName(g.world.seed, st.id, st.cx, st.cy);
+        this.moment(`🏙️ **${clean(p.name)}**'s town **${nm}** grew into a **city**: https://openworldchess.com/?city=${encodeURIComponent(nm)}&at=${st.cx},${st.cy}`);
       }
     }
     if (this.s.seen.cities.length > 5000) this.s.seen.cities = this.s.seen.cities.slice(-3000);

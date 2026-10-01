@@ -9,7 +9,7 @@ export interface Toast { id: number; text: string; tone: 'info' | 'error' | 'goo
 
 /** A drawing tool (citybuilding.md §8). */
 export type CityTool = { kind: 'decor'; type: DecorType } | { kind: 'pave'; style: number } | { kind: 'plant'; plant: 'wheat' | 'tree' };
-export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help' | 'shop' | 'chronicle' | 'troops' | 'controls';
+export type Sheet = null | 'build' | 'details' | 'battles' | 'settings' | 'help' | 'shop' | 'chronicle' | 'troops' | 'controls' | 'find';
 /** Which part of the Controls guide to open first. */
 export let controlsOpen = 'map';
 export const setControlsOpen = (s: string) => { controlsOpen = s; };

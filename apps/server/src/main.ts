@@ -55,6 +55,17 @@ const server = createServer((req, res) => {
     return;
   }
   if (req.url?.startsWith('/shop/') || req.url?.startsWith('/stripe/')) { handleShop(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { res.statusCode = 500; res.end('shop error'); }); return; }
+  if (req.url?.startsWith('/api/find?')) {
+    // Search rulers and cities (public names), a few requests a second per address at most.
+    const ip = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0];
+    const t = Date.now(), last = findAt.get(ip) ?? 0;
+    if (t - last < 250) { res.statusCode = 429; res.end(); return; }
+    findAt.set(ip, t); if (findAt.size > 5000) findAt.clear();
+    const q = new URL(req.url, 'http://x').searchParams.get('q') ?? '';
+    res.setHeader('content-type', 'application/json'); res.setHeader('cache-control', 'no-store');
+    res.end(JSON.stringify(game.directory.find(q)));
+    return;
+  }
   if (req.url === '/api/showcase') { res.setHeader('content-type', 'application/json'); res.setHeader('cache-control', 'max-age=300'); res.end(JSON.stringify(game.herald.showcase())); return; }
   if (req.url?.startsWith('/api/')) { handleStats(game, req, res, () => net.liveCounts()).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end(); } }); return; }
   if (req.url?.startsWith('/tiktok/') || req.url?.startsWith('/auth/tiktok/')) { handleTikTok(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end('tiktok error'); } }); return; }
@@ -67,6 +78,7 @@ const server = createServer((req, res) => {
   res.setHeader('cache-control', path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
   res.end(readFileSync(file));
 });
+const findAt = new Map<string, number>();
 const net = new Net(game, server, TURN, originOk);
 // Tabs opened before a deploy notice the new build on reconnect and reload (quest data, rules text).
 try { net.build = createHash('sha1').update(readFileSync(join(STATIC, 'index.html'))).digest('hex').slice(0, 12); } catch { /* no client build (dev) */ }

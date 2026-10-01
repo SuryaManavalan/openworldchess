@@ -1,4 +1,6 @@
 // Mounts the Pixi world and bridges world events to the HUD, sound and fx.
+import { followDeepLink } from './Find.tsx';
+import { VISIT } from '../net.ts';
 import { useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Scene } from '../game/scene.ts';
@@ -25,6 +27,8 @@ export function GameView() {
       const emp = mirror.myPieces().find((p) => p.emperor) ?? mirror.myKings()[0];
       if (emp) sc.centerOn(emp.x, emp.y); else if (mirror.self) sc.centerOn(...mirror.self.home);
       sc.cam.zoom = window.innerWidth < 700 ? 0.62 : 0.9;
+      // A shared link to a city, ruler or spot (Find.tsx).
+      if (mirror.self || VISIT) void followDeepLink(); else { const once = mirror.onSelf; let done = false; mirror.onSelf = () => { once(); if (!done) { done = true; void followDeepLink(); } }; }
     });
     bridge(sc);
     const beat = setInterval(() => {

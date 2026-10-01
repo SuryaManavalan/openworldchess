@@ -19,6 +19,7 @@ import { Troops } from './troops.ts';
 import { CityBuild } from './citybuild.ts';
 import { CityLife } from './citylife.ts';
 import { Herald } from './herald.ts';
+import { Directory } from './directory.ts';
 import { stats } from './stats.ts';
 import { shopOpen } from './shop.ts';
 import type { TikTokLink } from './tiktok.ts';
@@ -131,6 +132,7 @@ export class Game {
   city: CityBuild;
   life: CityLife;
   herald: Herald;
+  directory: Directory;
   wilds: Wilds;
   chronicle: Chronicle;
   turn = 0;
@@ -173,6 +175,7 @@ export class Game {
     this.city = new CityBuild(this);
     this.life = new CityLife(this);
     this.herald = new Herald(this);
+    this.directory = new Directory(this);
     this.wilds = new Wilds(this);
     this.chronicle = new Chronicle(this);
     this.chronicle.onSide = (pid, kind) => this.herald.side(pid, kind);

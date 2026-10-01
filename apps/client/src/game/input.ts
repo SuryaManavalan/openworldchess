@@ -571,6 +571,7 @@ export class Input {
     else if (k === 'Escape') { if (ui.orderMode) ui.set({ orderMode: null }); else if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else { ui.select([]); this.pendingMove = null; sc.pendingMarker = null; } }
     else if (k === 's' && !e.ctrlKey) { if (ui.selection.length) commands.stop(ui.selection); }
     else if (k === 'b') ui.set({ sheet: ui.sheet === 'build' ? null : 'build' });
+    else if (k === '/') { e.preventDefault(); ui.set({ sheet: ui.sheet === 'find' ? null : 'find' }); }
     else if (k === '?') { setControlsOpen(ui.tool ? 'tools' : 'map'); ui.set({ sheet: ui.sheet === 'controls' ? null : 'controls' }); }
     else if (k === 'f' && this.scene.hover) { ui.addFlag(this.scene.hover[0], this.scene.hover[1]); this.scene.fx.ripple(this.scene.hover[0], this.scene.hover[1], 0xe3b23c); }
     else if (k === 'h' || k === 'Home') { const emp = mirror.myPieces().find((p) => p.emperor); if (emp) sc.centerOn(emp.x, emp.y); }

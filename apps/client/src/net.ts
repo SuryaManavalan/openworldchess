@@ -10,11 +10,16 @@ const readToken = () => { try { return localStorage.getItem(tokenKey); } catch {
 const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 /** ?watch: look at the world without an empire (for filming; see tools/shorts). */
 export const WATCH = new URLSearchParams(location.search).has('watch');
+/**
+ * Visiting (social.md §2): someone new opened a link to a city, ruler or spot. They look around
+ * first, without an empire, with a bar to start their own.
+ */
+export const VISIT = !WATCH && !readToken() && ['city', 'player', 'at'].some((k) => new URLSearchParams(location.search).has(k));
 export const conn = new Connection({
   url: `${proto}://${location.host}/play`,
   WebSocket: WebSocket as never,
-  token: WATCH ? null : readToken(),
-  watch: WATCH,
+  token: WATCH || VISIT ? null : readToken(),
+  watch: WATCH || VISIT,
   autoStart: false,
   onToken: (t) => { try { localStorage.setItem(tokenKey, t); } catch { /* ignore */ } },
   onStatus: (s) => useUI.getState().set({ status: s }),
@@ -25,7 +30,7 @@ export const conn = new Connection({
   },
 });
 // Returning players reconnect at once; new players choose a name first.
-if (WATCH || readToken()) conn.start(); else useUI.getState().set({ needName: true });
+if (WATCH || VISIT || readToken()) conn.start(); else useUI.getState().set({ needName: true });
 export const mirror = conn.mirror;
 // A chapter done: celebrate it (campaign.md §5.5).
 mirror.onChapter = (c) => useUI.getState().set({ ceremony: c });
