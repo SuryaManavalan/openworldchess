@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "vite build",
+    "build": "node ../../tools/site/build.ts && vite build",
     "preview": "vite preview --host"
   },
   "dependencies": {

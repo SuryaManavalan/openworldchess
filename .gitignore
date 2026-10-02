@@ -4,3 +4,11 @@ data/
 *.log
 .DS_Store
 out/
+# The website's generated pages (tools/site/build.ts)
+apps/client/public/guide.html
+apps/client/public/wilds.html
+apps/client/public/chronicle.html
+apps/client/public/404.html
+apps/client/public/sitemap.xml
+apps/client/public/llms.txt
+apps/client/public/llms-full.txt

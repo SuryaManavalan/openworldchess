@@ -34,6 +34,9 @@ export class Directory {
     return this.cities;
   }
 
+  /** Every player city, biggest first (for the site's /cities page). */
+  all(): CityEntry[] { return this.index(); }
+
   /**
    * Rulers and cities matching `q` (case-insensitive; names that start with it first). A ruler
    * comes with their biggest cities, or, with no city yet, where their kings are.

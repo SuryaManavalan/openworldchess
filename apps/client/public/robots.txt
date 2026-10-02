@@ -1,0 +1,9 @@
+# Open World Chess: everyone's welcome, search engines and AI crawlers alike.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /tiktok/
+Disallow: /stats.html
+
+Sitemap: https://openworldchess.com/sitemap.xml

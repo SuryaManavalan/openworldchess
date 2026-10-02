@@ -1,8 +1,8 @@
 // Server entry: the loop (TECH.md T7), persistence and networking.
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, extname, join, normalize } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { CHUNK, TICK_HZ, TURN_MS } from '@owc/shared';
 import { Game } from './game.ts';
 import { Net } from './net.ts';
@@ -12,6 +12,7 @@ import { perf } from './perf.ts';
 import { handleShop } from './shop.ts';
 import { handleTikTok } from './tiktok.ts';
 import { handleStats, stats } from './stats.ts';
+import { serveWeb, warm } from './web.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const SEED = Number(process.env.SEED ?? 1);
@@ -37,8 +38,8 @@ game.herald.load(join(dirname(DATA), 'herald.json'));
 // Shape the land from the empires already living on it (elo.md §3), settled before anyone connects.
 for (let i = 0; i < 8; i++) game.reshapeLand();
 
-// Serve the built client too, so one process can run the whole game.
-const MIME: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
+// Serve the built client and the site too (web.ts), so one process runs the whole game.
+warm(STATIC);
 /** When set, only requests carrying this header (added by CloudFront) or from localhost are served. */
 const ORIGIN_SECRET = process.env.ORIGIN_SECRET ?? '';
 export const originOk = (req: { headers: Record<string, string | string[] | undefined>; socket: { remoteAddress?: string } }) =>
@@ -70,15 +71,7 @@ const server = createServer((req, res) => {
   if (req.url?.startsWith('/api/')) { handleStats(game, req, res, () => net.liveCounts()).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end(); } }); return; }
   if (req.url?.startsWith('/tiktok/') || req.url?.startsWith('/auth/tiktok/')) { handleTikTok(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end('tiktok error'); } }); return; }
   if (req.url?.startsWith('/auth/')) { handleAuth(game, req, res).catch(() => { res.statusCode = 500; res.end('auth error'); }); return; }
-  let path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^(\.\.[/\\])+/, '');
-  // The public pages (TikTok's review wants a real homepage, not the game's name screen).
-  if (path === '/about' || path === '/privacy' || path === '/terms') path += '.html';
-  if (path === '/' || !extname(path)) path = '/index.html';
-  const file = join(STATIC, path);
-  if (!file.startsWith(STATIC) || !existsSync(file) || !statSync(file).isFile()) { res.statusCode = 404; res.end('not found'); return; }
-  res.setHeader('content-type', MIME[extname(file)] ?? 'application/octet-stream');
-  res.setHeader('cache-control', path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
-  res.end(readFileSync(file));
+  if (!serveWeb(req, res, STATIC, game)) { res.statusCode = 405; res.end(); }
 });
 const findAt = new Map<string, number>();
 const net = new Net(game, server, TURN, originOk);

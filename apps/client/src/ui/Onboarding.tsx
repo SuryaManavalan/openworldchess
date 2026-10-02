@@ -50,7 +50,7 @@ export function Welcome() {
         {ui.googleEnabled && <a className="btn ghost big google" href="/auth/google/start">Continue with Google</a>}
         {ui.tiktokEnabled && <a className="btn ghost big tiktok" href="/auth/tiktok/start"><TikTokMark /> Continue with TikTok</a>}
         <p className="muted small">No sign-up needed. Sign in later to keep your empire.</p>
-        <p className="welcome-links"><a href="/about">About the game</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
+        <p className="welcome-links"><a href="/about">About the game</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
       </div>
     </div>
   );

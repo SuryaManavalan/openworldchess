@@ -3,6 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Open World Chess: Free Multiplayer Chess Strategy Game in Your Browser</title>
+    <meta name="description" content="The whole world is one endless chessboard. Build an empire, raise an army of chess pieces and win land from other players: every battle is a real game of chess. Free in your browser, on phone and desktop." />
+    <link rel="canonical" href="https://openworldchess.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Open World Chess" />
+    <meta property="og:title" content="Open World Chess: the whole world is a chessboard" />
+    <meta property="og:description" content="Build an empire on one endless, shared chessboard. Every battle is a real game of chess. Free in your browser." />
+    <meta property="og:url" content="https://openworldchess.com/" />
+    <meta property="og:image" content="https://openworldchess.com/img/site/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#23211f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -10,10 +22,68 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" />
-    <title>Open World Chess</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://openworldchess.com/#website",
+            "name": "Open World Chess",
+            "url": "https://openworldchess.com/",
+            "publisher": { "@id": "https://openworldchess.com/#org" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://openworldchess.com/#org",
+            "name": "Open World Chess",
+            "url": "https://openworldchess.com/",
+            "logo": "https://openworldchess.com/icon.svg",
+            "email": "openworldchessgame@gmail.com",
+            "sameAs": ["https://discord.gg/B6kPjrakW", "https://github.com/SuryaManavalan/openworldchess"]
+          },
+          {
+            "@type": "VideoGame",
+            "name": "Open World Chess",
+            "url": "https://openworldchess.com/",
+            "description": "Open World Chess is a free multiplayer strategy game played in the web browser on phone and desktop. The whole world is one endless, shared chessboard: players build an empire, raise an army of chess pieces, and win land from other players and monster camps, and every battle is a real game of chess with a clock.",
+            "image": "https://openworldchess.com/img/site/og.jpg",
+            "genre": ["Strategy", "Massively multiplayer online", "Chess", "City builder"],
+            "gamePlatform": ["Web browser", "Mobile web", "Desktop web"],
+            "applicationCategory": "Game",
+            "operatingSystem": "Any (web browser)",
+            "playMode": ["MultiPlayer", "SinglePlayer"],
+            "isAccessibleForFree": true,
+            "inLanguage": "en",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" },
+            "publisher": { "@id": "https://openworldchess.com/#org" }
+          }
+        ]
+      }
+    </script>
+    <style>
+      /* The loading screen: what shows (and what a crawler reads) until the game takes over #root. */
+      .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; background: #23211f; color: #ece6da; font: 600 16px/1.55 Nunito, system-ui, sans-serif; text-align: center; overflow: auto; }
+      .boot img { width: 64px; height: 64px; }
+      .boot h1 { font-size: 30px; font-weight: 900; margin: 6px 0 0; }
+      .boot p { max-width: 560px; margin: 0; color: #b8b0a2; }
+      .boot .loading { color: #f3d27a; font-weight: 800; margin-top: 8px; }
+      .boot nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 14px; font-size: 14px; }
+      .boot nav a { color: #b8b0a2; text-decoration: none; font-weight: 800; }
+      .boot a { color: #f3d27a; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="boot">
+        <img src="/icon.svg" alt="" width="64" height="64" />
+        <h1>Open World Chess</h1>
+        <p>The whole world is one endless chessboard. Build an empire, raise an army of chess pieces, and win land from other players and monster camps: every battle is a real game of chess. Free in your browser, on phone and desktop.</p>
+        <p class="loading">Loading the board…</p>
+        <noscript><p>Open World Chess needs JavaScript to play. Read about the game in the <a href="/guide">guide</a>.</p></noscript>
+        <nav aria-label="About the game"><a href="/about">About</a><a href="/guide">How to play</a><a href="/wilds">The Wilds</a><a href="/chronicle">Campaign</a><a href="/cities">Cities</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

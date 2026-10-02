@@ -39,3 +39,6 @@ jobs:
       - name: Deploy
         run: KEY="$HOME/.ssh/deploy_key" STRICT=yes bash deploy/deploy.sh
 
+      - name: Tell search engines the site changed (IndexNow)
+        continue-on-error: true
+        run: sleep 20 && node tools/site/indexnow.mjs
