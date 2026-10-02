@@ -46,7 +46,7 @@ export function Welcome() {
           <button className="icon-btn big" aria-label="Another name" onClick={() => { setName(randomName()); ui.set({ nameError: null }); }}><Icon name="dice" size={24} /></button>
         </div>
         {ui.nameError && <p className="field-error">{ui.nameError}</p>}
-        <button className="btn big" disabled={busy} onClick={enter}>{busy ? 'Entering…' : 'Play now'}</button>
+        <button className="btn big" disabled={busy} onClick={enter}>{busy ? 'Entering…' : 'Play as guest'}</button>
         {ui.googleEnabled && <a className="btn ghost big google" href="/auth/google/start">Continue with Google</a>}
         {ui.tiktokEnabled && <a className="btn ghost big tiktok" href="/auth/tiktok/start"><TikTokMark /> Continue with TikTok</a>}
         <p className="muted small">No sign-up needed. Sign in later to keep your empire.</p>
