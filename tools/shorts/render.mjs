@@ -65,7 +65,8 @@ if (voices.length && voices.at(-1).at + voices.at(-1).d > tl.seconds) console.wa
     l.cueEnd = spoken[hit + want.length - 1].e;
     prev.set(l.cue, l);
   }
-  cued.forEach((l, i) => { if (l.t1 == null) l.t1 = l.hold != null ? l.cueEnd + l.hold : (cued[i + 1] ? cued[i + 1].t0 - 0.05 : tl.seconds); });
+  // A card holds until the next card on different words (cards sharing a cue end together).
+  cued.forEach((l, i) => { if (l.t1 == null) { const next = cued.slice(i + 1).find((n) => n.cue !== l.cue); l.t1 = l.hold != null ? l.cueEnd + l.hold : (next ? next.t0 - 0.05 : tl.seconds); } });
   for (const l of cued) console.log(`cue ${l.t0.toFixed(2)}–${l.t1.toFixed(2)}  "${l.cue}"`);
 }
 

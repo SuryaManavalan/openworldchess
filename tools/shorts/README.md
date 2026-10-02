@@ -90,6 +90,9 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-10-02: cards sharing a cue now end together (the first one used to end before it began).
+  First used for Day 6a.
+
 - 2026-10-02: scenarios take `woods` (a stand of trees just east of the spot); `acts/army.mjs`
   (`clear`: elephants clear land; `march`: send pieces as a troop); `playToMateIn1` takes `by`
   (a piece letter: that piece delivers the mate); the end card takes `cta` (a line under the URL);

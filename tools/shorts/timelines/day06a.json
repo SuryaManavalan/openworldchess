@@ -1,0 +1,31 @@
+{
+ "out": "out/day06a/day06a.mp4",
+ "seconds": 24.2,
+ "base": { "video": "out/day06a/base.mp4" },
+ "layers": [
+  { "type": "vignette", "t0": 0, "t1": 24.2, "strength": 0.5 },
+  { "type": "text", "t0": 0, "t1": 2.55, "lines": ["JOIN THE OPEN", "WORLD CHESS", "DISCORD"], "colors": ["#ece6da", "#ece6da", "#e3b23c"], "y": 430, "size": 120, "anim": "slam", "glow": "rgba(227,178,60,0.3)" },
+  { "type": "text", "cue": "let's build this together", "lines": ["Let's build this", "together."], "y": 430, "size": 110, "anim": "pop" },
+  { "type": "label", "t0": 4.2, "t1": 8.4, "text": "Sped up" },
+  { "type": "flash", "t0": 4.15, "dur": 0.2 },
+  { "type": "text", "cue": "open world chess is now open source", "lines": ["NOW", "OPEN SOURCE."], "colors": ["#ece6da", "#e3b23c"], "y": 430, "size": 140, "anim": "slam", "glow": "rgba(227,178,60,0.35)" },
+  { "type": "text", "cue": "every line of the game is on github", "lines": ["Every line of the", "game, on GitHub."], "y": 430, "size": 96, "font": "bold", "anim": "pop" },
+  { "type": "text", "cue": "every line of the game is on github", "lines": ["github.com/SuryaManavalan/openworldchess"], "y": 640, "size": 40, "font": "bold", "anim": "fade", "plate": true },
+  { "type": "text", "cue": "share your cities", "lines": ["Share your cities."], "y": 430, "size": 110, "anim": "pop" },
+  { "type": "label", "t0": 10.2, "t1": 11.8, "text": "Staged battle", "y": 1400 },
+  { "type": "text", "cue": "find a rival", "lines": ["Find a rival."], "y": 260, "size": 100, "anim": "pop", "plate": true },
+  { "type": "label", "t0": 11.8, "t1": 14.9, "text": "Sped up" },
+  { "type": "text", "cue": "suggest the next update", "lines": ["Suggest the", "next update…"], "y": 430, "size": 104, "anim": "pop" },
+  { "type": "text", "cue": "or write it yourself", "lines": ["…or write it", "yourself."], "colors": ["#ece6da", "#e3b23c"], "y": 430, "size": 110, "anim": "pop" },
+  { "type": "image", "t0": 15.3, "t1": 19.15, "src": "apps/client/public/herald.png", "x": 495, "y": 930, "w": 300, "anim": "pop" },
+  { "type": "text", "cue": "the herald posts", "lines": ["The Herald, daily:"], "y": 380, "size": 96, "font": "bold", "anim": "pop" },
+  { "type": "text", "cue": "the city of the day", "lines": ["The City of the Day,"], "y": 380, "size": 96, "anim": "pop" },
+  { "type": "text", "cue": "and the biggest battles", "lines": ["and the biggest", "battles."], "y": 380, "size": 104, "anim": "pop" },
+  { "type": "endcard", "cue": "come build the board with us", "sub": "Come build the Board with us.", "url": "discord.gg/B6kPjrakW", "cta": "openworldchess.com · free in your browser", "dim": 0.62, "y": 520 },
+  { "type": "text", "t0": 20.2, "t1": 24.2, "lines": ["github.com/SuryaManavalan/openworldchess"], "y": 1250, "size": 38, "font": "bold", "anim": "fade" }
+ ],
+ "audio": { "bpm": 92, "musicGain": 0.45, "sfxGain": 0.5 },
+ "voice": [
+  { "at": 0.2, "voice": "chronicler", "timed": true, "text": "Join the Open World Chess Discord. Let's build this together. Open World Chess is now open source: every line of the game is on GitHub. Share your cities. Find a rival. Suggest the next update, or write it yourself. Every day, the Herald posts the city of the day and the biggest battles. Come build the Board with us." }
+ ]
+}
