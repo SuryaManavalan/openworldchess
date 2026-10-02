@@ -5,6 +5,8 @@
 import { BUILDINGS, CHAPTERS, FACTIONS, LESSONS, TITLES, type Faction } from '@owc/shared';
 
 export const ORIGIN = 'https://openworldchess.com';
+/** Google Search Console ownership (public by design). */
+const GOOGLE_VERIFY = 'WAR-EnHfB6m2uknDmTRTcDxGrD9Sv8ruT3kqxsrz1xQ';
 const DISCORD = 'https://discord.gg/B6kPjrakW';
 const GITHUB = 'https://github.com/SuryaManavalan/openworldchess';
 
@@ -43,6 +45,7 @@ ${p.noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" 
 <meta property="og:image" content="${image}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#23211f">
+<meta name="google-site-verification" content="${GOOGLE_VERIFY}">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Nunito:wght@600;700;800;900&display=swap">
