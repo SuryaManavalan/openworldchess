@@ -29,6 +29,7 @@ import { Controls } from './Controls.tsx';
 import { FindPanel, VisitBar } from './Find.tsx';
 import { controlsOpen, setControlsOpen } from '../store.ts';
 import { Celebrate } from './Celebrate.tsx';
+import { Tutorial, startTutorial } from './Tutorial.tsx';
 import { checkPlacement } from '../game/placement.ts';
 
 const KIND_ORDER: PieceKind[] = ['K', 'Q', 'R', 'B', 'N', 'P'];
@@ -48,11 +49,12 @@ export function HUD() {
       <TopBar />
       {/* On phones these stack in one column under the top bar, so they never overlap. */}
       <div className={`top-stack ${ui.layout === 'phone' && (ui.sheet || ui.questHelp || ui.riddle != null || ui.pendingAttack || ui.pendingClear || ui.inspect || battle) ? 'covered' : ''}`}>
-        {mirror.self?.chronicle ? <ChronicleTracker /> : <Guide />}
+        {ui.tutorial != null ? null : mirror.self?.chronicle ? <ChronicleTracker /> : <Guide />}
         <Alerts />
         {ui.layout === 'phone' && <Toasts />}
       </div>
       <ChapterCeremony />
+      <Tutorial />
       {ui.layout === 'desktop' && <SidePanel />}
       <BottomDock />
       <Sheet />
@@ -640,7 +642,10 @@ function Help() {
   return (
     <div className="help">
       <h3>The rulebook</h3>
-      <button className="btn ghost small" onClick={() => { setControlsOpen('map'); ui.set({ sheet: 'controls' }); }}><Icon name="help" size={14} /> Controls for this {ui.layout === 'phone' ? 'phone' : 'computer'}</button>
+      <div className="help-row">
+        <button className="btn ghost small" onClick={() => { setControlsOpen('map'); ui.set({ sheet: 'controls' }); }}><Icon name="help" size={14} /> Controls for this {ui.layout === 'phone' ? 'phone' : 'computer'}</button>
+        <button className="btn ghost small" onClick={startTutorial}><Icon name="play" size={14} /> Replay the tutorial</button>
+      </div>
       <p className="muted">Every rule of the game. Open a rule for its fine print (every number and exception) and tactics. The Chronicle teaches these as you go; they're all here if you'd rather read ahead.</p>
       <div className="rulebook">
         {Object.entries(LESSONS).map(([id, l]) => (

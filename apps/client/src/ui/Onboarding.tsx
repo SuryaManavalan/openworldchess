@@ -136,7 +136,7 @@ export function SignInNudge() {
     return () => clearInterval(t);
   }, []);
   const self = mirror.self;
-  const eligible = !!self?.guest && ui.googleEnabled && !ui.needName && !ui.battleFocus;
+  const eligible = !!self?.guest && ui.googleEnabled && !ui.needName && !ui.battleFocus && ui.tutorial == null;
   const nudge = (why: string) => {
     if (!eligible || show) return;
     if (Date.now() - lastNudge < NUDGE_MIN_GAP) return;

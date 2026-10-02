@@ -187,6 +187,17 @@ An attack gives **60 seconds** of warning ([battle.md](battle.md) §2). A warnin
   CI runs Playwright with mobile emulation for layout checks. Before each milestone, the team plays for real on actual devices.
 - **Definition of done:** every milestone ([ROADMAP.md](../ROADMAP.md)) counts as done only when it works on a phone in portrait **and** on desktop.
 
+## 10. The hands-on tutorial (as built 2026-10-01)
+
+A new empire (the Chronicle's very first step) gets a guided tour once, after the chapter's story card. Code: `apps/client/src/ui/Tutorial.tsx`.
+
+- **Show, then do.** A coach card under the top bar says what to do in one line. A **ghost hand** (touch screens) or **ghost cursor** (mouse) acts it out on the real map, over and over: taps with a ripple, right-clicks with a gold ripple and a *Right-click* tag, drags with a dashed trail, a held press, a lasso loop, two-finger pinch, the mouse wheel. A pulsing ring marks the target (the pawn to tap, the square to send it to). The ghost never takes a touch.
+- **The step ends when the player does it,** not when they press Next: the camera moved, the zoom changed, a pawn is selected, a move was sent, and so on. A short *Nicely done* follows. Reading-only steps (welcome, the Emperor and the king, battles, the end) have a button.
+- **The steps:** look around (drag; Space + drag, WASD or a touchpad on a computer) · zoom (pinch; the wheel) · the Emperor and the king · select a pawn · send it (tap to aim, tap again; right-click) · select a king's army · − / + on the bar · march them (drag from a selected piece; right-click) · deselect (×, Esc) · select many (hold and loop; drag a box) · pick the place first (movement.md §7) · build a house by the wheat (the hammer, *House*, drag the outline to a green spot, *Build*), which also completes the Chronicle's first step.
+- **Framing:** each step flies the camera so what it points at sits in the clear band between the coach card and the bottom bar, and targets are picked sideways on screen where there's more room.
+- **Never stuck:** every step has *Skip step*; the card has *Skip tutorial* (remembered). A step that doesn't apply (no pawn, no second king, a house already built) is passed over. Backing out of a multi-part step (closing the build sheet) goes back to its start. The tour pauses while a sheet, battle, confirmation, story or ceremony is open, and picks up where it was after a reload.
+- **Replay:** Help (?) → *Replay the tutorial*. The sign-in nudge waits until the tour is over.
+
 ## Phone layout (audited 2026-09-28)
 
 Audited at 360×740, 390×844 and 844×390 (landscape), screen by screen:

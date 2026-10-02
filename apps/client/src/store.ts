@@ -70,6 +70,8 @@ interface UIState {
   /** An area chosen for elephants to clear, waiting for confirmation. */
   pendingClear: { ids: number[]; a: [number, number]; b: [number, number] } | null;
   lassoMode: boolean;
+  /** The hands-on tutorial's step (Tutorial.tsx), or null when it isn't running. */
+  tutorial: number | null;
   /**
    * A spot picked on the map first, pieces after (movement.md §7): the nearest piece is chosen,
    * the bar's + and − bring nearer ones in or let farther ones go, and Move here sends them.
@@ -136,6 +138,7 @@ export const useUI = create<UIState>((set, get) => ({
   pendingClear: null,
   questFocus: (() => { try { const v = Number(localStorage.getItem('owc.questFocus')); return v > 0 ? v : null; } catch { return null; } })(),
   lassoMode: false,
+  tutorial: (() => { try { const v = localStorage.getItem('owc.tut'); return v != null && /^\d+$/.test(v) ? Number(v) : null; } catch { return null; } })(),
   rally: null,
   watching: false,
   updateReady: false,

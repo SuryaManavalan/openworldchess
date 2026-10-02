@@ -28,6 +28,8 @@ export class Input {
   private keys = new Set<string>();
   private lassoPts: [number, number][] = [];
   pendingMove: [number, number] | null = null;
+  /** What the player has done so far, for the tutorial to watch (Tutorial.tsx). */
+  stats = { moves: 0, drags: 0, groups: 0, spots: 0, builds: 0 };
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -468,6 +470,7 @@ export class Input {
   }
 
   private finishCommand(at: [number, number]) {
+    this.stats.drags++;
     const target = this.scene.pickPiece(at[0], at[1], 0.75);
     this.issue(at, target);
   }
@@ -501,6 +504,8 @@ export class Input {
     const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
     this.scene.fx.ripple(to[0], to[1], 0xffffff);
     audio.commit(); haptic();
+    this.stats.moves++;
+    if (this.rallying()) this.stats.spots++;
     this.pendingMove = null;
     this.scene.pendingMarker = null;
     if (ui.rally) ui.set({ rally: null });
@@ -545,6 +550,7 @@ export class Input {
     ids.forEach((id, i) => this.scene.fx.schedule(i * 45, () => { const v = this.scene.pieces.get(id); if (v) v.pop = performance.now(); }));
     this.selectWithSound(ids);
     if (ids.length) haptic(12);
+    if (found.length >= 2) this.stats.groups++;
   }
 
   private finishBox() {
@@ -559,6 +565,7 @@ export class Input {
     const ids = mirror.myPieces().filter((p) => p.state !== 'battle' && p.x >= x0 - 0.5 && p.x <= x1 + 0.5 && p.y >= y0 - 0.5 && p.y <= y1 + 0.5).map((p) => p.id);
     const sel = this.keys.has('Shift') || ui.lassoMode ? [...new Set([...ui.selection, ...ids])] : ids;
     this.selectWithSound(sel);
+    if (ids.length >= 2) this.stats.groups++;
   }
 
   // ---------- building ----------
@@ -588,7 +595,7 @@ export class Input {
       return;
     }
     commands.build(type, [x, y]).then((err) => {
-      if (!err) { audio.build(); this.scene.fx.dust(x, y, 12); haptic(15); ui.set({ buildType: null, ghost: null }); }
+      if (!err) { this.stats.builds++; audio.build(); this.scene.fx.dust(x, y, 12); haptic(15); ui.set({ buildType: null, ghost: null }); }
       else audio.error();
     });
   }

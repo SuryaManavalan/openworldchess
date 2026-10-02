@@ -52,7 +52,7 @@ export function DiscordNudge() {
       // Played on 3+ days? (The server knows about other devices and days before this browser.)
       if (Math.max(local, mirror.self?.daysPlayed ?? 0) < 3) { if (mirror.self) clearInterval(t); return; }
       const s = useUI.getState();
-      const busy = s.sheet || s.battleFocus != null || s.questHelp || s.riddle != null || s.buildType || document.querySelector('.welcome-backdrop, .story-backdrop');
+      const busy = s.sheet || s.tutorial != null || s.battleFocus != null || s.questHelp || s.riddle != null || s.buildType || document.querySelector('.welcome-backdrop, .story-backdrop');
       if (busy) { if (++tries > 30) clearInterval(t); return; }
       clearInterval(t);
       write('owc.discordShown', d);
