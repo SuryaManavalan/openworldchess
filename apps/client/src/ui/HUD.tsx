@@ -234,8 +234,10 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
   const knights = sel.filter((p) => p.kind === 'N').length;
   // A piece's own work shows only when the selection is all that kind (a troop marches; a crew works).
   const only = (kind: PieceKind) => sel.every((p) => p.kind === kind);
+  // Gathered for a spot picked first (movement.md §7): + and − work from that spot.
+  const rally = pending && input?.rallying() ? pending : null;
   // The selection is (part of) a troop out on an excursion (movement.md §10).
-  const troop = troopOfSelection(ui.selection);
+  const troop = rally ? undefined : troopOfSelection(ui.selection);
   const troopNo = troop ? troopsOf().indexOf(troop) + 1 : 0;
   const joining = new Set(troop?.joining.map((j) => j.id) ?? []);
   const hint = ui.orderMode === 'pave' ? `Tap where the road should go: ${knights} knight${knights > 1 ? 's' : ''} will pave it`
@@ -243,17 +245,21 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
     : ui.orderMode === 'haul' ? 'Tap the rock or ore deposit to haul'
     : ui.orderMode === 'haulTo' ? 'Now tap where to set it down (near one of your kings)'
     : ui.lassoMode ? (phone ? 'Tap pieces to add or remove them · long-press and draw to add many' : 'Click pieces to add or remove them')
+    : rally ? (phone ? '+ brings the next nearest · tap pieces to add or remove them' : '+ brings the next nearest · click pieces to add or remove them · Enter to go')
     : pending ? null
     : troop ? (phone ? '+ calls the nearest piece of that kind out to the troop' : '+ calls the nearest piece of that kind out to the troop · right-click to move it')
     : phone ? 'Tap the ground to move · tap an enemy to attack' : 'Right-click to move · right-click an enemy to attack';
   // Where "nearest" is measured from: the troop's post, or the selection's middle.
-  const from: [number, number] = troop ? troop.at : [Math.round(sel.reduce((s, p) => s + p.x, 0) / sel.length), Math.round(sel.reduce((s, p) => s + p.y, 0) / sel.length)];
+  const from: [number, number] = rally ?? (troop ? troop.at : [Math.round(sel.reduce((s, p) => s + p.x, 0) / sel.length), Math.round(sel.reduce((s, p) => s + p.y, 0) / sel.length)]);
   const lead = sel.find((p) => p.kind === 'K') ?? sel[0];
   const mine = mirror.myPieces();
   // − lets the farthest of a kind go; + brings the nearest one in (with a troop: calls it out).
   const minus = (kind: PieceKind) => {
-    const of = sel.filter((p) => p.kind === kind).sort((a, b) => cheb(b.x, b.y, lead.x, lead.y) - cheb(a.x, a.y, lead.x, lead.y));
-    if (of[0]) ui.select(ui.selection.filter((id) => id !== of[0].id));
+    const [ox, oy] = rally ?? [lead.x, lead.y];
+    const of = sel.filter((p) => p.kind === kind).sort((a, b) => cheb(b.x, b.y, ox, oy) - cheb(a.x, a.y, ox, oy));
+    if (!of[0]) return;
+    const rest = ui.selection.filter((id) => id !== of[0].id);
+    if (rest.length) ui.select(rest); else clear();
   };
   const plus = async (kind: PieceKind) => {
     const q = nearestOf(kind, from, new Set(ui.selection));
@@ -273,7 +279,7 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
     <div className="action-row sel-bar">
       <div className="sel-top">
         <span className="sel-title">
-          {troop ? <><Icon name="troop" size={16} /> {troop.auto === 'pilgrims' ? 'Pilgrims' : `Troop ${troopNo}`}</> : 'Selected'}
+          {troop ? <><Icon name="troop" size={16} /> {troop.auto === 'pilgrims' ? 'Pilgrims' : `Troop ${troopNo}`}</> : rally ? 'Send to this spot' : 'Selected'}
           <b className="sel-count">{troop ? `· ${sel.length}` : sel.length}</b>
           {joining.size > 0 && <span className="sel-otw">{joining.size} on the way</span>}
           {doing && <span className="sel-doing">{doing}</span>}
@@ -307,8 +313,9 @@ function SelectionBar({ sel, pending }: { sel: Piece[]; pending: [number, number
       )}
       <div className="sel-actions">
         {pending ? <>
-          <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>Move here</button>
-          <button className="btn ghost" onClick={() => { if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; ui.bump(); }}>Cancel</button>
+          <button className="btn" onClick={() => { input?.issue([pending[0], pending[1]]); useUI.getState().bump(); }}>{rally ? `Move ${sel.length} here` : 'Move here'}</button>
+          {/* Pieces gathered for the spot were never chosen on their own: cancelling lets them all go. */}
+          <button className="btn ghost" onClick={() => { if (rally) { clear(); return; } if (input) input.pendingMove = null; if (scene) scene.pendingMarker = null; ui.bump(); }}>Cancel</button>
         </> : <>
           {troop && !troop.home && <button className="btn ghost" title="March this troop back to the nearest city; it disbands there" onClick={() => commands.troopHome(troop.id).then((e) => e ? ui.toast(e, 'error') : ui.toast('The troop marches home', 'info'))}>Home</button>}
           <button className="btn ghost" onClick={() => commands.stop(ui.selection)}>Stop</button>

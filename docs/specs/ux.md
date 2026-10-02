@@ -40,6 +40,7 @@ The layout is chosen by viewport size and input type (`pointer: coarse` plus wid
 | Select a custom group | **Long-press, then draw a loop** around pieces (lasso) | Left-drag a box on empty ground |
 | Add to the selection | Tap **+ Add** on the bar, then tap pieces to put them in or take them out; a loop adds too. It turns off when the selection is cleared | Shift + click / Shift + drag, or **+ Add** |
 | **Move** | Tap the ground: a marker and **Move here**; tap the marker again (or the button) to go. Or drag from a selected piece to the spot | Right-click the destination |
+| **Send pieces to a spot** (spot first) | With nothing selected, tap the ground: a marker, and your nearest piece selected (never the Emperor). The **− / +** by each kind let the farthest go or bring the next nearest *to the spot*; tapping pieces puts them in or takes them out. **Move N here** (or tapping the marker) sends them; **Cancel** lets them all go | Click (or right-click) empty ground with nothing selected; the same bar; Enter sends |
 | Set facing on a move | While dragging, twist a second finger | Right-drag: release direction = facing |
 | **Attack** | Drag the selection **onto an enemy piece, king or building**, then confirm | Right-click the enemy, then confirm |
 | Build | Drag a building card from the Build sheet onto the map | Click a card, then click the map |

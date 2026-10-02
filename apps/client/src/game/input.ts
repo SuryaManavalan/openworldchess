@@ -370,6 +370,13 @@ export class Input {
     const dbl = now - this.lastTap.t < 320 && Math.hypot(at[0] - this.lastTap.x, at[1] - this.lastTap.y) < 1.2;
     this.lastTap = { t: now, x: at[0], y: at[1] };
     const mine = this.myPiece(at[0], at[1]);
+    // Picking who goes to a spot already chosen: each tap puts a piece in or takes it out.
+    if (mine && this.rallying()) {
+      const sel = ui.selection, next = sel.includes(mine.id) ? sel.filter((i) => i !== mine.id) : [...sel, mine.id];
+      if (!next.length) { this.pendingMove = null; sc.pendingMarker = null; }
+      this.selectWithSound(next);
+      return;
+    }
     if (mine) {
       this.pendingMove = null;
       // Double-tap: everything under that king. Tap a king: its best army. Tap a piece: just it.
@@ -394,13 +401,16 @@ export class Input {
     // (moving is a right-click); on touch, a tap with pieces selected is still a place to move to.
     if (b && b.owner === mirror.me && (!ui.selection.length || type === 'mouse')) { ui.set({ sheet: 'details', selection: [] }); useUI.getState().set({ hint: `building:${b.id}` }); return; }
     if (b && b.owner !== mirror.me && (!ui.selection.length || type === 'mouse')) { ui.set({ inspect: { building: b.id } }); return; }
-    if (ui.inspect) ui.set({ inspect: null });
+    // A tap on open ground just closes a card that's showing.
+    if (ui.inspect) { ui.set({ inspect: null }); if (!ui.selection.length) return; }
+    if (!ui.selection.length) { this.rally(at); return; }
     if (ui.selection.length) {
-      if (type === 'mouse') { if (!ui.lassoMode) ui.select([]); return; }
+      if (type === 'mouse' && !this.rallying()) { if (!ui.lassoMode) ui.select([]); return; }
       // Two-step command for touch: tap the ground to place, then confirm (ux.md §3). Tapping the
       // marker again confirms it, like the Move here button.
       const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
       if (this.pendingMove && Math.max(Math.abs(this.pendingMove[0] - to[0]), Math.abs(this.pendingMove[1] - to[1])) <= 1) { this.issue(this.pendingMove); ui.bump(); return; }
+      if (this.rallying()) ui.set({ rally: to });
       this.pendingMove = to;
       sc.pendingMarker = this.pendingMove;
       sc.pathPreview = null;
@@ -416,9 +426,34 @@ export class Input {
     if (!this.scene.pickPiece(at[0], at[1], 0.75) && !this.scene.pickBuilding(at[0], at[1])) { useUI.getState().addFlag(at[0], at[1]); this.scene.fx.ripple(Math.round(at[0]), Math.round(at[1]), 0xe3b23c); haptic(20); useUI.getState().toast('Flag placed'); }
   }
 
+  /**
+   * The spot first, then who goes (movement.md §7): tapping open ground with nothing selected
+   * marks it and selects your nearest piece; the bar's + and − (or tapping pieces) choose the
+   * rest, and Move here sends them all.
+   */
+  private rally(at: [number, number]) {
+    const to: [number, number] = [Math.round(at[0]), Math.round(at[1])];
+    // Never your Emperor unless you pick him yourself (as the bar's +).
+    const near = mirror.myPieces().filter((p) => p.state !== 'battle' && !p.emperor).sort((a, b) => cheb(a.x, a.y, to[0], to[1]) - cheb(b.x, b.y, to[0], to[1]))[0];
+    if (!near) return;
+    this.selectWithSound([near.id]);
+    useUI.getState().set({ rally: to, lassoMode: false });
+    this.pendingMove = to;
+    this.scene.pendingMarker = to;
+    this.scene.pathPreview = null;
+    this.scene.fx.ripple(to[0], to[1], 0xe3b23c);
+    haptic(8);
+  }
+
+  /** The selection was gathered for a spot picked first, and that move is still waiting. */
+  rallying(): boolean {
+    const r = useUI.getState().rally, p = this.pendingMove;
+    return !!r && !!p && r[0] === p[0] && r[1] === p[1];
+  }
+
   private rightClick(at: [number, number]) {
     const sel = useUI.getState().selection;
-    if (!sel.length) return;
+    if (!sel.length) { if (!this.scene.pickPiece(at[0], at[1], 0.75) && !this.scene.pickBuilding(at[0], at[1])) this.rally(at); return; }
     this.issue(at, this.scene.pickPiece(at[0], at[1], 0.75));
   }
 
@@ -465,6 +500,7 @@ export class Input {
     audio.commit(); haptic();
     this.pendingMove = null;
     this.scene.pendingMarker = null;
+    if (ui.rally) ui.set({ rally: null });
     const key = sel.slice().sort((a, b) => a - b).join(',');
     this.scene.moveTargets.set(key, { to, ids: sel, attack: false, t0: performance.now() });
     commands.move(sel, to).then((err) => { if (err) { audio.error(); this.scene.moveTargets.delete(key); } });
@@ -569,6 +605,7 @@ export class Input {
     else if (k === 'x' && ui.tool) ui.set({ toolErase: !ui.toolErase });
     else if (k === 'z' && (e.ctrlKey || e.metaKey) && ui.tool) { e.preventDefault(); void commands.undoCity().then((err) => { if (err) ui.toast(err, 'info'); else audio.commit(); }); }
     else if (k === 'Escape') { if (ui.orderMode) ui.set({ orderMode: null }); else if (ui.buildType) ui.set({ buildType: null, ghost: null }); else if (ui.battleFocus) ui.set({ battleFocus: null }); else { ui.select([]); this.pendingMove = null; sc.pendingMarker = null; } }
+    else if (k === 'Enter' && this.pendingMove && ui.selection.length) { this.issue(this.pendingMove); ui.bump(); }
     else if (k === 's' && !e.ctrlKey) { if (ui.selection.length) commands.stop(ui.selection); }
     else if (k === 'b') ui.set({ sheet: ui.sheet === 'build' ? null : 'build' });
     else if (k === '/') { e.preventDefault(); ui.set({ sheet: ui.sheet === 'find' ? null : 'find' }); }

@@ -14,7 +14,8 @@ const PHONE: Section[] = [
   { id: 'pieces', title: 'Pieces and troops', rows: [
     ['Select a king and its army', 'Tap the king'], ['Select one piece', 'Tap it'], ['Select everything near a king', 'Double-tap it'],
     ['Select many', 'Long-press, then draw around them'], ['Add or drop pieces', '+ Add, then tap pieces; or the − / + by each kind'],
-    ['Move', 'Tap the ground, then tap the marker again (or Move here)'], ['Attack', 'Tap an enemy king or camp'],
+    ['Move', 'Tap the ground, then tap the marker again (or Move here)'],
+    ['Send pieces to a spot', 'With nothing selected, tap the ground: your nearest piece is chosen; + / − bring nearer ones in or let some go, then Move here'], ['Attack', 'Tap an enemy king or camp'],
     ['Drag an order', 'Drag from a selected piece to where it should go'], ['Deselect', 'The ×, or tap the one selected piece again'],
   ] },
   { id: 'build', title: 'Building', rows: [

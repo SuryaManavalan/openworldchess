@@ -70,6 +70,11 @@ interface UIState {
   /** An area chosen for elephants to clear, waiting for confirmation. */
   pendingClear: { ids: number[]; a: [number, number]; b: [number, number] } | null;
   lassoMode: boolean;
+  /**
+   * A spot picked on the map first, pieces after (movement.md §7): the nearest piece is chosen,
+   * the bar's + and − bring nearer ones in or let farther ones go, and Move here sends them.
+   */
+  rally: [number, number] | null;
   watching: boolean;
   /** A new version was deployed during a battle: reload when ready. */
   updateReady: boolean;
@@ -131,6 +136,7 @@ export const useUI = create<UIState>((set, get) => ({
   pendingClear: null,
   questFocus: (() => { try { const v = Number(localStorage.getItem('owc.questFocus')); return v > 0 ? v : null; } catch { return null; } })(),
   lassoMode: false,
+  rally: null,
   watching: false,
   updateReady: false,
   needName: false,
@@ -155,7 +161,7 @@ export const useUI = create<UIState>((set, get) => ({
   bump: () => set({ version: get().version + 1 }),
   set: (p) => set(p),
   // Nothing selected: nothing to add to, and no order waiting for its place.
-  select: (ids) => set(ids.length ? { selection: ids } : { selection: [], lassoMode: false, orderMode: null }),
+  select: (ids) => set(ids.length ? { selection: ids } : { selection: [], lassoMode: false, orderMode: null, rally: null }),
   toast: (text, tone = 'info', icon) => {
     const id = nextId++;
     set({ toasts: [...get().toasts, { id, text, tone, icon }].slice(-3) });

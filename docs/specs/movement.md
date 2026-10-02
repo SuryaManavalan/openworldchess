@@ -125,6 +125,7 @@ A troop has a **heading**: the direction of its path, snapped to N, E, S or W. P
 | Double-click | Select all visible pieces of that type |
 | Ctrl + 1–9 / 1–9 | Save / recall a control group |
 | Right-click a square | Move there (the selection forms or joins a troop if it includes a king) |
+| Click or tap empty ground with nothing selected | Spot first (as of 2026-10-01): a marker there and your nearest piece selected; + / − on the bar bring the next nearest to that spot or let the farthest go, then Move here sends them all |
 | Right-click an enemy troop or city | Attack (see [battle.md](battle.md) §2) |
 | F | Cycle formation (line, column) |
 | Touch | Tap to select; long-press a square for the order menu |
