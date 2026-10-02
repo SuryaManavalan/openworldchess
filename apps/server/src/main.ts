@@ -37,6 +37,8 @@ stats.load(join(dirname(DATA), 'stats.json'), game);
 game.herald.load(join(dirname(DATA), 'herald.json'));
 // Shape the land from the empires already living on it (elo.md §3), settled before anyone connects.
 for (let i = 0; i < 8; i++) game.reshapeLand();
+// Once: cities' old automatic chessboards are now Arenas their rulers place (citybuilding.md §10).
+if (!game.migrated.has('arenas')) { game.now = Date.now(); console.log(`arenas: told ${game.announceArenas()} city rulers`); game.migrated.add('arenas'); }
 
 // Serve the built client and the site too (web.ts), so one process runs the whole game.
 warm(STATIC);

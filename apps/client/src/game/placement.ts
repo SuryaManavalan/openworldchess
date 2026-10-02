@@ -39,6 +39,8 @@ export function checkPlacement(type: BuildingType, x: number, y: number, moving?
     if (b.owner && b.owner !== mirror.me && distToRect(x, y, b.x, b.y, b.size) <= BUILD_SPACING + size - 1) return { ok: false, reason: 'Too close to another player' };
   if (type === 'palace' && mirror.myBuildings().some((b) => b.id !== moving && b.type === 'palace' && kings.some((k) => distToRect(k.x, k.y, b.x, b.y, b.size) <= REACH)))
     return { ok: false, reason: 'One palace per king' };
+  if (type === 'arena' && mirror.myBuildings().some((b) => b.id !== moving && b.type === 'arena' && Math.max(Math.abs(b.x - x), Math.abs(b.y - y)) < 24))
+    return { ok: false, reason: 'This town already has an Arena' };
   const nodes = [...mirror.nodes.values()];
   if (moving == null) for (const [kind, amt] of Object.entries(spec.cost) as [NodeKind, number][]) {
     const have = nodes.filter((n) => n.kind === kind && distToRect(n.x, n.y, x, y, size) <= REACH).reduce((s, n) => s + Math.max(0, n.remaining), 0);
@@ -47,5 +49,5 @@ export function checkPlacement(type: BuildingType, x: number, y: number, moving?
   const missing = spec.needs.filter((k) => !nodes.some((n) => n.kind === k && n.remaining > 0 && distToRect(n.x, n.y, x, y, size) <= WORK_AREA));
   // Allowed anywhere in reach (citybuilding.md §3); it just won't produce until it has its resource.
   if (missing.length) return { ok: true, warn: true, reason: `Won't produce here: no ${missing.map((k) => NAME[k]).join(' or ')} within 3 squares (plant some beside it)` };
-  return { ok: true, reason: 'Good spot' };
+  return { ok: true, reason: type === 'arena' ? 'Good spot: a full board fits here' : 'Good spot' };
 }

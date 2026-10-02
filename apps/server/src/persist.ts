@@ -21,6 +21,8 @@ interface Snapshot {
   cleared?: [string, number][];
   /** When players were first near each camp cell. */
   cellSeen?: [string, number][];
+  /** One-time changes to the world already made (e.g. 'arenas'). */
+  migrated?: string[];
 }
 
 export function save(game: Game, file: string) {
@@ -36,6 +38,7 @@ export function save(game: Game, file: string) {
     events: [...game.events],
     cleared: [...game.wilds.cleared],
     cellSeen: [...game.wilds.cellSeen],
+    migrated: [...game.migrated],
   };
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file + '.tmp', JSON.stringify(snap));
@@ -60,6 +63,7 @@ export function load(game: Game, file: string): boolean {
   for (const [pid, ev] of snap.events ?? []) game.events.set(pid, ev);
   for (const [cell, until] of snap.cleared ?? []) game.wilds.cleared.set(cell, until);
   for (const [cell, at] of snap.cellSeen ?? []) game.wilds.cellSeen.set(cell, at);
+  for (const m of snap.migrated ?? []) game.migrated.add(m);
   for (const b of snap.buildings) w.addBuilding(b);
   for (const p of snap.pieces) {
     // Battles and marches in progress don't survive a restart.

@@ -141,9 +141,10 @@ export class Battles {
 
   /**
    * A practice battle against the AI (ROADMAP M1): full sets, no world
-   * consequences, unrated. The AI plays at the player's rating.
+   * consequences, unrated. The AI plays at the player's rating. With `arena` (one of the player's
+   * Arenas, citybuilding.md §10) it's played on that board in the town, white from the south.
    */
-  practice(player: string): string | null {
+  practice(player: string, arena?: number): string | null {
     const g = this.game;
     if ([...this.recs.values()].some((r) => r.pub.kind === 'practice' && r.white.player === player && r.pub.phase !== 'over')) return 'You already have a practice battle';
     // Engines are shared with real battles' AI stand-ins: cap practice games.
@@ -151,11 +152,17 @@ export class Battles {
     const p = g.players.get(player);
     const emp = p?.emperorId ? this.w.pieces.get(p.emperorId) : undefined;
     if (!p) return 'Unknown player';
+    const ar = arena != null ? this.w.buildings.get(arena) : undefined;
+    if (arena != null) {
+      if (!ar || ar.type !== 'arena' || ar.owner !== player) return 'That Arena isn\'t yours';
+      if (ar.built < 1) return 'The Arena is still being laid';
+      if ([...this.recs.values()].some((r) => r.pub.arena === ar.id && r.pub.phase !== 'over')) return 'A match is already being played on this Arena';
+    }
     const set = (base: number) => 'KQRRBBNNPPPPPPPP'.split('').map((k, i) => ({ id: -(base + i), kind: k as PieceKind, x: i % 2, y: 0 }));
     const { fen, pieceMap } = assemble(set(1000), set(2000));
     const id = this.w.id();
     const pub: BattlePublic = {
-      id, kind: 'practice', cx: emp?.x ?? p.home[0], cy: (emp?.y ?? p.home[1]) - 12, whiteFacing: 0,
+      id, kind: 'practice', cx: ar ? ar.x + 4 : emp?.x ?? p.home[0], cy: ar ? ar.y + 4 : (emp?.y ?? p.home[1]) - 12, whiteFacing: 0, ...(ar ? { arena: ar.id } : {}),
       white: { playerId: player, kingId: -1000, name: p.name, rating: Math.round(p.rating), color: p.color },
       black: { playerId: 'ai', kingId: -2000, name: 'Shadow of the Board', rating: Math.round(p.rating), color: '#8a8a8a' },
       phase: 'live', startsAt: g.now, fen, startFen: fen, moves: [], clocks: { white: 300_000, black: 300_000, turnStartedAt: g.now },
@@ -167,6 +174,8 @@ export class Battles {
     };
     rec.game = new BattleGame(fen, pieceMap);
     rec.game.start(g.now);
+    // On an Arena, the town keeps off the board while the match is on (pieces route around it).
+    if (ar) for (let y = ar.y; y < ar.y + 8; y++) for (let x = ar.x; x < ar.x + 8; x++) { const k = key(x, y); if (!this.w.sealed.has(k)) { this.w.sealed.set(k, id); rec.sealed.push(k); } }
     this.recs.set(id, rec);
     this.sync(rec);
     return null;
@@ -365,6 +374,9 @@ export class Battles {
     r.pub.termination = gm.termination;
     r.endedAt = now;
     if (r.pub.kind === 'practice') {
+      for (const k of r.sealed) w.sealed.delete(k);
+      // A match played to the end on your own Arena (not resigned at once) counts for the Chronicle.
+      if (r.pub.arena != null && gm.moves.length >= 10) g.chronicle.note(r.white.player, 'spar');
       this.sync(r);
       const empty: BattleSummary = { winner: result === 'white' ? r.white.player : null, loser: null, killed: [], converted: [], routed: [], promoted: [], buildingsTransferred: [], emperorKilled: false, cooldownMs: 0, rated: false, ratingChange: {} };
       this.onEnd(r.pub, empty, [r.white.player]);

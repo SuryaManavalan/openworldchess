@@ -84,7 +84,7 @@ export function setWorth(kinds: Iterable<PieceKind>): number {
 
 /** Decorations (citybuilding.md §4): drawn by players, no production, no tier, no anchor. */
 export type DecorType = 'bridge' | 'wall' | 'fence' | 'hedge' | 'flowerbed' | 'lamp' | 'bench' | 'banner' | 'planter' | 'well' | 'stall' | 'statue' | 'fountain' | 'tavern';
-export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks' | 'wonder' | 'altar' | DecorType;
+export type BuildingType = 'palace' | 'house' | 'stable' | 'temple' | 'barracks' | 'wonder' | 'altar' | 'arena' | DecorType;
 /** Resources. "ore" looks different in each biome (gold, silver, copper, gems) but is one resource. */
 export type NodeKind = 'tree' | 'wheat' | 'rock' | 'ore';
 
@@ -120,6 +120,9 @@ export const BUILDINGS: Record<BuildingType, BuildingSpec> = {
   // The campaign's capstone (campaign.md §4.5): one per empire, in a city capital; it produces nothing, it lifts its town.
   // A bishop's altar (economy.md §8): raised anywhere by a bishop standing beside it; free, and it produces nothing.
   altar: { type: 'altar', size: 1, cost: {}, buildMs: 60_000, needs: [], draw: {}, produces: [], baseMs: 0 },
+  // The Arena (citybuilding.md §10): a full chessboard laid in the town, walnut and cream in a bronze
+  // frame. Pieces stroll across it; practice matches are played on it, where the town can watch.
+  arena: { type: 'arena', size: 8, cost: { tree: 40 }, buildMs: 40_000, needs: [], draw: {}, produces: [], baseMs: 0, walk: true },
   wonder: { type: 'wonder', size: 3, cost: { tree: 400, rock: 400, ore: 150 }, buildMs: 30 * 60_000, needs: [], draw: {}, produces: [], baseMs: 0 },
   // Decorations (citybuilding.md §4).
   bridge: { type: 'bridge', size: 1, cost: { tree: 10 }, buildMs: 4_000, needs: [], draw: {}, produces: [], baseMs: 0, decor: true, walk: true, onWater: true, line: true },

@@ -258,6 +258,7 @@ export class CityBuild {
     if (!b || b.owner !== owner || b.type === 'ruin' || b.type === 'camp') return 'Not your building';
     if (b.type === 'altar' || b.type === 'wonder') return b.type === 'altar' ? 'An altar stays where its bishop raised it' : 'The Wonder stands where it was raised';
     if (this.underAttack(b)) return 'Not while this town is under attack';
+    if (this.inMatch(b)) return 'Not while a match is played on it';
     const [x, y] = at, size = b.size;
     if (x === b.x && y === b.y) return null;
     // Check the new spot as if the building weren't where it is now.
@@ -272,6 +273,9 @@ export class CityBuild {
     void old;
     return null;
   }
+
+  /** An Arena with a practice match on it (citybuilding.md §10). */
+  private inMatch(b: Building) { return b.type === 'arena' && this.game.battles.active().some((x) => x.arena === b.id && x.phase !== 'over'); }
 
   /** Placement rules for moving a building (reach, ground, room; no cost). */
   private spotFor(owner: string, type: BuildingType, x: number, y: number, size: number): string | null {
@@ -298,6 +302,7 @@ export class CityBuild {
     const w = this.w, b = w.buildings.get(id);
     if (!b || b.owner !== owner || b.type === 'ruin' || b.type === 'camp') return 'Not your building';
     if (b.type === 'altar' || b.type === 'wonder') return b.type === 'altar' ? 'An altar falls only when its bishop leaves it' : 'The Wonder cannot be torn down';
+    if (this.inMatch(b)) return 'Not while a match is played on it';
     if (this.underAttack(b)) return 'Not while this town is under attack';
     const spec = BUILDINGS[b.type];
     w.removeBuilding(b.id);

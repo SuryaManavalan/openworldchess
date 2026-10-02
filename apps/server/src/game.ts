@@ -145,6 +145,8 @@ export class Game {
   onAlert: (playerId: string, a: Alert) => void = () => {};
   /** Recent events per player, for the "While you were away" report (progression.md §5). */
   events = new Map<string, { at: number; kind: string; text: string }[]>();
+  /** One-time changes to the world already made (persisted). */
+  migrated = new Set<string>();
   logEvent(player: string, kind: string, text: string) {
     const list = this.events.get(player) ?? [];
     list.push({ at: this.now, kind, text });
@@ -564,6 +566,22 @@ export class Game {
     return false;
   }
 
+  /**
+   * Cities used to get a chessboard at their centre on their own; now it's the Arena, a building
+   * players place where they like (citybuilding.md §10). (Their centres are built up, so there's no
+   * room to turn the old boards into Arenas in place.) Once, each city's ruler is told.
+   */
+  announceArenas(): number {
+    this.chronicle.refreshSettlements(this.now, true);
+    let n = 0;
+    for (const p of this.players.values()) {
+      if (p.isBot || p.wild || !this.chronicle.settlementsOf(p.id).some((st) => st.tier >= 4)) continue;
+      this.logEvent(p.id, 'news', 'Your city\'s chessboard is now the Arena: build one where you want it (8×8, in the Build menu), and play practice matches on it while the town watches.');
+      n++;
+    }
+    return n;
+  }
+
   /** Place a building (economy.md §2). Construction draws from nodes within reach of the site. */
   build(player: string, type: BuildingType, at: [number, number]): string | null {
     if (isDecor(type)) return this.city.placeDecor(player, type, [at]).err;
@@ -582,6 +600,8 @@ export class Game {
         if (!cap) return 'Name a capital first (open one of your buildings)';
         if (cheb(cap.cx, cap.cy, x + 1, y + 1) > 12) return 'Raise your Wonder in your capital';
       }
+      // One Arena to a town (citybuilding.md §10).
+      if (type === 'arena' && w.buildingsNear(x + 4, y + 4, 24).some((b) => b.owner === player && b.type === 'arena' && cheb(b.x, b.y, x, y) < 24)) return 'This town already has an Arena';
     }
     const kings = this.kingsOf(player).filter((k) => distToRect(k.x, k.y, x, y, size) <= REACH);
     // Altars (economy.md §8): a bishop raises one anywhere; a tended altar holds a few small buildings.
@@ -978,7 +998,7 @@ export class Game {
       if (b.built < 1) {
         if (anchored) b.built = Math.min(1, b.built + (dt * this.speed) / BUILDINGS[b.type].buildMs);
         b.blocked = b.built < 1 ? 'building' : null;
-      } else if (anchored && b.owner && b.type !== 'wonder' && b.type !== 'altar') {
+      } else if (anchored && b.owner && !['wonder', 'altar', 'arena'].includes(b.type)) {
         this.produce(b, dt, popOf(b.owner));
       }
       // A building waiting for room (pop-cap) keeps its bubbles: popping banks progress toward

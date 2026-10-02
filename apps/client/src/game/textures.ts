@@ -38,7 +38,8 @@ const HOARDS = campaignArt.HOARDS as unknown as Record<string, () => string>;
 const piecesOf = (civ?: string) => (civ && CIV_ART[civ]?.PIECES) || PIECES;
 /** Altars look like their land, not their civilization (economy.md §8). */
 const altar = altarArt.altar as unknown as (o: { biome?: string; team?: string }) => string;
-const buildingsOf = (civ?: string): Record<string, ArtFn> => ({ ...((civ && CIV_ART[civ]?.BUILDINGS) || BUILDINGS), wonder: WONDERS[civ && WONDERS[civ] ? civ : 'classic'], altar: (o) => altar({ team: o?.team }) });
+// (Every civilization's Arena is the same walnut board: civilizations restyle the rest.)
+const buildingsOf = (civ?: string): Record<string, ArtFn> => ({ ...BUILDINGS, ...((civ && CIV_ART[civ]?.BUILDINGS) || {}), arena: BUILDINGS.arena, wonder: WONDERS[civ && WONDERS[civ] ? civ : 'classic'], altar: (o) => altar({ team: o?.team }) });
 const ART_NAME: Record<PieceKind, string> = { K: 'king', Q: 'queen', R: 'elephant', B: 'bishop', N: 'knight', P: 'pawn' };
 export const RES = 128; // raster size per 100x100 art unit
 
@@ -80,6 +81,12 @@ export function buildingTexture(type: string, team: string, onReady?: () => void
   if (type === 'ruin') return get('b:ruin', ruinArt, 192, onReady);
   if (type === 'altar') return get(`b:altar:${biome ?? 'meadow'}:${team}`, () => altar({ biome, team }), 192, onReady);
   return get(`b:${type}:${team}:${civ ?? ''}`, () => buildingsOf(civ)[type]({ team }), 192, onReady);
+}
+
+/** An Arena's corner post, flying its owner's pennant (citybuilding.md §10). */
+const arenaPost = worldArt.arenaPost as unknown as (o: { team: string }) => string;
+export function arenaPostTexture(team: string, onReady?: () => void) {
+  return get(`arenapost:${team}`, () => arenaPost({ team }), 96, onReady);
 }
 
 const NODE_ART: Record<string, string> = { tree: 'tree', pine: 'pine', rock: 'rock', ore: 'goldOre', wheat: 'wheat' };

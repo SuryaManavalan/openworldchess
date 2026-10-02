@@ -169,6 +169,8 @@ export type BattleResult = 'white' | 'black' | 'draw' | null;
 export interface BattlePublic {
   id: number;
   kind: 'siege' | 'field' | 'practice';
+  /** A practice match played on an Arena (that building's id): drawn on its squares in the world. */
+  arena?: number;
   /** Arena center on the world grid. */
   cx: number;
   cy: number;

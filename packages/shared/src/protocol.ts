@@ -18,7 +18,7 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('order.clear'), rid: z.number().optional(), pieceIds: ids, a: xy, b: xy, hard: z.boolean() }),
   z.object({ t: z.literal('order.attack'), rid: z.number().optional(), pieceIds: ids, targetKingId: z.number().int().optional(), /** A camp, by its home (wilds.md §4). */ targetBuildingId: z.number().int().optional() }),
   z.object({ t: z.literal('order.cancelAttack'), battleId: z.number().int() }),
-  z.object({ t: z.literal('build'), rid: z.number().optional(), building: z.enum(['palace', 'house', 'stable', 'temple', 'barracks', 'wonder', 'altar', 'bridge', 'wall', 'fence', 'hedge', 'flowerbed', 'lamp', 'bench', 'banner', 'planter', 'well', 'stall', 'statue', 'fountain', 'tavern']), at: xy }),
+  z.object({ t: z.literal('build'), rid: z.number().optional(), building: z.enum(['palace', 'house', 'stable', 'temple', 'barracks', 'wonder', 'altar', 'arena', 'bridge', 'wall', 'fence', 'hedge', 'flowerbed', 'lamp', 'bench', 'banner', 'planter', 'well', 'stall', 'statue', 'fountain', 'tavern']), at: xy }),
   // City building (citybuilding.md): move, demolish, paint streets, erase decor, plant.
   z.object({ t: z.literal('building.move'), rid: z.number().optional(), buildingId: z.number().int(), at: xy }),
   z.object({ t: z.literal('building.demolish'), rid: z.number().optional(), buildingId: z.number().int() }),
@@ -37,7 +37,8 @@ export const ClientMsg = z.discriminatedUnion('t', [
   z.object({ t: z.literal('battle.watch'), battleId: z.number().int() }),
   z.object({ t: z.literal('battle.unwatch'), battleId: z.number().int() }),
   z.object({ t: z.literal('emote'), battleId: z.number().int().optional(), id: z.number().int().min(0).max(15) }),
-  z.object({ t: z.literal('practice') }),
+  /** A practice match against the AI; `arena`: on that Arena of yours, where the town can watch. */
+  z.object({ t: z.literal('practice'), arena: z.number().optional() }),
   // Cosmetics (cosmetics.md): buy Crowns (Stripe checkout), spend them on a civilization, choose which to show.
   z.object({ t: z.literal('shop.checkout'), rid: z.number().optional(), pack: z.string().max(20) }),
   z.object({ t: z.literal('civ.buy'), rid: z.number().optional(), civ: z.string().max(20) }),

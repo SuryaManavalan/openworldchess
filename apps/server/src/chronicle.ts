@@ -5,7 +5,7 @@
 import { Chess } from 'chess.js';
 import { readFileSync } from 'node:fs';
 import {
-  CHAPTERS, FACTIONS, FEATS, KING_OF_NEED_MIN, OPENINGS, PLAYER_KING_CAP, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements,
+  CHAPTERS, FACTIONS, FEATS, KING_OF_NEED_MIN, OPENINGS, PLAYER_KING_CAP, PIECE_NAME, key, setWorth, RAIDERS, REACH, RELIC_OF, RELIC_NAME, RENOWN, TITLES, cheb, clusterSettlements, distToRect,
   type Ability, type BuildingType, type ChronicleView, type Piece, type PieceKind, type SettlementInfo, type SideQuest, type Step,
 } from '@owc/shared';
 import { biomeAt, RARE_BIOMES, resourcesInRect } from '@owc/worldgen';
@@ -94,6 +94,7 @@ const keyOf = (s: Step): string | null => {
     case 'scout': return 'scout';
     case 'clear': return 'clear';
     case 'pave': return 'pave';
+    case 'spar': return 'spar';
     default: return null;
   }
 };
@@ -184,6 +185,8 @@ export class Chronicle {
     if (type === 'altar') return this.canBuild(p, 'temple') ? 'Altars open with temples' : null;
     const st = this.of(p);
     if (st.buildings.includes(type)) return null;
+    // Arenas came after many had passed chapter 1 (2026-10): past it, they're open.
+    if (type === 'arena' && st.ch > 1) return null;
     const ch = CHAPTERS.find((c) => c.reward.buildings?.includes(type) || (type === 'wonder' && c.reward.abilities?.includes('wonder')));
     return ch ? `Unlocks after chapter ${ch.n}: ${ch.name}` : 'Not available';
   }
@@ -494,6 +497,7 @@ export class Chronicle {
       return weak ? [weak.x + 1, weak.y + 1] : undefined;
     }
     if (s.verb === 'build' && s.type === 'palace') return this.palaceSite(p, from.x, from.y);
+    if (s.verb === 'build' && s.type === 'arena') return this.arenaSite(p);
     if (s.verb === 'discover') return this.searchRing(from.x, from.y, 1600, 24, (x, y) => RARE_BIOMES.includes(biomeAt(w.seed, x, y)), `discover:${p.id}`);
     if (s.verb === 'settle' && s.eloAbove != null) {
       const need = w.elo(p.home[0], p.home[1]) + s.eloAbove;
@@ -536,6 +540,28 @@ export class Chronicle {
    * tile by tile in the generated map, without loading those chunks into the
    * world. On the live server it works 12ms a call and resumes where it left off.
    */
+  /** Open ground for an Arena (8×8, nothing in the way but crops) near one of the player's kings: its centre. */
+  private arenaSite(p: PlayerRec): [number, number] | undefined {
+    const w = this.w;
+    const clear = (x0: number, y0: number) => {
+      for (let y = y0; y < y0 + 8; y++) for (let x = x0; x < x0 + 8; x++) {
+        if (!w.buildable(x, y) || w.buildingIdAt(x, y) != null) return false;
+        const n = w.nodeAt(x, y);
+        if (n && n.remaining > 0 && n.kind !== 'wheat') return false;
+      }
+      return true;
+    };
+    for (const k of this.game.kingsOf(p.id).sort((a, b) => Number(!!a.emperor) - Number(!!b.emperor)))
+      for (let r = 0; r <= REACH; r++)
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          // The board's corner square nearest the king stays within its reach.
+          const x0 = k.x + dx - 4, y0 = k.y + dy - 4;
+          if (distToRect(k.x, k.y, x0, y0, 8) <= REACH && clear(x0, y0)) return [x0 + 4, y0 + 4];
+        }
+    return undefined;
+  }
+
   private palaceSite(p: PlayerRec, x0: number, y0: number): [number, number] | undefined {
     const w = this.w, live = !!this.game.viewed, end = live ? performance.now() + 12 : Infinity;
     const slot = `${p.id}:${x0},${y0}`, T = 40;

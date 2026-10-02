@@ -5,7 +5,7 @@ import { isDecor, BUILDINGS, CHUNK, PAVED, REACH, cheb, chunkKey, key, type Buil
 import { biomeAt, hash01 } from '@owc/worldgen';
 import { Chess } from 'chess.js';
 import type { Mirror, MoveEvent } from '@owc/client-core';
-import { ascendedTexture, relicTexture, buildingTexture, campTexture, creatureTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
+import { arenaPostTexture, ascendedTexture, relicTexture, buildingTexture, campTexture, creatureTexture, nodeTexture, pieceTexture, stumpTexture } from './textures.ts';
 import { nodeArt } from './biomeArt.ts';
 import { paintChunk, paintChunkFar, terrainCodes, biomeCodes, textureFrom, TPX, FAR_TPX } from './terrain.ts';
 import { Fx } from './fx.ts';
@@ -52,7 +52,10 @@ class BuildingView {
   texKey = '';
   /** When a bubble was popped here (the building squashes and springs back). */
   squash = 0;
+  /** An Arena's corner posts (citybuilding.md §10). */
+  posts: Sprite[] = [];
   constructor() { this.sprite.anchor.set(0.5, 0.88); }
+  destroy() { this.sprite.destroy(); this.bar.destroy(); for (const p of this.posts) p.destroy(); }
 }
 
 /** ?nolabels: no town names on the map (filming, tools/shorts). */
@@ -82,8 +85,8 @@ export class Scene {
   /** Settlements (visuals.md §10), their settled ground, decorations and name labels. */
   settlements: Settlement[] = [];
   groundMap = new Map<number, number>();
-  /** Squares of a city's heart (the chessboard plaza). */
-  heart = new Set<number>();
+  /** Squares of Arenas (citybuilding.md §10): 1 a light square, 2 a dark one. */
+  heart = new Map<number, number>();
   decor: Decor[] = [];
   private decorSprites = new Map<string, Sprite>();
   private townLabels = new Map<number, Text>();
@@ -253,7 +256,7 @@ export class Scene {
       codes: v.codes,
       biomes: v.biomes,
       ground: (x, y) => this.groundMap.get(key(x, y)) ?? 0,
-      heart: (x, y) => this.heart.has(key(x, y)),
+      heart: (x, y) => this.heart.get(key(x, y)) ?? 0,
       traffic: (x, y) => m.traffic.get(key(x, y)) ?? 0,
     }, v.canvas);
     // Pixi caches one texture per canvas: re-upload the pixels, don't make a new one.
@@ -312,14 +315,14 @@ export class Scene {
       }
     };
     m.onBuildingChange = (b, prev) => {
-      if (!prev || prev.type !== b.type || prev.owner !== b.owner) this.settleDirty = true;
+      if (!prev || prev.type !== b.type || prev.owner !== b.owner || prev.x !== b.x || prev.y !== b.y) this.settleDirty = true;
       if (b.type === 'flowerbed' || b.type === 'bridge' || prev?.type === 'flowerbed' || prev?.type === 'bridge') { this.city.mark(b.x, b.y); if (prev) this.city.mark(prev.x, prev.y); }
       if (prev && prev.built < 1 && b.built >= 1) this.fx.ripple(b.x + b.size / 2 - 0.5, b.y + b.size / 2 - 0.5, 0xfff2b0, b.size * 1.2);
     };
     m.onBuildingRemoved = (id) => {
       const gone = this.buildings.get(id) as (BuildingView & { at?: [number, number] }) | undefined;
       if (gone?.at) this.city.mark(gone.at[0], gone.at[1]);
-      this.settleDirty = true; this.buildings.get(id)?.sprite.destroy(); this.buildings.get(id)?.bar.destroy(); this.buildings.delete(id); };
+      this.settleDirty = true; this.buildings.get(id)?.destroy(); this.buildings.delete(id); };
     // A resource inside a settlement changed (felled, mined, regrown): its civilized form follows.
     m.onNodeChange = (n) => { this.syncNode(n); if (this.groundMap.has(key(n.x, n.y))) this.settleDirty = true; };
     // Forgotten with its chunk: drop the sprite too (they used to pile up as you panned).
@@ -479,8 +482,8 @@ export class Scene {
     for (const b of m.buildings.values()) {
       const off = b.x + b.size < view.x0 || b.x > view.x1 || b.y + b.size < view.y0 || b.y > view.y1;
       const v = this.buildings.get(b.id);
-      if (off && v) { v.sprite.visible = false; v.bar.visible = false; continue; }
-      if (v) { v.sprite.visible = true; v.bar.visible = true; }
+      if (off && v) { v.sprite.visible = false; v.bar.visible = false; for (const q of v.posts) q.visible = false; continue; }
+      if (v) { v.sprite.visible = true; v.bar.visible = true; for (const q of v.posts) q.visible = true; }
       this.drawBuilding(b, zsort, counter, now);
     }
     // Nodes (performance.md §7): only what's on screen is on the stage, so depth
@@ -578,6 +581,35 @@ export class Scene {
     v.sprite.tint = 0xffffff;
   }
 
+  /**
+   * An Arena (citybuilding.md §10): its board is painted into the ground (the terrain's plaza
+   * layer); here, a stone post flying the owner's pennant at each corner, upright as the camera turns.
+   */
+  private drawArena(b: Building, v: BuildingView, color: string, zsort: (x: number, y: number) => number, counter: number) {
+    v.sprite.visible = false;
+    v.bar.clear();
+    const tex = arenaPostTexture(color);
+    if (!v.posts.length) for (let i = 0; i < 4; i++) { const p = new Sprite(); p.anchor.set(0.5, 0.9); this.objects.addChild(p); v.posts.push(p); }
+    const corners: [number, number][] = [[b.x + 0.25, b.y + 0.25], [b.x + 7.75, b.y + 0.25], [b.x + 7.75, b.y + 7.75], [b.x + 0.25, b.y + 7.75]];
+    corners.forEach(([x, y], i) => {
+      const p = v.posts[i];
+      if (tex) p.texture = tex;
+      p.width = S * 1.15; p.height = S * 1.15;
+      p.position.set(x * S, y * S);
+      p.rotation = counter;
+      p.zIndex = zsort(x * S, y * S);
+      p.alpha = b.built < 1 ? 0.45 + 0.5 * b.built : 1;
+    });
+    if (b.built < 1 && b.owner === this.mirror.me && this.cam.zoom > 0.4) {
+      const bw = S * 4, bh = 7, th = this.theta, cx = (b.x + 4) * S, cy = (b.y + 4) * S;
+      v.bar.rect(-bw / 2, 0, bw, bh).fill({ color: 0x23211f, alpha: 0.7 });
+      v.bar.rect(-bw / 2 + 1.5, 1.5, (bw - 3) * b.built, bh - 3).fill({ color: 0xe3b23c });
+      v.bar.position.set(cx - Math.sin(th) * S * 4.6, cy - Math.cos(th) * S * 4.6);
+      v.bar.rotation = counter;
+      v.bar.zIndex = zsort(cx, cy) + 0.5;
+    }
+  }
+
   private drawBuilding(b: Building, zsort: (x: number, y: number) => number, counter: number, now: number) {
     let v = this.buildings.get(b.id);
     if (!v) {
@@ -589,6 +621,7 @@ export class Scene {
     (v as BuildingView & { at?: [number, number] }).at = [b.x, b.y];
     const color = this.colorOf(b.owner);
     if (isDecor(b.type)) { this.drawDecor(b, v, color, zsort, counter); return; }
+    if (b.type === 'arena') { this.drawArena(b, v, color, zsort, counter); return; }
     const civ = this.civOf(b.owner);
     const biome = b.type === 'altar' ? biomeAt(this.mirror.seed, b.x, b.y) : undefined;
     const k = b.camp ? `camp:${b.camp.art}:${b.camp.faction}` : `${b.type}:${color}:${civ ?? ''}:${biome ?? ''}`;
@@ -797,12 +830,13 @@ export class Scene {
     const mark = (k: number) => { const x = Math.round(k / 134217728), y = k - x * 134217728; touched.add(chunkKey(Math.floor(x / CHUNK), Math.floor(y / CHUNK))); };
     for (const [k, t] of next) if (this.groundMap.get(k) !== t) mark(k);
     for (const k of this.groundMap.keys()) if (!next.has(k)) mark(k);
-    // A city's heart (citybuilding.md §9): the framed chessboard plaza, only near its centre.
-    const heart = new Set<number>();
-    for (const st of this.settlements) if (st.tier >= 4) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const hk = key(st.cx + dx, st.cy + dy); if (st.ground.has(hk)) heart.add(hk); }
+    // Arenas (citybuilding.md §10): a player's chessboard, laid where they chose, a1 dark at the
+    // south-west like the battle board (cities no longer get one on their own).
+    const heart = new Map<number, number>();
+    for (const b of m.buildings.values()) if (b.type === 'arena') for (let dy = 0; dy < 8; dy++) for (let dx = 0; dx < 8; dx++) heart.set(key(b.x + dx, b.y + dy), (dx + dy) % 2 ? 2 : 1);
     const retile = (k: number) => { mark(k); const x = Math.round(k / 134217728), y = k - x * 134217728; this.city.mark(x, y); };
-    for (const k of heart) if (!this.heart.has(k)) retile(k);
-    for (const k of this.heart) if (!heart.has(k)) retile(k);
+    for (const [k, v] of heart) if (this.heart.get(k) !== v) retile(k);
+    for (const k of this.heart.keys()) if (!heart.has(k)) retile(k);
     this.heart = heart;
     this.groundMap = next;
     for (const ck of touched) { const v = this.chunkViews.get(ck); if (v) v.dirty = true; }
@@ -926,7 +960,9 @@ export class Scene {
         if (wv && bv) g.moveTo((wv.x + 0.5) * S, (wv.y + 0.5) * S).lineTo((bv.x + 0.5) * S, (bv.y + 0.5) * S).stroke({ width: 4, color: 0xe0503a, alpha: 0.4 + 0.4 * pulse });
         continue;
       }
-      if (b.kind === 'practice' || (b.phase !== 'live' && !(b.phase === 'over' && b.fen))) continue;
+      // Practice is drawn only on an Arena (citybuilding.md §10), whose board is already in the ground.
+      if ((b.kind === 'practice' && b.arena == null) || (b.phase !== 'live' && !(b.phase === 'over' && b.fen))) continue;
+      const onArena = b.arena != null;
       // Board squares on the world grid, oriented by the attacker's approach.
       const [fx, fy] = [[0, -1], [1, 0], [0, 1], [-1, 0]][b.whiteFacing];
       const rx = -fy, ry = fx;
@@ -935,14 +971,16 @@ export class Scene {
       const [c1x, c1y] = sq(0, 0), [c2x, c2y] = sq(7, 7);
       const minx = Math.min(c1x, c2x), miny = Math.min(c1y, c2y);
       const fade = b.phase === 'over' ? 0.6 : 1;
-      g.roundRect((minx - 0.35) * S, (miny - 0.35) * S, 8.7 * S, 8.7 * S, 20).fill({ color: 0x3a2a1a, alpha: 0.85 * fade }).stroke({ width: 6, color: 0xe3b23c, alpha: 0.9 * fade });
-      for (let f = 0; f < 8; f++) for (let r = 0; r < 8; r++) {
-        const [x, y] = sq(f, r);
-        g.rect(x * S, y * S, S, S).fill({ color: (f + r) % 2 ? 0xeeeed2 : 0x769656, alpha: fade });
-      }
-      // The dome (Wizard101 bubble)
-      const ccx = (minx + 4) * S, ccy = (miny + 4) * S;
-      g.circle(ccx, ccy, S * 6.2).fill({ color: 0xbfe6ff, alpha: 0.07 + 0.03 * Math.sin(now / 700) }).stroke({ width: 4, color: 0xdff4ff, alpha: 0.35 });
+      if (!onArena) {
+        g.roundRect((minx - 0.35) * S, (miny - 0.35) * S, 8.7 * S, 8.7 * S, 20).fill({ color: 0x3a2a1a, alpha: 0.85 * fade }).stroke({ width: 6, color: 0xe3b23c, alpha: 0.9 * fade });
+        for (let f = 0; f < 8; f++) for (let r = 0; r < 8; r++) {
+          const [x, y] = sq(f, r);
+          g.rect(x * S, y * S, S, S).fill({ color: (f + r) % 2 ? 0xeeeed2 : 0x769656, alpha: fade });
+        }
+        // The dome (Wizard101 bubble)
+        const ccx = (minx + 4) * S, ccy = (miny + 4) * S;
+        g.circle(ccx, ccy, S * 6.2).fill({ color: 0xbfe6ff, alpha: 0.07 + 0.03 * Math.sin(now / 700) }).stroke({ width: 4, color: 0xdff4ff, alpha: 0.35 });
+      } else if (b.phase === 'over') continue;
       if (!b.fen) continue;
       const chess = new Chess(b.fen);
       for (let f = 0; f < 8; f++) for (let r = 0; r < 8; r++) {

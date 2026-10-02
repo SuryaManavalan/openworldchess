@@ -3,7 +3,7 @@
 // buttons that do the fiddly part for you (show me the crops, place the house, select the army).
 import { BUILDINGS, CHAPTERS, FEATS, LESSONS, SIDE_TEACH, OPENINGS, PIECE_NAME, REACH, cheb, type BuildingType, type PieceKind, type SideQuest, type Step } from '@owc/shared';
 import { biomeAt } from '@owc/worldgen';
-import { mirror } from '../net.ts';
+import { commands, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
 import { scene, input } from './GameView.tsx';
 import { buildingUrl, nodeUrl, pieceUrl } from '../game/textures.ts';
@@ -109,7 +109,25 @@ function helpForStep(s: Step, target: [number, number] | undefined, phone: boole
     };
   };
   switch (s.verb) {
-    case 'build': return building(s.type);
+    case 'build': return s.type !== 'arena' ? building(s.type) : {
+      title: 'Lay an Arena',
+      steps: [
+        `${tap} the hammer (bottom right) and choose Arena.`,
+        'It needs open ground 8 squares by 8, within 10 squares of a king: no trees or rocks in the way (crops are fine). The Chronicle marks a spot.',
+        `The outline turns green on a good spot. ${phone ? 'Tap Build' : 'Click to build'}. It costs ${BUILDINGS.arena.cost.tree} wood, from the trees within 10 squares.`,
+      ],
+      look: [{ img: buildingUrl('arena', color, mirror.self?.civ), label: 'Arena' }, { img: art('tree'), label: 'wood: trees' }],
+      actions: [...(target ? [{ label: 'Show me a spot', run: fly(target) }] : []), { label: 'Place an Arena for me', run: () => placeFor('arena') }],
+    };
+    case 'spar': {
+      const a = mirror.myBuildings().find((x) => x.type === 'arena' && x.built >= 1);
+      return {
+        title: 'Play a practice match in your Arena',
+        steps: [`${tap} your Arena, then Practice match.`, 'You play the AI with a full set, on the Arena itself. Play it to the end (win, lose or draw): nothing is lost.'],
+        look: [{ img: buildingUrl('arena', color, mirror.self?.civ), label: 'Arena' }],
+        actions: a ? [{ label: 'Show my Arena', run: fly([a.x + 4, a.y + 4]) }, { label: 'Start a practice match', run: () => { commands.practice(a.id); useUI.getState().set({ questHelp: null }); } }] : [],
+      };
+    }
     case 'raise': {
       const b = MAKER[s.kind], name = PIECE_NAME[s.kind].toLowerCase();
       const have = mirror.myBuildings().some((x) => x.type === b && x.built >= 1);

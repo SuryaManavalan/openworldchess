@@ -144,8 +144,8 @@ then 1–4 for the tabs).
 - **Bridges:** one deck along the crossing, planks across it, rails only on the two outer edges,
   stone piers where it meets the banks.
 - **Base ground:** settled ground is soft earth for every tier. Flagstones no longer flood towns.
-  A city keeps a small framed chessboard plaza at its heart (radius 2). Auto-decor (lamps,
-  benches, planters) thins out in a settlement once its owner has placed 8 or more decorations
+  Cities no longer get a chessboard on their own (2026-10): players asked to choose where it
+  goes, so it's the Arena (§9c). Auto-decor (lamps, benches, planters) thins out in a settlement once its owner has placed 8 or more decorations
   of their own there.
 
 ## 9b. Controls are always one tap away
@@ -157,6 +157,29 @@ The Controls guide (`Controls.tsx`) lists the controls for this device only: a p
 - on desktop, the **?** key, or the Controls link in the side panel.
 
 Lessons are written for touch; on a computer, "tap" reads "click".
+
+## 9c. The Arena
+
+A full chessboard you lay in your town: walnut and cream squares in a bronze frame, with a stone
+post at each corner flying your pennant (`art/assets/world.mjs`: `arena`, `arenaPost`). It
+replaced the board that cities used to get at their centre on their own: players liked the look
+but not having it placed for them, and a chessboard reads badly as a street style.
+
+- **The building.** 8×8 squares, the size of the battle board, 40 wood, built like any building
+  (a king within reach, open ground: crops can be built over). One to a town. It produces nothing;
+  pieces walk across it like a plaza. It can be moved or demolished, except during a match.
+- **Practice on it.** Tap it → **Practice match**: the usual practice game against the AI (full
+  sets, unrated, nothing lost), but placed on the Arena (`BattlePublic.arena`). Its squares are
+  sealed while the match lasts, and every client draws the game's pieces standing on the board, so
+  the town watches it play out. The battle menu's practice button goes to your nearest Arena; with
+  none, it still offers the old off-map practice and suggests building one.
+- **The quest.** Chapter 1 opens the Arena. Chapter 2 (*First Hunt*), after the raid, asks you to
+  lay one (the Chronicle marks open ground) and then play a practice match on it (`spar`: a match
+  on your own Arena, 10 plies or more). The rule is the `arena` lesson.
+- **Older empires.** Players already past chapter 1 have it open. Rulers of cities got a one-time
+  note in their "While you were away" report. The old boards could not be turned into Arenas in
+  place: on the live world (2026-10-02) no city had open 8×8 ground at its centre; the nearest was
+  4 to 12 squares out, so placing them for players would repeat the complaint.
 
 ## 10. What we don't copy from Tiny Glade
 

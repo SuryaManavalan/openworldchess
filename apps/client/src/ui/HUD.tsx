@@ -411,14 +411,14 @@ function BuildList() {
   const color = mirror.self?.color ?? '#888';
   const chron = mirror.self?.chronicle;
   // The Chronicle opens buildings chapter by chapter; the Wonder appears once it's earned (campaign.md §3).
-  const types: BuildingType[] = ['house', 'stable', 'temple', 'barracks', 'palace', 'altar', ...(chron?.buildings.includes('wonder') ? ['wonder' as const] : [])];
+  const types: BuildingType[] = ['house', 'stable', 'arena', 'temple', 'barracks', 'palace', 'altar', ...(chron?.buildings.includes('wonder') ? ['wonder' as const] : [])];
   // Altars open with temples (economy.md §8).
   const opensAt = (t: BuildingType) => CHAPTERS.find((c) => c.reward.buildings?.includes(t === 'altar' ? 'temple' : t))?.n;
   return (
     <div className="build-list">
       {types.map((t) => {
         const s = BUILDINGS[t];
-        const locked = !!chron && !chron.buildings.includes(t === 'altar' ? 'temple' : t);
+        const locked = !!chron && !chron.buildings.includes(t === 'altar' ? 'temple' : t) && !(t === 'arena' && chron.chapter > 1);
         if (locked) return (
           <div key={t} className="build-card locked" title="Opens as you progress through the Chronicle">
             <img src={buildingUrl(t, color, mirror.self?.civ)} alt="" />
@@ -434,7 +434,7 @@ function BuildList() {
           }}>
             <img src={buildingUrl(t, color, mirror.self?.civ)} alt="" />
             <span className="bname">{t[0].toUpperCase() + t.slice(1)}</span>
-            <span className="bmeta">{t === 'altar' ? 'Raised by a bishop, anywhere · holds up to 3 houses, stables or temples around it' : t === 'wonder' ? 'A monument the world can see · in your capital' : `${s.produces.map((k) => PIECE_NAME[k]).join(' / ')} · needs ${s.needs.map((n) => NODE_NAME[n]).join(' + ')} nearby`}</span>
+            <span className="bmeta">{t === 'arena' ? 'A full chessboard in your town, 8×8 · play practice matches on it' : t === 'altar' ? 'Raised by a bishop, anywhere · holds up to 3 houses, stables or temples around it' : t === 'wonder' ? 'A monument the world can see · in your capital' : `${s.produces.map((k) => PIECE_NAME[k]).join(' / ')} · needs ${s.needs.map((n) => NODE_NAME[n]).join(' + ')} nearby`}</span>
             <span className="bcost">{Object.entries(s.cost).map(([k, v]) => `${v} ${NODE_NAME[k]}`).join(', ') || 'Free: a bishop\'s time'}</span>
           </button>
         );
@@ -474,6 +474,21 @@ function Details() {
       {mine && <div className="row-actions"><button className="btn ghost small" onClick={() => { void commands.eraseDecor([[b.x, b.y]]); ui.set({ sheet: null, hint: null }); }}><Icon name="close" size={14} /> Remove</button></div>}
     </div>
   );
+  // An Arena (citybuilding.md §10): a board for practice matches, played where the town can watch.
+  if (b.type === 'arena') {
+    const match = [...mirror.battles.values()].find((x) => x.arena === b.id && x.phase !== 'over');
+    const owner = mirror.players.get(b.owner ?? '')?.name;
+    return (
+      <div className="details">
+        <h3>Arena</h3>
+        {b.built < 1 ? <><div className="meter"><span style={{ width: `${b.built * 100}%` }} /></div><p>Being laid: {Math.round(b.built * 100)}%</p></>
+          : <p>{mine ? 'Your town\'s chessboard. Play a practice match on it: the AI plays at your rating, and nothing is won or lost. Anyone looking at your town sees the game.' : `${owner ?? 'A ruler'}'s chessboard: practice matches are played on it.`}</p>}
+        {match && <button className="btn small" onClick={() => ui.set({ battleFocus: match.id, sheet: null })}><Icon name="swords" size={14} /> {match.white.playerId === mirror.me ? 'Back to your match' : 'Watch the match'}</button>}
+        {mine && !match && b.built >= 1 && <button className="btn gold" onClick={() => { commands.practice(b.id); ui.set({ sheet: null, hint: null }); }}><Icon name="swords" size={15} /> Practice match</button>}
+        {mine && !match && <MoveDemolish b={b} />}
+      </div>
+    );
+  }
   const why: Record<string, string> = { unanchored: b.type === 'altar' ? 'No bishop tending it: bring one within 2 squares, or it will fall to ruin' : 'No king (or tended altar) nearby for too long: production has paused (it only decays if none of your pieces are home)', 'no-node': `Nothing to draw from: needs ${spec.needs.map((n) => NODE_NAME[n]).join(' + ')} within 3 squares`, 'pop-cap': popFull(b.type as BuildingType), 'king-cap': `Your title lets you hold ${TITLES[mirror.self?.chronicle?.title ?? 0]?.kingCap ?? 2} kings, and you have them all: it crowns again when your title rises (or a king falls). Switch it to queens meanwhile.`, building: 'Under construction', paused: 'Paused by you' };
   return (
     <div className="details">
@@ -547,7 +562,16 @@ function BattleList() {
     <div>
       <h3>Battles</h3>
       {!list.length && <p className="muted">No battles right now.</p>}
-      <button className="btn ghost" style={{ width: '100%', marginBottom: 8 }} onClick={() => { commands.practice(); ui.set({ sheet: null }); }}><Icon name="pawn" size={16} /> Practice battle vs AI</button>
+      {(() => {
+        // Practice is played on your Arena when you have one (citybuilding.md §10), where the town can watch.
+        const arena = mirror.myBuildings().filter((x) => x.type === 'arena' && x.built >= 1).sort((a, c) => Math.hypot(a.x - (scene?.cam.x ?? 0), a.y - (scene?.cam.y ?? 0)) - Math.hypot(c.x - (scene?.cam.x ?? 0), c.y - (scene?.cam.y ?? 0)))[0];
+        return arena
+          ? <button className="btn ghost" style={{ width: '100%', marginBottom: 8 }} onClick={() => { scene?.flyTo(arena.x + 4, arena.y + 4, Math.max(scene.cam.zoom, 0.55)); commands.practice(arena.id); ui.set({ sheet: null }); }}><Icon name="pawn" size={16} /> Practice match in your Arena</button>
+          : <>
+              <button className="btn ghost" style={{ width: '100%', marginBottom: 4 }} onClick={() => { commands.practice(); ui.set({ sheet: null }); }}><Icon name="pawn" size={16} /> Practice battle vs AI</button>
+              <p className="muted small" style={{ marginTop: 0 }}>Build an Arena to play practice matches in your town, where everyone can watch.</p>
+            </>;
+      })()}
       {list.map((b) => (
         <button key={b.id} className="row-btn" onClick={() => { ui.set({ battleFocus: b.id, sheet: null }); scene?.centerOn(b.cx, b.cy); }}>
           <span className="chip" style={{ background: b.white.color }} /> {b.white.name} vs <span className="chip" style={{ background: b.black.color }} /> {b.black.name}

@@ -182,6 +182,18 @@ export const LESSONS: Record<string, Lesson> = {
     ],
     tips: ['Look for checks, captures and threats every move. Your clock matters: don\'t spend two minutes on move three.', 'Attack when the defender is away from home: a field battle has a short countdown and no town to defend.'],
   },
+  arena: {
+    title: 'The Arena',
+    text: 'An Arena is a full chessboard in your town. Tap it to play a practice match there, while the town watches.',
+    fine: [
+      `An Arena is 8 squares by 8, laid on open ground (clear trees and rock first; crops can be paved over). It costs ${BUILDINGS.arena.cost.tree} wood and needs a king within ${REACH} squares, like any building.`,
+      'Tap your Arena and choose Practice match: you play the AI with a full set, on the Arena itself. Anyone looking at your town sees the game played out on its squares.',
+      'Practice is free: nothing dies, nothing is won or lost, and it is unrated. The AI plays at your own rating.',
+      'Pieces walk across an Arena like a plaza; during a match they keep off it. You can move it or tear it down like any building.',
+      'Before you have an Arena, practice matches are played from the battle menu instead.',
+    ],
+    tips: ['Lay your Arena where your streets meet, so it reads as the town square.', 'Practise an opening a few times before you march on a rival: the clock is the same in a real battle.'],
+  },
   army: {
     title: 'Your army is who you bring',
     text: 'A side fights with the pieces near its king: at most one chess set.',

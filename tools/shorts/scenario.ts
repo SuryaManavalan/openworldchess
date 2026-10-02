@@ -33,7 +33,7 @@ import { mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Game, type PlayerRec } from '../../apps/server/src/game.ts';
 import { save } from '../../apps/server/src/persist.ts';
-import type { Building, BuildingType, Piece, PieceKind } from '../../packages/shared/src/index.ts';
+import { BUILDINGS, type Building, type BuildingType, type Piece, type PieceKind } from '../../packages/shared/src/index.ts';
 
 const spec = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const dir = resolve('out', spec.name);
@@ -106,8 +106,10 @@ for (const ps of spec.players) {
   // Buildings in a loose ring around the king, then pieces, then reserves further out.
   (ps.buildings ?? []).forEach((type: BuildingType, i: number) => {
     const ang = (i / (ps.buildings.length || 1)) * Math.PI * 2, rr = 5 + (i % 2) * 2;
-    const size = type === 'palace' || type === 'stable' || type === 'temple' || type === 'barracks' ? 2 : 1;
-    const at = w.nearestFree(Math.round(cx + Math.cos(ang) * rr), Math.round(cy + Math.sin(ang) * rr), 6, (x, y) => w.buildable(x, y) && w.buildable(x + size - 1, y + size - 1) && !w.nodeAt(x, y))!;
+    const size = BUILDINGS[type].size;
+    // Every square of the footprint open (an Arena is 8×8).
+    const open = (x: number, y: number) => { for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) if (!w.buildable(x + dx, y + dy) || w.nodeAt(x + dx, y + dy) || w.buildingIdAt(x + dx, y + dy) != null) return false; return true; };
+    const at = w.nearestFree(Math.round(cx + Math.cos(ang) * rr), Math.round(cy + Math.sin(ang) * rr), size > 2 ? 14 : 6, open)!;
     const b: Building = { id: nextB++, owner: p.id, type, x: at[0], y: at[1], size, hp: 100, built: 1, prod: 0 };
     w.addBuilding(b);
   });

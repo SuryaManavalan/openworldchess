@@ -187,7 +187,7 @@ export class Net {
       case 'battle.watch': s.watching.add(msg.battleId); break;
       case 'battle.unwatch': s.watching.delete(msg.battleId); break;
       case 'profile': { if (now - (this.renamedAt.get(p.id) ?? 0) < 600_000) { this.send(s, { t: 'err', msg: 'You can rename once every 10 minutes' }); break; } const n = msg.name.trim(); const bad = g.checkName(n, p); if (!bad) this.renamedAt.set(p.id, now); if (!bad) { p.name = n; this.broadcastPlayers(); this.sendMine(s); } else this.send(s, { t: 'err', msg: bad }); break; }
-      case 'practice': { const e = g.battles.practice(p.id); if (e) this.send(s, { t: 'err', msg: e }); break; }
+      case 'practice': { const e = g.battles.practice(p.id, msg.arena); if (e) this.send(s, { t: 'err', msg: e }); break; }
       case 'shop.checkout': {
         const rid = msg.rid;
         createCheckout(p, msg.pack).then((r) => { if ('url' in r) this.send(s, { t: 'shop.url', rid, url: r.url }); else this.send(s, { t: 'err', rid, msg: r.error }); });

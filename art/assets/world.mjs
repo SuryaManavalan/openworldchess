@@ -90,7 +90,48 @@ export function palace({ team = TEAMS.red } = {}) {
     part(rr(33, 36, 34, 4, 1), team, null);
 }
 
-export const BUILDINGS = { palace, house, stable, temple, barracks };
+// The Arena (citybuilding.md §10): a full chessboard laid in the town, walnut and cream in a
+// bronze frame, with a stone post at each corner flying the owner's pennant. In the world the
+// board is painted into the ground and the posts stand at its corners (arenaPost); this is the
+// whole thing, seen from the front, for menus and the Chronicle.
+const WALNUT = '#b58863', CREAM = '#efe0c0', BRONZE = '#c9a15a', BRONZE_DARK = '#7a5a32';
+
+/** A corner post: a stone pillar with a bronze cap, a brazier bowl and the owner's pennant. */
+export function arenaPost({ team = TEAMS.red } = {}) {
+  return groundShadow(16, 90) +
+    part('M38 89 V84 H62 V89 Z', MAT.stoneShade, null) +
+    part('M41 84 V40 H59 V84 Z', MAT.stone, MAT.stoneShade, { shadeX: 54 }) +
+    line('M41 58 H59 M41 70 H59', 1.6) +
+    part('M36 40 V33 H64 V40 Z', BRONZE, BRONZE_DARK, { shadeX: 56 }) +
+    part('M40 33 Q50 24 60 33 Z', BRONZE_DARK, null) +
+    line('M50 26 V6', 2.6) +
+    part('M50 7 L74 12 L66 17 L74 22 L50 26 Z', team, null);
+}
+
+export function arena({ team = TEAMS.red } = {}) {
+  // The board in gentle perspective: 6 rows narrowing toward the back.
+  const rows = 6, cols = 6, yB = 84, yT = 48, wB = 72, wT = 52;
+  const at = (fx, fy) => { const y = yB + (yT - yB) * fy, w = wB + (wT - wB) * fy; return [50 - w / 2 + w * fx, y]; };
+  let sq = '';
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const [ax, ay] = at(c / cols, r / rows), [bx] = at((c + 1) / cols, r / rows), [cx, cy] = at((c + 1) / cols, (r + 1) / rows), [dx] = at(c / cols, (r + 1) / rows);
+    sq += `<path d="M${ax.toFixed(2)} ${ay.toFixed(2)} L${bx.toFixed(2)} ${ay.toFixed(2)} L${cx.toFixed(2)} ${cy.toFixed(2)} L${dx.toFixed(2)} ${cy.toFixed(2)} Z" fill="${(r + c) % 2 ? CREAM : WALNUT}"/>`;
+  }
+  const [l0x, l0y] = at(0, 0), [r0x] = at(1, 0), [l1x, l1y] = at(0, 1), [r1x] = at(1, 1);
+  const frame = `M${l0x - 3} ${l0y + 3} L${r0x + 3} ${l0y + 3} L${r1x + 2} ${l1y - 2} L${l1x - 2} ${l1y - 2} Z`;
+  const post = (x, y, s) => `<g transform="translate(${x - 50 * s} ${y - 89 * s}) scale(${s})">${arenaPost({ team })}</g>`;
+  return groundShadow(46, 88) +
+    part(frame, BRONZE, BRONZE_DARK, { shadeX: 70 }) +
+    sq +
+    `<path d="M${l0x} ${l0y} L${r0x} ${l0y} L${r1x} ${l1y} L${l1x} ${l1y} Z" fill="none" stroke="${BRONZE_DARK}" stroke-width="2"/>` +
+    // A pair of pieces mid-game, small.
+    part('M41 66 Q41 59 45 58 Q49 59 49 66 Z', '#f6efdf', null) + part(circ(45, 56, 3.2), '#f6efdf', null) +
+    part('M56 58 Q56 52 59 51 Q62 52 62 58 Z', '#4a3a2c', null) + part(circ(59, 49.5, 2.6), '#4a3a2c', null) +
+    post(l1x + 2, l1y + 1, 0.36) + post(r1x - 2, l1y + 1, 0.36) +
+    post(l0x + 2, l0y + 5, 0.44) + post(r0x - 2, l0y + 5, 0.44);
+}
+
+export const BUILDINGS = { palace, house, stable, temple, barracks, arena };
 
 // ---------- resources ----------
 

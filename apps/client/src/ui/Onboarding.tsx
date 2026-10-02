@@ -184,7 +184,7 @@ const STEPS: { id: string; text: (phone: boolean) => ReactNode }[] = [
   { id: 'select', text: (phone: boolean) => phone ? 'Double-tap your Emperor (gold crown) to select its group.' : 'Double-click your Emperor (gold crown) to select its group.' },
   { id: 'move', text: (phone: boolean) => phone ? 'Drag from your pieces to a square to march there.' : 'Right-click a square to march there.' },
   { id: 'house', text: () => <>Build a house <Icon name="hammer" size={15} /> next to wheat. It will produce pawns.</> },
-  { id: 'battle', text: () => <>Battles are chess. Try a practice battle from the <Icon name="swords" size={15} /> menu.</> },
+  { id: 'battle', text: () => <>Battles are chess. Try a practice battle from the <Icon name="swords" size={15} /> menu, or build an Arena and play in your town.</> },
 ];
 
 export function Guide() {

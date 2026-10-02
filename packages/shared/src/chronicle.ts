@@ -47,7 +47,9 @@ type StepGoal =
   /** Trees felled by your elephants' Clear land. */
   | { verb: 'clear'; count: number; line: string }
   /** Squares paved by your knights. */
-  | { verb: 'pave'; count: number; line: string };
+  | { verb: 'pave'; count: number; line: string }
+  /** Practice matches played to the end on your own Arena. */
+  | { verb: 'spar'; count: number; line: string };
 
 export interface Chapter {
   n: number;
@@ -76,7 +78,7 @@ export const CHAPTERS: Chapter[] = [
       { verb: 'raise', kind: 'P', count: 3, line: 'The house raises pawns on its own. Three pawns, and your people are a people.', teach: ['production', 'population', 'bubbles'] },
       { verb: 'scout', line: 'Smoke rises from the wilds nearby. Send a pawn to see who camps there (just look: the fight comes next).', teach: ['pieces', 'wilds'] },
     ],
-    reward: { title: 1, buildings: ['stable'] }, opens: 'Stables: knights, who leap in L-shapes',
+    reward: { title: 1, buildings: ['stable', 'arena'] }, opens: 'Stables: knights, who leap in L-shapes. And Arenas: a chessboard in your town',
   },
   {
     n: 2, act: 'Hearth', name: 'First Hunt', intro: 'The camp is young and hungry. Strike before it grows.',
@@ -84,6 +86,8 @@ export const CHAPTERS: Chapter[] = [
     steps: [
       { verb: 'raise', kind: 'N', count: 1, line: 'A knight rides where pawns cannot. Raise one in your stable.' , teach: ['army', 'titles'] },
       { verb: 'hunt', count: 1, raid: true, line: 'Raid the camp you found with your pawns and your knight. No king needed: a pawn commands. Win the game.', teach: ['raids', 'troops', 'battle', 'stakes'] },
+      { verb: 'build', type: 'arena', count: 1, line: 'Your people saw a war won on a chessboard, and want one of their own. Lay an Arena in your town: a full board, 8 squares by 8 (the Chronicle marks open ground).', teach: ['arena'] },
+      { verb: 'spar', count: 1, line: 'Tap your Arena and play a practice match on it, while the town looks on. Nothing is lost, win or lose.', teach: ['arena'] },
     ],
     reward: { pieces: ['N'] }, opens: 'Spoils: every camp you clear leaves a hoard behind',
   },

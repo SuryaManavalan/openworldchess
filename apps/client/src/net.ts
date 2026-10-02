@@ -80,7 +80,7 @@ export const commands = {
   draw(battleId: number) { conn.send({ t: 'battle.draw', battleId }); },
   cancelAttack(battleId: number) { conn.send({ t: 'order.cancelAttack', battleId }); },
   watch(battleId: number) { conn.send({ t: 'battle.watch', battleId }); },
-  practice() { conn.send({ t: 'practice' }); },
+  practice(arena?: number) { conn.send({ t: 'practice', ...(arena != null ? { arena } : {}) }); },
   emote(id: number, battleId?: number) { conn.send({ t: 'emote', id, battleId }); },
   // Shop (cosmetics.md): Crowns via Stripe, civilizations via Crowns.
   setCapital(buildingId: number) { return conn.request({ t: 'capital.set', buildingId }); },

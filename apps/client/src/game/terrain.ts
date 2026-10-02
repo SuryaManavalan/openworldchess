@@ -27,8 +27,8 @@ export interface ChunkPaint {
   biomes: Uint8Array;
   /** Settlement tier of a world square (0 = wild). */
   ground: (x: number, y: number) => number;
-  /** A city's heart: the chessboard plaza (citybuilding.md §9). */
-  heart?: (x: number, y: number) => boolean;
+  /** An Arena's board (citybuilding.md §10): 0 none, 1 a light square, 2 a dark one. */
+  heart?: (x: number, y: number) => number;
   /** Walking traffic at a world square. */
   traffic: (x: number, y: number) => number;
 }
@@ -274,7 +274,7 @@ function paintPaths(g: CanvasRenderingContext2D, seed: number, x0: number, y0: n
 /**
  * Settlement ground (visuals.md §10), painted over the whole settled area at once, as one
  * soft shape with rounded corners and a trodden rim instead of square-cut blocks. Villages
- * are packed earth; towns lay flagstones in staggered courses; a city's heart is a
+ * are packed earth; towns lay flagstones in staggered courses; an Arena is a
  * walnut-and-cream chessboard in a bronze frame. The board's checker always shows through.
  */
 function paintPlazas(g: CanvasRenderingContext2D, seed: number, x0: number, y0: number, d: ChunkPaint) {
@@ -301,17 +301,20 @@ function paintPlazas(g: CanvasRenderingContext2D, seed: number, x0: number, y0: 
     const r = hash01(seed, x0 + x, y0 + y, 341);
     if (r < 0.35) { g.beginPath(); g.ellipse(x * TPX + 3 + r * 26, y * TPX + 4 + (r * 97 % 8), 1.5, 1, r * 4, 0, Math.PI * 2); g.fill(); }
   }
-  if (any < 4 || !d.heart) return;
-  // A city's heart (citybuilding.md §9): the chessboard, walnut and cream, in a bronze frame,
-  // only around its centre. Everything else is calm earth, for players to pave as they like.
-  const city = (x: number, y: number) => tier(x, y) >= 4 && d.heart!(x0 + x, y0 + y);
+  if (!d.heart) return;
+  // An Arena (citybuilding.md §10): the chessboard, walnut and cream, in a bronze frame. Its own
+  // colouring (a1 dark, like the battle board), not the world's checker.
+  const sqAt = (x: number, y: number) => d.heart!(x0 + x, y0 + y);
+  const city = (x: number, y: number) => sqAt(x, y) > 0;
   const cSegs = outline(city, seed, x0, y0, F, T, 0);
   for (let y = F; y < T; y++) for (let x = F; x < T; x++) {
-    if (!city(x, y)) continue;
-    g.fillStyle = dark(x, y) ? '#b58863' : '#efe0c0';
+    const v = sqAt(x, y);
+    if (!v) continue;
+    const dk = v === 2;
+    g.fillStyle = dk ? '#b58863' : '#efe0c0';
     g.fillRect(x * TPX, y * TPX, TPX, TPX);
     const r = hash01(seed, x0 + x, y0 + y, 344);
-    g.fillStyle = dark(x, y) ? 'rgba(90,56,30,0.16)' : 'rgba(255,255,255,0.35)';
+    g.fillStyle = dk ? 'rgba(90,56,30,0.16)' : 'rgba(255,255,255,0.35)';
     g.fillRect(x * TPX + 2, y * TPX + 3 + r * 8, TPX - 4, 1);
   }
   g.lineCap = 'round';
