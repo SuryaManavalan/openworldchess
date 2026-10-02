@@ -60,6 +60,7 @@ A faction also has a **minimum area rating** (the Orc Warhost needs 900, the Dra
 ## 4. Behavior
 
 - **Roaming:** now and then the whole camp wanders out as a group (herds and hordes farther, lairs close) and always comes home. Idle creatures shuffle around their king between walks.
+- **Defending home** (as of 2026-10-01): attack a camp (its structure, its king, or any of its creatures) and its whole band is back at the camp at once, however far it had roamed, and stays home for 5 minutes instead of wandering off. You march to the camp and fight there; a band out of sight never makes a camp (or a quest to beat it) unwinnable.
 - **Raiding:** hordes and lairs attack only **online** players' **field troops**. They never attack an Emperor, a king standing in its own settlement, or a shielded new player, and each camp attacks at most once every 4 minutes. Nobody is ambushed while away, and no city is ever sacked by goblins.
 - **Server load:** the server's engines play the camps, so at most 6 battles involving camps run at once ("The wilds are restless"), and camps think for at most 0.35s a move.
 

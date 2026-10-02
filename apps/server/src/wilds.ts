@@ -46,6 +46,8 @@ const GROW_MS = 4 * 60_000;
 /** A scattered camp's site stays empty this long. */
 const CLEARED_MS = 3 * 60 * 60_000;
 const ATTACK_EVERY_MS = 4 * 60_000;
+/** A camp someone is marching on stays home (no roaming) this long. */
+const HOLD_MS = 5 * 60_000;
 /** Sleeping camps cost almost nothing; this bounds memory. */
 const MAX_CAMPS = 2000;
 
@@ -71,6 +73,8 @@ export interface CampInfo {
   lastViewed?: number;
   /** Raised by the Chronicle for this player's hunt: stays young (it never grows). */
   quarryFor?: string;
+  /** Someone is marching on it: it stays home until then. */
+  holdUntil?: number;
 }
 
 export interface Site { faction: Faction; x: number; y: number; cell: string; biome: string; roll: number; /** The land's rating when the faction was chosen. */ elo?: number }
@@ -454,7 +458,7 @@ export class Wilds {
   private roam(c: PlayerRec, now: number) {
     const g = this.game, info = c.wild!, f = FACTIONS[info.faction];
     const k = this.king(c);
-    if (!k || k.state !== 'idle' || k.groupId || this.inBattle(c.id)) return;
+    if (!k || k.state !== 'idle' || k.groupId || this.inBattle(c.id) || (info.holdUntil ?? 0) > now) return;
     const home: [number, number] = [info.x + 1, info.y + 3];
     const away = cheb(k.x, k.y, home[0], home[1]);
     const seed = this.w.seed, t = Math.floor(now / 5000);
@@ -469,6 +473,26 @@ export class Wilds {
     if (this.roamBudget-- <= 0) return;
     const ids = this.piecesOf(c).filter((p) => p.state === 'idle').map((p) => p.id);
     g.orderMove(c.id, ids, to);
+  }
+
+  /**
+   * Someone is marching on the camp (wilds.md §4): its band is home at once to defend it,
+   * however far it had roamed, and stays there for a while. A camp you set out to fight is
+   * always there when you arrive.
+   */
+  recall(c: PlayerRec) {
+    const g = this.game, w = this.w, info = c.wild!;
+    if (this.inBattle(c.id)) return;
+    info.holdUntil = g.now + HOLD_MS;
+    const home: [number, number] = [info.x + 1, info.y + 3];
+    // The king first, so it stands nearest the camp.
+    const band = [...w.pieces.values()].filter((p) => p.owner === c.id && p.state !== 'battle').sort((a, b) => Number(b.kind === 'K') - Number(a.kind === 'K'));
+    for (const p of band) {
+      if (p.groupId) g.leaveGroup(p);
+      if (cheb(p.x, p.y, home[0], home[1]) <= 4) continue;
+      const at = w.nearestFree(home[0], home[1], 8, (x, y) => distToRect(x, y, info.x, info.y, 2) > 0);
+      if (at) w.movePiece(p, at[0], at[1]);
+    }
   }
 
   /** Hordes and lairs attack online players' troops that come close. */

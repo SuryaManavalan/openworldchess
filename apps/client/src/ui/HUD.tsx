@@ -690,8 +690,11 @@ function AttackConfirm() {
   const ui = useUI();
   const a = ui.pendingAttack!;
   const mine = a.pieceIds.map((id) => mirror.pieces.get(id)).filter(Boolean) as Piece[];
-  const target = mirror.pieces.get(a.targetKingId);
-  const theirs = target ? [...mirror.pieces.values()].filter((p) => p.owner === target.owner && cheb(p.x, p.y, target.x, target.y) <= REACH) : [];
+  const target = a.targetKingId != null ? mirror.pieces.get(a.targetKingId) : undefined;
+  const camp = a.targetBuildingId != null ? mirror.buildings.get(a.targetBuildingId) : undefined;
+  // A camp's band is counted wherever it is: it runs home to defend.
+  const theirs = target ? [...mirror.pieces.values()].filter((p) => p.owner === target.owner && (camp || cheb(p.x, p.y, target.x, target.y) <= REACH)) : camp ? [...mirror.pieces.values()].filter((p) => p.owner === camp.owner) : [];
+  const at: [number, number] | null = camp ? [camp.x + 1, camp.y + 1] : target ? [target.x, target.y] : null;
   // What each side could actually field: one legal chess set.
   const val = (ps: Piece[]) => setWorth(ps.map((p) => p.kind));
   return (
@@ -700,10 +703,11 @@ function AttackConfirm() {
         <SheetGrab onClose={() => ui.set({ pendingAttack: null })} />
         <h3>Attack {a.name}?</h3>
         {a.kingless && <p>Their troop has no king: one of its pawns will command it, as its king for this battle.</p>}
+        {camp && <p>Wherever its band has wandered, it runs home to defend the camp.</p>}
         <p>{a.raid ? 'A raid: one of your pawns leads as the king for this battle only. If you lose, only that pawn falls; the rest walk home.' : `${a.siege ? 'A siege: they get 60 seconds to prepare.' : 'A field battle: 15 seconds until it starts.'} Both sides fight with at most one chess set. If your king falls, the pieces with it are lost.`}</p>
         <div className="versus"><div><b>You</b><span>{mine.length} pieces · material {val(mine)}</span></div><div className="vs">vs</div><div><b>{a.name}</b><span>~{theirs.length} pieces seen · material {val(theirs)}</span></div></div>
         <div className="row-actions">
-          <button className="btn danger" onClick={() => { commands.attack(a.pieceIds, a.targetKingId); if (scene && target) scene.moveTargets.set('attack:' + a.targetKingId, { to: [target.x, target.y], ids: a.pieceIds, attack: true, t0: performance.now() }); ui.set({ pendingAttack: null }); }}><Icon name="swords" size={17} /> Attack</button>
+          <button className="btn danger" onClick={() => { commands.attack(a.pieceIds, a.targetKingId, a.targetBuildingId); if (scene && at) scene.moveTargets.set('attack:' + (a.targetKingId ?? 'camp' + a.targetBuildingId), { to: at, ids: a.pieceIds, attack: true, t0: performance.now() }); ui.set({ pendingAttack: null }); }}><Icon name="swords" size={17} /> Attack</button>
           <button className="btn ghost" onClick={() => ui.set({ pendingAttack: null })}>Not now</button>
         </div>
       </div>

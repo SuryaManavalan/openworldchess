@@ -500,10 +500,13 @@ export class Game {
     if (stopped.length) { const lead = stopped.find((p) => p.kind === 'K') ?? stopped[0]; this.troops.assign(player, stopped, [lead.x, lead.y]); }
   }
 
-  orderAttack(player: string, ids: number[], targetId: number): string | null {
-    const target = this.defenderOf(this.world.pieces.get(targetId));
+  /** `buildingId`: a camp attacked by its home (wilds.md §4); its king answers, wherever it is. */
+  orderAttack(player: string, ids: number[], targetId?: number, buildingId?: number): string | null {
+    const home = buildingId != null ? this.world.buildings.get(buildingId) : undefined;
+    const camp = home?.type === 'camp' ? this.wilds.campOf(home.owner) : undefined;
+    const clicked = targetId != null ? this.world.pieces.get(targetId) : camp ? this.wilds.king(camp) : undefined;
+    const target = this.defenderOf(clicked);
     // Pilgrims travel under the peace of the road (citylife.md §4).
-    const clicked = this.world.pieces.get(targetId);
     if (target && (this.troops.pilgrim(target.owner, target.id) || (clicked && this.troops.pilgrim(clicked.owner, clicked.id)))) return 'Pilgrims travel under the peace of the road: they can\'t be attacked';
     if (!target || !target.owner || target.owner === player) return 'Pick an enemy king or troop';
     const pieces = this.orderable(player, ids);
@@ -525,6 +528,9 @@ export class Game {
     // Attacking an empire ends your own spawn shield (progression.md §4); raiding camps doesn't.
     const me = this.players.get(player);
     if (me && !raid) me.shieldUntil = 0;
+    // A camp's band runs home to defend it, however far it had roamed.
+    const wild = this.wilds.campOf(target.owner);
+    if (wild) this.wilds.recall(wild);
     // Already in range? Engage now. Otherwise march there.
     if (this.engaged(king, target)) return this.battles.engage(king, target);
     return this.orderMove(player, pieces.map((p) => p.id), [target.x, target.y], target.id, undefined, raid ? king.id : undefined, true);
@@ -541,7 +547,9 @@ export class Game {
     const near = this.world.piecesNear(p.x, p.y, REACH).filter((q) => q.owner === p.owner && q.state !== 'battle');
     const king = near.filter((q) => q.kind === 'K').sort((a, b) => cheb(a.x, a.y, p.x, p.y) - cheb(b.x, b.y, p.x, p.y))[0];
     if (king) return king;
-    if (this.wilds.campOf(p.owner)) return undefined; // a camp is always answered by its king
+    // A camp is always answered by its king, wherever it has wandered.
+    const camp = this.wilds.campOf(p.owner);
+    if (camp) return this.wilds.king(camp);
     const pawns = near.filter((q) => q.kind === 'P' && cheb(q.x, q.y, p.x, p.y) <= 3);
     return pawns.length ? pawns.reduce((a, b) => (cheb(a.x, a.y, p.x, p.y) <= cheb(b.x, b.y, p.x, p.y) ? a : b)) : p;
   }

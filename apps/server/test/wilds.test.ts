@@ -331,4 +331,30 @@ describe('wilds', () => {
     game.addPiece(p);
     expect(game.orderAttack(a.id, [p.id], bk.id)).toMatch(/needs a king/);
   });
+
+  it('a camp attacked at its home is defended there, however far its band had roamed (wilds.md §4)', () => {
+    for (const r of game.battles.recs.values()) if (r.pub.phase !== 'over') { r.pub.phase = 'over'; for (const k of r.sealed) game.world.sealed.delete(k); }
+    for (const p of game.world.pieces.values()) if (p.state === 'battle') { p.state = 'idle'; game.world.dropPiece(p, p.x, p.y); }
+    const hunter = join('CampHunter');
+    const camp = game.wilds.camps().find((c) => { const ck = game.wilds.king(c); return c.wild!.buildingId && ck && ck.state === 'idle' && !ck.groupId; })!;
+    const info = camp.wild!, home: [number, number] = [info.x + 1, info.y + 3];
+    const ck = game.wilds.king(camp)!;
+    ck.protectedUntil = 0; ck.cooldownUntil = 0;
+    // The whole band has wandered off, 40 squares away.
+    const band = [...game.world.pieces.values()].filter((p) => p.owner === camp.id);
+    for (const p of band) { const at = game.world.nearestFree(p.x + 40, p.y, 10)!; game.world.movePiece(p, at[0], at[1]); }
+    expect(cheb(ck.x, ck.y, home[0], home[1])).toBeGreaterThan(30);
+    // Three pawns at the camp, nobody home; they attack the camp itself.
+    const pawns = [0, 1, 2].map((i) => { const at = game.world.nearestFree(home[0] + 4, home[1] + i, 6)!; const p = { id: game.world.id(), owner: hunter.id, kind: 'P' as const, x: at[0], y: at[1], facing: 3 as const, state: 'idle' as const }; game.addPiece(p); return p; });
+    expect(game.orderAttack(hunter.id, pawns.map((p) => p.id), undefined, info.buildingId)).toBeNull();
+    // The band ran home to defend it.
+    for (const p of band) expect(cheb(p.x, p.y, home[0], home[1])).toBeLessThanOrEqual(8);
+    for (let i = 0; i < 6 && ![...game.battles.recs.values()].some((r) => r.white.player === hunter.id); i++) tick(600);
+    const rec = [...game.battles.recs.values()].find((r) => r.white.player === hunter.id)!;
+    expect(rec).toBeTruthy();
+    expect(rec.black.kingId).toBe(ck.id);
+    // It stays home rather than wandering off again.
+    expect(info.holdUntil).toBeGreaterThan(game.now);
+    game.battles.resign(hunter.id, rec.pub.id);
+  });
 });

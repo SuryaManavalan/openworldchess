@@ -45,7 +45,7 @@ interface UIState {
   alerts: AlertItem[];
   toasts: Toast[];
   battleFocus: number | null;
-  pendingAttack: { pieceIds: number[]; targetKingId: number; name: string; siege: boolean; /** No king: a pawn commands (battle.md §9). */ raid?: boolean; /** Their troop has no king: one of its pawns will defend as commander. */ kingless?: boolean } | null;
+  pendingAttack: { pieceIds: number[]; targetKingId?: number; /** A camp, by its home: its band runs back to defend it (wilds.md §4). */ targetBuildingId?: number; name: string; siege: boolean; /** No king: a pawn commands (battle.md §9). */ raid?: boolean; /** Their troop has no king: one of its pawns will defend as commander. */ kingless?: boolean } | null;
   /** A finished chapter being celebrated (campaign.md §5.5). */
   ceremony: { n: number; name: string; opens: string; title?: string; coronation?: boolean } | null;
   /** A civilization to scroll to and highlight when the shop opens. */

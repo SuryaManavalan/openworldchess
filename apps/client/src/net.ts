@@ -61,8 +61,9 @@ export const commands = {
   },
   haul(pieceIds: number[], from: [number, number], to: [number, number]) { return conn.request({ t: 'order.haul', pieceIds, from, to }); },
   stop(pieceIds: number[]) { conn.send({ t: 'order.stop', pieceIds }); },
-  async attack(pieceIds: number[], targetKingId: number) {
-    const err = await conn.request({ t: 'order.attack', pieceIds, targetKingId });
+  /** A camp can be named by its home instead (wilds.md §4): its king answers, wherever it is. */
+  async attack(pieceIds: number[], targetKingId?: number, targetBuildingId?: number) {
+    const err = await conn.request({ t: 'order.attack', pieceIds, targetKingId, targetBuildingId });
     if (err) useUI.getState().toast(err, 'error');
     return err;
   },

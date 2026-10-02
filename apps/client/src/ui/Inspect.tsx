@@ -48,10 +48,14 @@ export function Inspect() {
   const band = king ? [...mirror.pieces.values()].filter((q) => q.owner === owner && cheb(q.x, q.y, king.x, king.y) <= REACH) : [];
   const counts = (['Q', 'R', 'B', 'N', 'P'] as PieceKind[]).map((k) => [k, band.filter((q) => q.kind === k).length] as const).filter(([, n]) => n);
   const myKing = ui.selection.map((id) => mirror.pieces.get(id)).find((q) => q?.kind === 'K');
+  // A camp is fought at its home: its band runs back to defend it (wilds.md §4).
+  const camp = b?.camp ? b : faction && owner ? [...mirror.buildings.values()].find((q) => q.owner === owner && q.type === 'camp') : undefined;
+  // Without a king, a pawn leads a raid on the wilds (battle.md §9).
+  const raid = !myKing && ui.selection.some((id) => mirror.pieces.get(id)?.kind === 'P');
   const attack = () => {
-    if (!king) return;
+    if (!king && !camp) return;
     close();
-    ui.set({ pendingAttack: { pieceIds: ui.selection, targetKingId: king.id, name: pl?.name ?? faction?.name ?? 'enemy', siege: false } });
+    ui.set({ pendingAttack: { pieceIds: ui.selection, targetKingId: king?.id, targetBuildingId: camp?.id, name: pl?.name ?? faction?.name ?? 'enemy', siege: false, raid: raid || undefined } });
   };
   return (
     <div className="inspect" onClick={(e) => e.stopPropagation()}>
@@ -81,7 +85,7 @@ export function Inspect() {
             </div>
           )}
           <p className="note">Beat its king in battle to scatter the camp and clear the land. Creatures never join your side.</p>
-          {myKing && king && <button className="btn danger" onClick={attack}><Icon name="swords" size={16} /> Challenge the {faction.roles.K}</button>}
+          {(myKing || raid) && (king || camp) && <button className="btn danger" onClick={attack}><Icon name="swords" size={16} /> Challenge the {faction.roles.K}</button>}
         </>
       )}
     </div>

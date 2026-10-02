@@ -16,7 +16,7 @@ export const ClientMsg = z.discriminatedUnion('t', [
   // Works (movement.md §9): knights pave a road to a square; elephants clear an area.
   z.object({ t: z.literal('order.pave'), rid: z.number().optional(), pieceIds: ids, to: xy }),
   z.object({ t: z.literal('order.clear'), rid: z.number().optional(), pieceIds: ids, a: xy, b: xy, hard: z.boolean() }),
-  z.object({ t: z.literal('order.attack'), rid: z.number().optional(), pieceIds: ids, targetKingId: z.number().int() }),
+  z.object({ t: z.literal('order.attack'), rid: z.number().optional(), pieceIds: ids, targetKingId: z.number().int().optional(), /** A camp, by its home (wilds.md §4). */ targetBuildingId: z.number().int().optional() }),
   z.object({ t: z.literal('order.cancelAttack'), battleId: z.number().int() }),
   z.object({ t: z.literal('build'), rid: z.number().optional(), building: z.enum(['palace', 'house', 'stable', 'temple', 'barracks', 'wonder', 'altar', 'bridge', 'wall', 'fence', 'hedge', 'flowerbed', 'lamp', 'bench', 'banner', 'planter', 'well', 'stall', 'statue', 'fountain', 'tavern']), at: xy }),
   // City building (citybuilding.md): move, demolish, paint streets, erase decor, plant.

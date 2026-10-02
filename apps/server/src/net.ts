@@ -168,7 +168,7 @@ export class Net {
       case 'order.haul': reply(msg.rid, g.works.haul(p.id, msg.pieceIds, msg.from, msg.to)); break;
       case 'order.clear': reply(msg.rid, g.works.clear(p.id, msg.pieceIds, msg.a, msg.b, msg.hard)); break;
       case 'order.stop': g.orderStop(p.id, msg.pieceIds); break;
-      case 'order.attack': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderAttack(p.id, msg.pieceIds, msg.targetKingId)); break;
+      case 'order.attack': if (!this.spendPath(s, now)) { reply(msg.rid, 'Too many orders at once'); break; } reply(msg.rid, g.orderAttack(p.id, msg.pieceIds, msg.targetKingId, msg.targetBuildingId)); break;
       case 'order.cancelAttack': g.battles.cancel(p.id, msg.battleId); break;
       case 'build': reply(msg.rid, g.build(p.id, msg.building, msg.at)); break;
       case 'building.move': reply(msg.rid, g.city.move(p.id, msg.buildingId, msg.at)); break;

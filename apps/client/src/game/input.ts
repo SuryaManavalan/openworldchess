@@ -488,6 +488,9 @@ export class Input {
       // a king can still be attacked: the server names one of its pawns commander (battle.md §9).
       const inReach = kings[0] && cheb(kings[0].x, kings[0].y, ref.x, ref.y) <= REACH ? kings[0] : undefined;
       const wild = !!mirror.players.get(enemyOwner)?.wild;
+      // A camp is fought at its home, wherever its band has roamed: they run back to defend it (wilds.md §4).
+      const camp = wild ? [...mirror.buildings.values()].find((q) => q.owner === enemyOwner && q.type === 'camp') : undefined;
+      if (camp) { this.attack(sel, target?.kind === 'K' ? target : kings[0], enemyOwner, camp.id); return; }
       // A building held without a king (an altar's, economy.md §8): the pieces tending it answer.
       const keeper = !target && b && !inReach && !wild ? [...mirror.pieces.values()].filter((p) => p.owner === enemyOwner && p.state !== 'battle' && cheb(p.x, p.y, b.x, b.y) <= 6).sort((a, c) => cheb(a.x, a.y, b.x, b.y) - cheb(c.x, c.y, b.x, b.y))[0] : undefined;
       const king = target?.kind === 'K' ? target : inReach ?? keeper ?? (target && !wild ? target : kings[0]);
@@ -507,14 +510,14 @@ export class Input {
   }
 
   /** Challenge an enemy king: a confirm sheet first (ux.md §3). Raiding the wilds needs no king (battle.md §9): a pawn leads as commander. */
-  private attack(sel: number[], king: Piece, enemyOwner: string) {
+  private attack(sel: number[], king: Piece | undefined, enemyOwner: string, campId?: number) {
     const ui = useUI.getState();
     const hasKing = sel.some((id) => mirror.pieces.get(id)?.kind === 'K');
     const wild = !!mirror.players.get(enemyOwner)?.wild;
     const raid = !hasKing && wild && sel.some((id) => mirror.pieces.get(id)?.kind === 'P');
     if (!hasKing && !raid) { ui.toast(wild ? 'A raid on the wilds needs a king or at least one pawn' : 'An attack on an empire needs a king in your selection', 'error'); audio.error(); return; }
-    const siege = [...mirror.buildings.values()].some((bl) => bl.owner === enemyOwner && cheb(bl.x, bl.y, king.x, king.y) <= REACH);
-    ui.set({ pendingAttack: { pieceIds: sel, targetKingId: king.id, name: mirror.players.get(enemyOwner)?.name ?? 'enemy', siege, raid, kingless: king.kind !== 'K' || undefined } });
+    const siege = !wild && !!king && [...mirror.buildings.values()].some((bl) => bl.owner === enemyOwner && cheb(bl.x, bl.y, king.x, king.y) <= REACH);
+    ui.set({ pendingAttack: { pieceIds: sel, targetKingId: king?.id, targetBuildingId: campId, name: mirror.players.get(enemyOwner)?.name ?? 'enemy', siege, raid, kingless: (king && king.kind !== 'K') || undefined } });
     audio.attack(); haptic(20);
   }
 
