@@ -2,6 +2,8 @@
 
 An online multiplayer open-world chess game. The world is a chessboard in every direction. You settle near resources, raise armies of pieces, and fight other rulers in real chess battles.
 
+**Play free in your browser: [openworldchess.com](https://openworldchess.com)** · [How to play](https://openworldchess.com/guide) · [The Wilds](https://openworldchess.com/wilds) · [Discord](https://discord.gg/B6kPjrakW)
+
 ```bash
 pnpm install
 pnpm dev        # game server + client (http://localhost:5173) + bots
