@@ -71,6 +71,8 @@ const server = createServer((req, res) => {
   if (req.url?.startsWith('/tiktok/') || req.url?.startsWith('/auth/tiktok/')) { handleTikTok(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end('tiktok error'); } }); return; }
   if (req.url?.startsWith('/auth/')) { handleAuth(game, req, res).catch(() => { res.statusCode = 500; res.end('auth error'); }); return; }
   let path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^(\.\.[/\\])+/, '');
+  // The public pages (TikTok's review wants a real homepage, not the game's name screen).
+  if (path === '/about' || path === '/privacy' || path === '/terms') path += '.html';
   if (path === '/' || !extname(path)) path = '/index.html';
   const file = join(STATIC, path);
   if (!file.startsWith(STATIC) || !existsSync(file) || !statSync(file).isFile()) { res.statusCode = 404; res.end('not found'); return; }

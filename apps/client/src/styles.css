@@ -773,3 +773,6 @@ a.btn { display: flex; align-items: center; justify-content: center; text-decora
 @keyframes tut-pulse { 0% { transform: scale(0.7); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
 .help-row { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (prefers-reduced-motion: reduce) { .tut-ring { animation: none; } .tut-dot { animation: none; } }
+.welcome-links { margin: 2px 0 0; font-size: 13px; color: var(--dim); text-align: center; }
+.welcome-links a { color: var(--dim); font-weight: 800; text-decoration: none; }
+.welcome-links a:hover { color: var(--ink); text-decoration: underline; }
