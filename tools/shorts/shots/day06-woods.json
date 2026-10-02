@@ -1,0 +1,21 @@
+{
+ "scenario": "out/day06/scenario.env.json",
+ "out": "out/day06/woods.mp4",
+ "seconds": 18,
+ "time": "noon",
+ "nolabels": true,
+ "offset": [10, 1],
+ "path": [
+  { "t": 0, "zoom": 0.85, "dx": 0, "dy": 0 },
+  { "t": 9, "zoom": 0.6, "dx": 1, "dy": 0 },
+  { "t": 18, "zoom": 0.5, "dx": 14, "dy": 0 }
+ ],
+ "ease": "inOut",
+ "before": [
+  { "act": "army.mjs#clear", "args": { "as": "Aurelian", "from": [-7, -6], "to": [7, 6] } },
+  { "wait": 800 }
+ ],
+ "events": [
+  { "t": 9.5, "act": "army.mjs#march", "args": { "as": "Aurelian", "to": [30, 0] } }
+ ]
+}

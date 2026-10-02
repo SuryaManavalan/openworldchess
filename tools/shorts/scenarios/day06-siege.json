@@ -1,0 +1,14 @@
+{
+ "name": "day06s",
+ "seed": 1,
+ "near": [300, 300],
+ "turnMs": 3000,
+ "countdownScale": 0.1,
+ "players": [
+  { "name": "Aurelian", "color": "#3d6fd1", "at": [-9, 0], "facing": 1,
+    "pieces": { "K": 1, "R": 2, "N": 1, "P": 4 } },
+  { "name": "Greyholt", "color": "#c8623f", "at": [5, 0], "facing": 3,
+    "buildings": ["house", "house", "stable", "house", "temple", "house"],
+    "pieces": { "K": 1, "P": 3, "N": 1 } }
+ ]
+}

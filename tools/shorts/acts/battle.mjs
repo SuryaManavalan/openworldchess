@@ -56,8 +56,11 @@ async function click(p, uci, white) {
   if (uci.length > 4) { await p.waitForTimeout(250); await p.locator('.promo button').first().click(); }
 }
 
-/** Wait for `as`'s battle to go live, open it, and play engine moves until the next move mates. */
-export async function playToMateIn1(ctx, { as, maxMs = 240_000 }) {
+/**
+ * Wait for `as`'s battle to go live, open it, and play engine moves until the next move mates.
+ * `by` (a piece letter, e.g. 'r'): stop as soon as that piece has a mate, so it delivers it.
+ */
+export async function playToMateIn1(ctx, { as, maxMs = 240_000, by }) {
   const p = await player(ctx, as);
   const until = Date.now() + maxMs;
   let b;
@@ -70,6 +73,11 @@ export async function playToMateIn1(ctx, { as, maxMs = 240_000 }) {
     if (!b || b.phase !== 'live') throw new Error('the battle ended before a mate in one');
     const mine = (b.fen.split(' ')[1] === 'w') === b.white;
     if (!mine) { await p.waitForTimeout(250); continue; }
+    if (by) {
+      const g = new Chess(b.fen);
+      const m = g.moves({ verbose: true }).find((x) => x.piece === by && (() => { const t = new Chess(b.fen); t.move(x.san); return t.isCheckmate(); })());
+      if (m) { ctx.mate = { uci: m.from + m.to + (m.promotion ?? ''), white: b.white }; return ctx.mate.uci; }
+    }
     const uci = await engine().bestMove(b.fen, 3200, 400);
     const test = new Chess(b.fen);
     test.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });

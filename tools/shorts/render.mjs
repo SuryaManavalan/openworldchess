@@ -79,7 +79,7 @@ const wav = await page.evaluate(() => window.renderAudio());
 writeFileSync(`${work}/score.wav`, Buffer.from(wav, 'base64'));
 
 // 3. ffmpeg: base video (or a color), overlay frames piped in, score + voices mixed.
-const args = ['-v', 'error', '-y'];
+const args = ['-v', process.env.FFV ?? 'error', '-y'];
 if (tl.base?.video) args.push('-ss', String(tl.base.start ?? 0), '-i', resolve(tl.base.video));
 else args.push('-f', 'lavfi', '-i', `color=c=${(tl.background ?? '#23211f').replace('#', '0x')}:s=${W}x${H}:r=${FPS}`);
 // (-reinit_filter 0: an overlay that turns fully opaque, like a full-screen board, changes the
@@ -100,10 +100,14 @@ args.push('-filter_complex', fc, '-map', '[v]', '-map', '[a]', '-t', String(tl.s
   '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', out);
 mkdirSync(dirname(out), { recursive: true });
 const ff = spawn('ffmpeg', args, { stdio: ['pipe', 'inherit', 'inherit'] });
+let ffDone = null;
+ff.on('exit', (code, sig) => { ffDone = { code, sig }; });
+ff.stdin.on('error', (e) => console.error('\nffmpeg input closed:', e.code, ffDone));
 const frames = Math.round(tl.seconds * FPS);
 for (let i = 0; i < frames; i++) {
   await page.evaluate((t) => window.draw(t), i / FPS);
   const png = await page.screenshot({ type: 'png', omitBackground: true });
+  if (ffDone) { console.error(`\nffmpeg exited early at frame ${i}:`, ffDone); process.exit(1); }
   if (!ff.stdin.write(png)) await new Promise((r) => ff.stdin.once('drain', r));
   if (i % 30 === 0) process.stdout.write(`\rframe ${i}/${frames}`);
 }

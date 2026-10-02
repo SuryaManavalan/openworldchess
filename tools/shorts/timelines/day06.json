@@ -1,0 +1,33 @@
+{
+ "out": "out/day06/day06.mp4",
+ "seconds": 25.5,
+ "base": { "video": "out/day06/base.mp4" },
+ "layers": [
+  { "type": "vignette", "t0": 0, "t1": 25.5, "strength": 0.5 },
+  { "type": "label", "t0": 0, "t1": 3.0, "text": "Sped up" },
+  { "type": "text", "t0": 0, "t1": 2.15, "lines": ["CHAT,"], "y": 300, "size": 80, "font": "bold", "anim": "slam", "silent": true },
+  { "type": "text", "t0": 0, "t1": 2.15, "lines": ["THE ROOK IS", "AN ELEPHANT."], "colors": ["#ece6da", "#e3b23c"], "y": 470, "size": 118, "anim": "slam", "glow": "rgba(227,178,60,0.35)" },
+  { "type": "text", "cue": "not a castle", "lines": ["Not a castle."], "y": 420, "size": 120, "anim": "pop" },
+  { "type": "text", "cue": "a war elephant", "lines": ["A WAR", "ELEPHANT."], "colors": ["#ece6da", "#e3b23c"], "y": 450, "size": 150, "anim": "slam", "glow": "rgba(227,178,60,0.35)" },
+  { "type": "text", "cue": "send them into the woods", "lines": ["Send them", "into the woods…"], "y": 420, "size": 110, "font": "bold", "anim": "pop" },
+  { "type": "text", "cue": "the forest just falls over", "lines": ["…the forest", "falls over."], "colors": ["#ece6da", "#e3b23c"], "y": 420, "size": 120, "anim": "pop" },
+  { "type": "text", "cue": "then they march", "lines": ["Then they march."], "y": 400, "size": 110, "anim": "pop" },
+  { "type": "text", "cue": "when the war becomes a game of chess", "lines": ["Every battle is", "real chess."], "colors": ["#ece6da", "#e3b23c"], "y": 420, "size": 110, "anim": "pop" },
+  { "type": "label", "t0": 12.0, "t1": 16.6, "text": "Staged battle", "y": 1400 },
+  { "type": "text", "cue": "two elephants", "lines": ["Two elephants. One ladder."], "y": 250, "size": 66, "font": "bold", "anim": "pop", "plate": true },
+  { "type": "flash", "t0": 14.4, "dur": 0.25 },
+  { "type": "sweep", "t0": 14.45, "t1": 15.2 },
+  { "type": "text", "cue": "checkmate", "lines": ["CHECKMATE."], "y": 330, "size": 140, "anim": "slam", "glow": "rgba(227,178,60,0.35)", "color": "#e3b23c" },
+  { "type": "text", "cue": "elephant diff", "lines": ["Elephant diff."], "y": 330, "size": 130, "anim": "slam" },
+  { "type": "board", "t0": 17.35, "t1": 21.2, "mode": "drift", "light": "#efe3c6", "dark": "#d6c095", "speed": 0.3 },
+  { "type": "image", "t0": 17.35, "t1": 21.2, "src": "out/day06/haathi.png", "x": 495, "y": 840, "w": 640, "anim": "float" },
+  { "type": "text", "cue": "in india", "t1": 21.2, "lines": ["In India, the rook", "is still called"], "y": 330, "size": 80, "font": "bold", "anim": "rise" },
+  { "type": "text", "cue": "haathi", "t1": 21.2, "lines": ["HAATHI."], "color": "#e3b23c", "y": 1230, "size": 170, "anim": "slam", "glow": "rgba(227,178,60,0.45)" },
+  { "type": "text", "cue": "the elephant", "t1": 21.2, "lines": ["“the elephant”"], "y": 1380, "size": 64, "font": "bold", "anim": "fade" },
+  { "type": "endcard", "cue": "open world chess", "sub": "Protect your elephants.", "url": "openworldchess.com", "cta": "Free in your browser", "dim": 0.6, "y": 560 }
+ ],
+ "audio": { "bpm": 100, "musicGain": 0.5, "sfxGain": 0.7 },
+ "voice": [
+  { "at": 0.15, "voice": "caster", "timed": true, "text": "Chat, the rook is an elephant. Not a castle. A war elephant. Send them into the woods, and the forest just falls over. Then they march. And when the war becomes a game of chess, two elephants walk the king to the edge of the board. Checkmate. Elephant diff. In India, the rook is still called haathi. The elephant. Open World Chess. Free in your browser." }
+ ]
+}

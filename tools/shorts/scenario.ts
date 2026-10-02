@@ -13,6 +13,8 @@
 //     "needs": { "wheat": 6, "tree": 12 }, // resources within 12 squares of the spot (for building on camera)
 //     "river": true,                    // a narrow river (2–5 wide) starting 7–10 squares east of the spot
 //                                       // (env.river = [squares east to the water, its width])
+//     "woods": [8, 22, 60],             // a stand of trees east of the spot: at least 60 trees from
+//                                       // 8 to 22 squares east (within 7 rows), the town's side still open
 //     "hoards": [ { "kind": "rock", "at": [-12, 6], "amount": 120 } ],   // piles near the spot
 //     "players": [
 //       { "name": "Aurelian", "color": "#3d6fd1", "at": [0, 0],          // offset from the spot
@@ -44,13 +46,13 @@ const [nx, ny] = spec.near ?? [0, 0];
 let spot: [number, number] | null = null;
 let riverAt: [number, number] | null = null;
 // (A river is rarer: look farther, and more finely.)
-const R = spec.river ? 4000 : 600, STEP = spec.river ? 12 : 20, ANG = spec.river ? 48 : 16;
+const R = spec.river || spec.woods ? 4000 : 600, STEP = spec.river || spec.woods ? 12 : 20, ANG = spec.river || spec.woods ? 48 : 16;
 for (let r = 0; r < R && !spot; r += STEP)
   for (let a = 0; a < ANG && !spot; a++) {
     const x = Math.round(nx + Math.cos((a / ANG) * Math.PI * 2) * r), y = Math.round(ny + Math.sin((a / ANG) * Math.PI * 2) * r);
     let ok = 0;
     // With a river, the town is judged on the land west of it.
-    const [xa, xb] = spec.river ? [-15, 5] : [-15, 15];
+    const [xa, xb] = spec.river || spec.woods ? [-15, 5] : [-15, 15];
     for (let dy = -15; dy <= 15; dy += 3) for (let dx = xa; dx <= xb; dx += 3) if (w.buildable(x + dx, y + dy) && !w.nodeAt(x + dx, y + dy)) ok++;
     if (spec.river) {
       ok = ok >= 62 ? 999 : 0; // 80% of the land west of it open (by a river, trees and crops crowd in)
@@ -60,6 +62,13 @@ for (let r = 0; r < R && !spot; r += STEP)
       let wd = 0; while (wd < 7 && water(a + wd)) wd++;
       if (wd < 2 || wd > 5 || !w.buildable(x + a + wd, y) || !w.buildable(x + a - 1, y)) continue;
       riverAt = [a, wd];
+    }
+    if (spec.woods) {
+      const [a0, a1, min] = spec.woods as [number, number, number];
+      let trees = 0;
+      for (let dy = -7; dy <= 7; dy++) for (let dx = a0; dx <= a1; dx++) { const n = w.nodeAt(x + dx, y + dy); if (n?.kind === 'tree' && n.remaining > 0) trees++; }
+      if (trees < min || ok < 55) continue;
+      ok = 999;
     }
     // A town to grow on camera needs crops and trees close by (and so a little less open ground).
     const near = spec.needs ? w.nodesNear(x, y, 1, 12) : [];

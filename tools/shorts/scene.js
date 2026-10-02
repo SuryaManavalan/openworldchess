@@ -7,7 +7,7 @@
 //   label    { text, y }                                small corner tag, e.g. "4× speed" (y default 1400)
 //   vignette { strength }                               darkens the edges and top/bottom bands for legible text
 //   flash    { color }                                  a quick flash at t0
-//   endcard  { title, sub, url, dim }                   name + CTA
+//   endcard  { title, sub, url, cta, dim }              name + a line + the URL pill + a CTA under it
 //   image    { src, x, y, w, anim: 'pop'|'float'|'fade' }
 //   board    { mode: 'zoom'|'drift', light, dark, speed, dim }   procedural endless chessboard (no-gameplay pieces)
 //   sweep    { color }                                  a diagonal light sweep across the frame
@@ -62,7 +62,8 @@ function drawText(l, t) {
   }
   ctx.restore();
   let scale = 1, dy = 0, alpha = L.a, shown = null;
-  if (l.anim === 'slam') { const p = clamp(L.k / 0.28); scale = 1.9 - 0.9 * easeOut(p); alpha *= clamp(L.k / 0.06); }
+  // (An opening title, at 0 s, is already landed on frame 1: the first frame is the ad.)
+  if (l.anim === 'slam' && l.t0 > 0) { const p = clamp(L.k / 0.28); scale = 1.9 - 0.9 * easeOut(p); alpha *= clamp(L.k / 0.06); }
   if (l.anim === 'pop') scale = 0.6 + 0.4 * easeBack(L.k / 0.35);
   if (l.anim === 'rise') { dy = 70 * (1 - easeOut(L.k / 0.45)); }
   if (l.anim === 'type') { const total = lines.join('').length; shown = Math.floor(clamp(L.k / (l.typeSec ?? 0.05 * total)) * total); }
@@ -152,6 +153,7 @@ function drawEndcard(l, t) {
   if (l.sub) drawText({ t0: l.t0 + 0.35, t1: l.t1, lines: [l.sub], y: (l.y ?? 640) + 330, size: 64, font: 'bold', weight: 800, color: '#ece6da', anim: 'rise', out: 'cut' }, t);
   // The URL is the point of the whole video: big, on its own bright pill.
   if (l.url) drawText({ t0: l.t0 + 0.6, t1: l.t1, lines: [l.url], y: (l.y ?? 640) + 470, size: l.urlSize ?? 70, font: 'bold', weight: 900, color: '#1d2412', stroke: false, plate: '#95b957', anim: 'pop', out: 'cut' }, t);
+  if (l.cta) drawText({ t0: l.t0 + 0.8, t1: l.t1, lines: [l.cta], y: (l.y ?? 640) + 590, size: 52, font: 'bold', weight: 800, color: '#ece6da', anim: 'rise', out: 'cut' }, t);
 }
 
 function drawImage(l, t) {
@@ -192,6 +194,9 @@ window.draw = (t) => {
   ctx.clearRect(0, 0, W, H);
   if (TL.background) { ctx.fillStyle = TL.background; ctx.fillRect(0, 0, W, H); }
   for (const l of TL.layers) DRAW[l.type]?.(l, t);
+  // One clear corner pixel, always: a fully opaque frame (a full-screen board) was saved as a PNG
+  // without alpha, and that change of format mid-stream made ffmpeg quit without a word.
+  ctx.clearRect(0, 0, 1, 1);
   return true;
 };
 

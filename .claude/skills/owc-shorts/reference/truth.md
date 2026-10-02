@@ -20,6 +20,8 @@ on phone and desktop, no download.
 | Pieces walk the world in character: knights hop in L-shapes, pawns trudge | `movement.md` |
 | **The rook is a war elephant** (our art) | `art.md` |
 | **War elephants knock down trees** to clear a road through woods for the troop they march with | `movement.md` §4 (as built 2026-09-28) |
+| **Elephants clear land on order**: select them, Clear land, drag an area; each tree takes an elephant 2 turns (rock and ore only if you tick it) | `movement.md` §9 Clearing land |
+| Elephants **haul** stone and ore from a deposit to where you build | `citybuilding.md` |
 | Troops march as a column along their road and fan out into a chess line when they arrive | `movement.md` §4 |
 | Kings hold land: buildings only work near a king | `economy.md` |
 | Buildings make pieces: houses → pawns, stables → knights, temples → bishops, barracks → elephants (rooks), palace → kings and queens | `constants.ts` |

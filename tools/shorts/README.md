@@ -90,6 +90,16 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-10-02: scenarios take `woods` (a stand of trees just east of the spot); `acts/army.mjs`
+  (`clear`: elephants clear land; `march`: send pieces as a troop); `playToMateIn1` takes `by`
+  (a piece letter: that piece delivers the mate); the end card takes `cta` (a line under the URL);
+  `art/piece-png.mjs` renders any piece (any civilization) as a big PNG for cards. The page's
+  debug hook has `commands`. First used for Day 6.
+- 2026-10-02: two render fixes: every overlay frame keeps one clear corner pixel (a fully opaque
+  frame, like a full-screen board, was saved without alpha and ffmpeg quit silently mid-render), and
+  a `slam` title at 0 s is already landed on frame 1 (it faded in from nothing, so frame 1 had no title).
+  `FFV=warning` shows ffmpeg's warnings.
+
 - 2026-10-01: `towns.ts` builds a world of hand-designed cities (sites found by biome, water or dryness;
   layouts in code). Shots take `time` (noon, dusk or night: pins the client's day, `?time=`) and
   `nolabels` (no town names drawn: `?nolabels`). Cards that share a cue (a title and its subtitle)

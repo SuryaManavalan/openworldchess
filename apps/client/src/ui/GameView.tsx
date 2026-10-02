@@ -1,11 +1,10 @@
 // Mounts the Pixi world and bridges world events to the HUD, sound and fx.
 import { followDeepLink } from './Find.tsx';
-import { VISIT } from '../net.ts';
 import { useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Scene } from '../game/scene.ts';
 import { Input } from '../game/input.ts';
-import { conn, mirror } from '../net.ts';
+import { VISIT, commands, conn, mirror } from '../net.ts';
 import { useUI } from '../store.ts';
 import { audio } from '../audio/audio.ts';
 
@@ -22,7 +21,7 @@ export function GameView() {
       if (!alive) return;
       input = new Input(sc);
       // Debug/automation hook (read-only use in tests and the console).
-      (window as unknown as { __owc: unknown }).__owc = { mirror, scene: sc, input, ui: useUI };
+      (window as unknown as { __owc: unknown }).__owc = { mirror, scene: sc, input, ui: useUI, commands };
       sc.onSubscribe = (chunks) => conn.setSubs(chunks);
       const emp = mirror.myPieces().find((p) => p.emperor) ?? mirror.myKings()[0];
       if (emp) sc.centerOn(emp.x, emp.y); else if (mirror.self) sc.centerOn(...mirror.self.home);
