@@ -90,6 +90,19 @@ node tools/shorts/capture.mjs tools/shorts/shots/day02-siege.json       # "scena
 
 ## Changelog
 
+- 2026-10-06: the music no longer stops with the last voice line (the voice mix is padded to the
+  video's length; the ducking filter ended at its shortest input). Videos made before this have
+  silence after their last spoken word: re-render before posting.
+
+- 2026-10-06: the `board` layer's zoom is seamless (the finer board faded out instead of in, so it
+  jumped once a period). With `spin` = a quarter turn over the video, a mantra piece loops exactly.
+  First used for Day 9.
+
+- 2026-10-04: `battle.mjs` acts `queenBlunderSetup` / `hangQueen` / `takeQueen`: a real hung queen
+  (a short quiet opening off camera, then the blunder and the free capture on camera, all checked
+  with chess.js). `play` waits for its turn in that tab (a move could be clicked before the other
+  side's had arrived). First used for Day 7.
+
 - 2026-10-02: cards sharing a cue now end together (the first one used to end before it began).
   First used for Day 6a.
 

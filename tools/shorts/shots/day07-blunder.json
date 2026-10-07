@@ -1,0 +1,20 @@
+{
+ "scenario": "out/day07/scenario.env.json",
+ "out": "out/day07/blunder.mp4",
+ "seconds": 7,
+ "time": "noon",
+ "nolabels": true,
+ "offset": [4, 1],
+ "path": [ { "t": 0, "zoom": 0.62 }, { "t": 7, "zoom": 0.62 } ],
+ "ease": "inOut",
+ "before": [
+  { "act": "battle.mjs#attack", "args": { "as": "Aurelian", "target": "Greyholt" } },
+  { "act": "battle.mjs#queenBlunderSetup", "args": { "white": "Aurelian", "black": "Greyholt" } },
+  { "eval": "window.__owc.ui.getState().set({ battleFocus: B })" },
+  { "wait": 1500 }
+ ],
+ "events": [
+  { "t": 1.0, "act": "battle.mjs#hangQueen", "args": { "black": "Greyholt" } },
+  { "t": 3.4, "act": "battle.mjs#takeQueen", "args": { "white": "Aurelian" } }
+ ]
+}

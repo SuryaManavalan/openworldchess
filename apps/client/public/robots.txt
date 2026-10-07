@@ -4,6 +4,7 @@ Allow: /
 Disallow: /api/
 Disallow: /auth/
 Disallow: /tiktok/
+Disallow: /studio/
 Disallow: /stats.html
 
 Sitemap: https://openworldchess.com/sitemap.xml

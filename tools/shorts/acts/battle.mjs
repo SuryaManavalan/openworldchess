@@ -108,6 +108,8 @@ async function openBattle(p, maxMs = 240_000) {
 
 /** Play one move from `as`'s tab and wait until the server has it. */
 async function play(p, uci) {
+  // Its turn in this tab too (the other side's move may not have arrived here yet).
+  await p.waitForFunction(() => { const m = window.__owc.mirror; const b = [...m.battles.values()].reverse().find((x) => x.phase === 'live' && (x.white.playerId === m.me || x.black.playerId === m.me)); return b && (b.fen.split(' ')[1] === 'w') === (b.white.playerId === m.me); }, null, { timeout: 20_000 });
   const b = await battleOf(p);
   await click(p, uci, b.white);
   await p.waitForFunction((fen) => { const m = window.__owc.mirror; return ![...m.battles.values()].some((x) => x.fen === fen && x.phase === 'live'); }, b.fen, { timeout: 20_000 });
@@ -146,3 +148,61 @@ export async function doubleStep(ctx, { black }) { await play(await player(ctx, 
 
 /** White takes it in passing. */
 export async function passant(ctx, { white }) { await play(await player(ctx, white), ctx.passant.take); }
+
+/**
+ * A real hung queen (Day 7): from the battle's starting position, finds a short quiet opening and a
+ * black queen move after which white can take the queen for nothing (no recapture). The opening
+ * is played here; `hangQueen` (black's blunder) and `takeQueen` (white's capture) are left
+ * for events to play on camera. Every move is checked with chess.js, so it's a legal game.
+ */
+export async function queenBlunderSetup(ctx, { white, black }) {
+  const wp = await player(ctx, white), bp = await player(ctx, black);
+  const b = await openBattle(wp); await openBattle(bp);
+  const uciOf = (m) => m.from + m.to + (m.promotion ?? '');
+  let plan = null;
+  const quiet = (g, pieces) => g.moves({ verbose: true }).filter((m) => !m.captured && !m.san.includes('+') && pieces.includes(m.piece));
+  // The blunder itself, from a position with black to move: the best-looking hung queen, if any.
+  const blunderFrom = (fen) => {
+    let best = null;
+    const g1 = new Chess(fen);
+    for (const q of quiet(g1, 'q')) {
+      const g2 = new Chess(fen); g2.move(q.san);
+      for (const x of g2.moves({ verbose: true }).filter((m) => m.captured === 'q' && m.piece !== 'k')) {
+        const g3 = new Chess(g2.fen()); g3.move(x.san);
+        // Free: black can't take back on that square, and isn't mated or stalemated by it.
+        if (g3.isGameOver() || g3.moves({ verbose: true }).some((m) => m.to === x.to && m.captured)) continue;
+        // The queen travels (a long slide reads on camera), and a knight or an elephant takes it if one can.
+        const score = (Math.abs(q.from.charCodeAt(0) - q.to.charCodeAt(0)) + Math.abs(Number(q.from[1]) - Number(q.to[1]))) + (x.piece === 'n' || x.piece === 'r' ? 4 : 0);
+        if (!best || score > best.score) best = { score, hang: uciOf(q), take: uciOf(x), by: x.piece };
+      }
+    }
+    return best;
+  };
+  // Straight away if the position allows; else after a short, natural opening played off camera:
+  // white develops (a knight or a pawn), black pushes a pawn (opening the queen's way), white develops again.
+  const g0 = new Chess(b.fen);
+  search: for (const w1 of quiet(g0, 'np')) {
+    const a = new Chess(b.fen); a.move(w1.san);
+    const direct = blunderFrom(a.fen());
+    if (direct && (!plan || direct.score > plan.score)) plan = { ...direct, prep: [uciOf(w1)] };
+    for (const b1 of quiet(a, 'p')) {
+      const c = new Chess(a.fen()); c.move(b1.san);
+      for (const w2 of quiet(c, 'np')) {
+        const d = new Chess(c.fen()); d.move(w2.san);
+        const found = blunderFrom(d.fen());
+        if (found && (!plan || found.score > plan.score)) plan = { ...found, prep: [uciOf(w1), uciOf(b1), uciOf(w2)] };
+        if (plan && plan.score >= 10) break search;
+      }
+    }
+  }
+  if (!plan) throw new Error('no queen blunder from ' + b.fen);
+  console.log('queen blunder line:', plan.prep.join(' '), '|', plan.hang, plan.take, 'by', plan.by);
+  for (const [i, u] of plan.prep.entries()) { await play(i % 2 ? bp : wp, u).catch(async (e) => { if (process.env.SHOT_DEBUG) await (i % 2 ? bp : wp).screenshot({ path: process.env.SHOT_DEBUG }); throw e; }); }
+  ctx.blunder = plan;
+}
+
+/** Black's queen walks onto the square where it can be taken (set up by queenBlunderSetup). */
+export async function hangQueen(ctx, { black }) { await play(await player(ctx, black), ctx.blunder.hang); }
+
+/** White takes the queen. */
+export async function takeQueen(ctx, { white }) { await play(await player(ctx, white), ctx.blunder.take); }

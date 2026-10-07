@@ -1,0 +1,27 @@
+{
+ "out": "out/day07/day07.mp4",
+ "seconds": 23.8,
+ "base": { "video": "out/day07/base.mp4" },
+ "layers": [
+  { "type": "vignette", "t0": 0, "t1": 23.8, "strength": 0.45 },
+  { "type": "label", "t0": 0, "t1": 12.4, "text": "Staged battle", "y": 1400 },
+  { "type": "text", "t0": 0, "t1": 1.7, "lines": ["HE HUNG", "HIS QUEEN."], "colors": ["#ece6da", "#e3b23c"], "y": 1010, "size": 150, "anim": "slam", "glow": "rgba(0,0,0,0.6)" },
+  { "type": "text", "cue": "in a war", "lines": ["IN A WAR."], "color": "#e3b23c", "y": 1080, "size": 170, "anim": "slam", "glow": "rgba(227,178,60,0.35)" },
+  { "type": "text", "cue": "one careless move", "lines": ["One careless move…"], "y": 255, "size": 84, "font": "bold", "anim": "pop", "plate": true },
+  { "type": "flash", "t0": 4.85, "dur": 0.22 },
+  { "type": "text", "cue": "the elephant says thank you", "lines": ["“Thank you.”"], "y": 255, "size": 110, "anim": "slam", "plate": true },
+  { "type": "text", "cue": "a blunder costs more than a game", "lines": ["A blunder costs", "more than a game."], "colors": ["#ece6da", "#e3b23c"], "y": 240, "size": 76, "font": "bold", "anim": "pop", "plate": true },
+  { "type": "flash", "t0": 10.2, "dur": 0.25 },
+  { "type": "sweep", "t0": 10.25, "t1": 11.0 },
+  { "type": "text", "cue": "checkmate", "lines": ["CHECKMATE."], "color": "#e3b23c", "y": 300, "size": 140, "anim": "slam", "glow": "rgba(227,178,60,0.35)" },
+  { "type": "text", "cue": "every building in his town", "lines": ["Every building.", "Our flag."], "colors": ["#ece6da", "#7fa8ff"], "y": 400, "size": 116, "anim": "pop", "glow": "rgba(61,111,209,0.4)" },
+  { "type": "text", "cue": "look for checks", "lines": ["Look for checks."], "y": 400, "size": 104, "anim": "pop" },
+  { "type": "text", "cue": "look for captures", "lines": ["Look for captures."], "y": 400, "size": 104, "anim": "pop" },
+  { "type": "text", "cue": "look for kingdoms", "lines": ["LOOK FOR", "KINGDOMS."], "colors": ["#ece6da", "#e3b23c"], "y": 420, "size": 140, "anim": "slam", "glow": "rgba(227,178,60,0.35)" },
+  { "type": "endcard", "cue": "open world chess", "sub": "Would you have seen it?", "url": "openworldchess.com", "cta": "Free in your browser", "dim": 0.6, "y": 560 }
+ ],
+ "audio": { "bpm": 100, "musicGain": 0.5, "sfxGain": 0.75 },
+ "voice": [
+  { "at": 0.15, "voice": "caster", "timed": true, "text": "He hung his queen. In a war. One careless move, and the elephant says thank you. But here, a blunder costs more than a game. Checkmate. And every building in his town now flies our flag. Look for checks. Look for captures. Look for kingdoms. Open World Chess. Free in your browser." }
+ ]
+}

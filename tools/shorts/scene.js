@@ -176,7 +176,9 @@ function drawBoard(l, t) {
   ctx.save();
   ctx.translate(W / 2, H / 2);
   if (l.spin) ctx.rotate(L.k * l.spin);
-  for (const [s, a] of [[size, 1], [size / 8, 1 - p]]) {
+  // The finer board fades in as the squares grow, so the end of a period is exactly its start
+  // (each square has become a whole board): the zoom never jumps.
+  for (const [s, a] of [[size, 1], [size / 8, p]]) {
     const n = Math.ceil(H / s) + 2;
     ctx.globalAlpha = a;
     for (let j = -n; j <= n; j++) for (let i = -n; i <= n; i++) {

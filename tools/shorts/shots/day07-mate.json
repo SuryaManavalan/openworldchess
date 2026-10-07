@@ -1,0 +1,60 @@
+{
+ "scenario": "out/day07/scenario.env.json",
+ "out": "out/day07/mate.mp4",
+ "seconds": 16,
+ "offset": [
+  4,
+  1
+ ],
+ "path": [
+  {
+   "t": 0,
+   "zoom": 0.62
+  },
+  {
+   "t": 4.6,
+   "zoom": 0.62
+  },
+  {
+   "t": 10,
+   "zoom": 0.42,
+   "dx": 1,
+   "dy": -2
+  },
+  {
+   "t": 16,
+   "zoom": 0.32,
+   "dx": -4,
+   "dy": -3
+  }
+ ],
+ "ease": "inOut",
+ "before": [
+  {
+   "act": "battle.mjs#playToMateIn1",
+   "args": {
+    "as": "Aurelian",
+    "maxMs": 400000
+   }
+  }
+ ],
+ "events": [
+  {
+   "t": 0.2,
+   "eval": "window.__owc.ui.getState().set({ battleFocus: B })"
+  },
+  {
+   "t": 2.4,
+   "act": "battle.mjs#mate",
+   "args": {
+    "as": "Aurelian"
+   }
+  },
+  {
+   "t": 4.6,
+   "eval": "window.__owc.ui.getState().set({ battleFocus: null })"
+  }
+ ],
+ "time": "noon",
+ "nolabels": true
+}

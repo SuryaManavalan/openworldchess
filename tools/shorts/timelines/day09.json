@@ -1,0 +1,161 @@
+{
+ "out": "out/day09/day09.mp4",
+ "seconds": 12,
+ "background": "#23211f",
+ "layers": [
+  {
+   "type": "board",
+   "t0": 0,
+   "t1": 12,
+   "mode": "zoom",
+   "light": "#efe0c0",
+   "dark": "#b58863",
+   "period": 4,
+   "speed": 1,
+   "spin": 0.1309,
+   "dim": 0.5
+  },
+  {
+   "type": "vignette",
+   "t0": 0,
+   "t1": 12,
+   "strength": 0.7
+  },
+  {
+   "type": "image",
+   "t0": 0,
+   "t1": 3.95,
+   "src": "out/day09/bishop.png",
+   "x": 495,
+   "y": 960,
+   "w": 760,
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 0,
+   "t1": 3.95,
+   "lines": [
+    "CALCULATE."
+   ],
+   "color": "#ece6da",
+   "y": 500,
+   "size": 170,
+   "anim": "slam",
+   "glow": "rgba(0,0,0,0.5)"
+  },
+  {
+   "type": "sweep",
+   "t0": 2.0,
+   "t1": 2.8
+  },
+  {
+   "type": "image",
+   "t0": 4,
+   "t1": 7.95,
+   "src": "out/day09/knight.png",
+   "x": 495,
+   "y": 960,
+   "w": 760,
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 4,
+   "t1": 7.95,
+   "lines": [
+    "COMMIT."
+   ],
+   "color": "#ece6da",
+   "y": 500,
+   "size": 170,
+   "anim": "slam",
+   "glow": "rgba(0,0,0,0.5)"
+  },
+  {
+   "type": "sweep",
+   "t0": 6.0,
+   "t1": 6.8
+  },
+  {
+   "type": "image",
+   "t0": 8,
+   "t1": 11.95,
+   "src": "out/day09/king.png",
+   "x": 495,
+   "y": 960,
+   "w": 760,
+   "anim": "pop"
+  },
+  {
+   "type": "text",
+   "t0": 8,
+   "t1": 11.95,
+   "lines": [
+    "CONQUER."
+   ],
+   "color": "#e3b23c",
+   "y": 500,
+   "size": 170,
+   "anim": "slam",
+   "glow": "rgba(227,178,60,0.4)"
+  },
+  {
+   "type": "sweep",
+   "t0": 10.0,
+   "t1": 10.8
+  },
+  {
+   "type": "text",
+   "t0": 0,
+   "t1": 12,
+   "lines": [
+    "OPEN WORLD CHESS"
+   ],
+   "y": 1350,
+   "size": 54,
+   "font": "bold",
+   "spacing": 8,
+   "anim": "slam",
+   "out": "cut",
+   "silent": true
+  },
+  {
+   "type": "text",
+   "t0": 0,
+   "t1": 12,
+   "lines": [
+    "openworldchess.com \u00b7 free in your browser"
+   ],
+   "y": 1425,
+   "size": 36,
+   "font": "bold",
+   "anim": "slam",
+   "out": "cut",
+   "silent": true
+  }
+ ],
+ "audio": {
+  "bpm": 90,
+  "musicGain": 0.6,
+  "sfxGain": 0.8
+ },
+ "voice": [
+  {
+   "at": 0.15,
+   "voice": "chronicler",
+   "text": "Calculate."
+  },
+  {
+   "at": 4.15,
+   "voice": "chronicler",
+   "text": "Commit."
+  },
+  {
+   "at": 8.15,
+   "voice": "chronicler",
+   "text": "Conquer."
+  }
+ ],
+ "voiceContext": true
+}

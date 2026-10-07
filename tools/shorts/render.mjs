@@ -92,7 +92,7 @@ const sp = tl.base?.speed ?? 1;
 let fc = `[0:v]setpts=(PTS-STARTPTS)/${sp},fps=${FPS},scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},trim=duration=${tl.seconds}[b];[b][1:v]overlay=0:0:format=auto[v];`;
 if (voices.length) {
   voices.forEach((v, i) => { const ms = Math.round(v.at * 1000); fc += `[${3 + i}:a]aresample=48000,adelay=${ms}|${ms},volume=${v.gain ?? 1.6}[v${i}];`; });
-  fc += `${voices.map((_, i) => `[v${i}]`).join('')}amix=inputs=${voices.length}:normalize=0,asplit=2[vo][vk];`;
+  fc += `${voices.map((_, i) => `[v${i}]`).join('')}amix=inputs=${voices.length}:normalize=0,apad,asplit=2[vo][vk];`; // apad: or the music ends with the last spoken word (the ducking stops at its shortest input)
   fc += `[2:a][vk]sidechaincompress=threshold=0.02:ratio=8:attack=15:release=350[md];[md][vo]amix=inputs=2:normalize=0[mix];`;
 } else fc += `[2:a]anull[mix];`;
 fc += `[mix]atrim=duration=${tl.seconds},loudnorm=I=-14:TP=-1.5:LRA=9[a]`;

@@ -13,6 +13,7 @@ import { handleShop } from './shop.ts';
 import { handleTikTok } from './tiktok.ts';
 import { handleStats, stats } from './stats.ts';
 import { serveWeb, warm } from './web.ts';
+import { handleStudio, loadStudio } from './studio.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const SEED = Number(process.env.SEED ?? 1);
@@ -35,6 +36,7 @@ if (process.env.GUEST_GRACE_MS) game.guestGraceMs = Number(process.env.GUEST_GRA
 if (load(game, DATA)) console.log(`loaded ${game.world.pieces.size} pieces, ${game.players.size} players from ${DATA}`);
 stats.load(join(dirname(DATA), 'stats.json'), game);
 game.herald.load(join(dirname(DATA), 'herald.json'));
+loadStudio(join(dirname(DATA), 'studio.json'));
 // Shape the land from the empires already living on it (elo.md §3), settled before anyone connects.
 for (let i = 0; i < 8; i++) game.reshapeLand();
 // Once: cities' old automatic chessboards are now Arenas their rulers place (citybuilding.md §10).
@@ -71,6 +73,7 @@ const server = createServer((req, res) => {
   }
   if (req.url === '/api/showcase') { res.setHeader('content-type', 'application/json'); res.setHeader('cache-control', 'max-age=300'); res.end(JSON.stringify(game.herald.showcase())); return; }
   if (req.url?.startsWith('/api/')) { handleStats(game, req, res, () => net.liveCounts()).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end(); } }); return; }
+  if (req.url?.startsWith('/studio/')) { handleStudio(game, req, res).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end('studio error'); } }); return; }
   if (req.url?.startsWith('/tiktok/') || req.url?.startsWith('/auth/tiktok/')) { handleTikTok(game, req, res).then((ok) => { if (!ok) { res.statusCode = 404; res.end(); } }).catch(() => { if (!res.headersSent) { res.statusCode = 500; res.end('tiktok error'); } }); return; }
   if (req.url?.startsWith('/auth/')) { handleAuth(game, req, res).catch(() => { res.statusCode = 500; res.end('auth error'); }); return; }
   if (!serveWeb(req, res, STATIC, game)) { res.statusCode = 405; res.end(); }

@@ -20,6 +20,22 @@ export const VOICES = {
 const MODEL = 'eleven_multilingual_v2';
 const CACHE = new URL('../../out/voice-cache/', import.meta.url).pathname;
 
+/**
+ * Where speech comes from. With a studio key (OWC_STUDIO_KEY, the daily agent) and no ElevenLabs key
+ * of our own, the game server speaks for us (/studio/voice: it holds the key). Otherwise ElevenLabs directly.
+ */
+const STUDIO = process.env.OWC_STUDIO_KEY ?? '';
+const STUDIO_BASE = (process.env.OWC_BASE ?? 'https://openworldchess.com').replace(/\/$/, '');
+const ownKey = () => !!process.env.ELEVENLABS_API_KEY || existsSync(join(homedir(), '.config/owc/elevenlabs.key'));
+function tts(voiceId, payload, timed) {
+  if (STUDIO && !ownKey()) return fetch(`${STUDIO_BASE}/studio/voice`, { method: 'POST', headers: { 'x-studio-key': STUDIO, 'content-type': 'application/json' }, body: JSON.stringify({ voice_id: voiceId, timed, ...payload }) });
+  return fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}${timed ? '/with-timestamps' : ''}?output_format=mp3_44100_128`, {
+    method: 'POST',
+    headers: { 'xi-api-key': apiKey(), 'content-type': 'application/json', ...(timed ? {} : { accept: 'audio/mpeg' }) },
+    body: JSON.stringify(payload),
+  });
+}
+
 function apiKey() {
   if (process.env.ELEVENLABS_API_KEY) return process.env.ELEVENLABS_API_KEY.trim();
   const f = join(homedir(), '.config/owc/elevenlabs.key');
@@ -42,25 +58,16 @@ export async function speak(voice, text, opts = {}) {
   const key = createHash('sha1').update(JSON.stringify(ctx ? [v.id, MODEL, settings, text, ctx] : [v.id, MODEL, settings, text])).digest('hex').slice(0, 16);
   const file = join(CACHE, `${voice}-${key}${opts.timed ? '-t' : ''}.mp3`);
   if (existsSync(file)) return file;
+  const payload = { text, model_id: MODEL, voice_settings: settings, ...(ctx ? { previous_text: ctx[0] || undefined, next_text: ctx[1] || undefined } : {}) };
+  const r = await tts(v.id, payload, !!opts.timed);
+  if (!r.ok) throw new Error(`voice ${r.status}: ${(await r.text()).slice(0, 200)}`);
   if (opts.timed) {
     // The same speech, plus when each character is spoken (for cards that follow the words).
-    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${v.id}/with-timestamps?output_format=mp3_44100_128`, {
-      method: 'POST',
-      headers: { 'xi-api-key': apiKey(), 'content-type': 'application/json' },
-      body: JSON.stringify({ text, model_id: MODEL, voice_settings: settings, ...(ctx ? { previous_text: ctx[0] || undefined, next_text: ctx[1] || undefined } : {}) }),
-    });
-    if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
     const j = await r.json();
     writeFileSync(file, Buffer.from(j.audio_base64, 'base64'));
     writeFileSync(file.replace(/\.mp3$/, '.json'), JSON.stringify(j.alignment));
     return file;
   }
-  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${v.id}?output_format=mp3_44100_128`, {
-    method: 'POST',
-    headers: { 'xi-api-key': apiKey(), 'content-type': 'application/json', accept: 'audio/mpeg' },
-    body: JSON.stringify({ text, model_id: MODEL, voice_settings: settings, ...(ctx ? { previous_text: ctx[0] || undefined, next_text: ctx[1] || undefined } : {}) }),
-  });
-  if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`);
   writeFileSync(file, Buffer.from(await r.arrayBuffer()));
   return file;
 }
