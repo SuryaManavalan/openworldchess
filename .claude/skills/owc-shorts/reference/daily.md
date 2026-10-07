@@ -72,6 +72,11 @@ There is no `out/` folder: earlier days' footage is gone. Film what you need.
   `node art/piece-png.mjs` (run inside `art/`).
 - Filming is headless here, about 1–2 s a frame. Budget: **at most 25 s of filmed footage a day**
   (several short shots are fine). Keep videos 12–26 s.
+- **Never end your turn while something is still running.** Nobody is there to wake you: a run that
+  stops to "wait for filming" may never continue. Run filming and rendering in the foreground with
+  a long timeout (`timeout: 600000`, the maximum; one shot of up to 8 s of footage fits), or start
+  it in the background and wait for it with an until-loop in the same turn. Split long footage into
+  several short shots rather than one long one.
 - Look at what you filmed before you build on it: extract frames with ffmpeg and read them. If a
   shot is empty, dark or not what the script says, film again or change the script.
 
