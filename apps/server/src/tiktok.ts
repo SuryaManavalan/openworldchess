@@ -30,7 +30,14 @@ const REDIRECT = `${PUBLIC_URL}/auth/tiktok/callback`;
 // Overridable so tests can stand in for TikTok.
 const API = process.env.TIKTOK_API ?? 'https://open.tiktokapis.com/v2';
 const AUTHORIZE = process.env.TIKTOK_AUTHORIZE ?? 'https://www.tiktok.com/v2/auth/authorize/';
-const SCOPES = 'user.info.basic,video.publish,video.upload';
+/**
+ * The scopes we ask for must be ones TikTok approved for this app, or its login page refuses
+ * ("scope"). Direct Post (video.publish) is reviewed separately from uploading to drafts
+ * (video.upload): TIKTOK_SCOPES says what the live app has.
+ */
+const SCOPES = process.env.TIKTOK_SCOPES ?? 'user.info.basic,video.publish,video.upload';
+/** Can this player's link post straight to their profile (not only to drafts)? */
+const canPublish = (l?: { scope: string }) => SCOPES.includes('video.publish') && !!l && (!l.scope || l.scope.includes('video.publish'));
 /** TikTok takes a single-chunk upload up to 64MB; our clips are far smaller. */
 const MAX_VIDEO = 60 * 1024 * 1024;
 
@@ -242,6 +249,8 @@ export async function handleTikTok(game: Game, req: IncomingMessage, res: Server
   if (path === '/tiktok/me') {
     if (!tiktokEnabled()) { json(res, { enabled: false }); return true; }
     if (!pl.tiktok) { json(res, { enabled: true, connected: false }); return true; }
+    // Drafts only (the app, or this link, has no video.publish): nothing to ask TikTok about posting.
+    if (!canPublish(pl.tiktok)) { json(res, { enabled: true, connected: true, name: pl.tiktok.name, avatar: pl.tiktok.avatar, canPublish: false, privacy: [], maxSec: 600 }); return true; }
     // The creator's current settings: who we'll post as, and what they allow (Content Posting UX rules).
     const c = await api<{ creator_avatar_url?: string; creator_username?: string; creator_nickname?: string; privacy_level_options?: string[]; comment_disabled?: boolean; duet_disabled?: boolean; stitch_disabled?: boolean; max_video_post_duration_sec?: number }>(pl, '/post/publish/creator_info/query/', {});
     if (c.error && c.error.code !== 'ok') {
@@ -251,7 +260,7 @@ export async function handleTikTok(game: Game, req: IncomingMessage, res: Server
     }
     const d = c.data ?? {};
     json(res, {
-      enabled: true, connected: true,
+      enabled: true, connected: true, canPublish: true,
       name: d.creator_nickname ?? pl.tiktok.name, username: d.creator_username, avatar: d.creator_avatar_url ?? pl.tiktok.avatar,
       privacy: d.privacy_level_options ?? [], commentOff: !!d.comment_disabled, duetOff: !!d.duet_disabled, stitchOff: !!d.stitch_disabled,
       maxSec: d.max_video_post_duration_sec ?? 60,
@@ -269,6 +278,7 @@ export async function handleTikTok(game: Game, req: IncomingMessage, res: Server
     try { meta = JSON.parse(decodeURIComponent(String(req.headers['x-owc-meta'] ?? '%7B%7D'))); } catch { /* defaults */ }
     const raw = await readBody(req, MAX_VIDEO);
     if (!raw || raw.length < 1000) { json(res, { error: 'The clip is too large or empty' }, 413); return true; }
+    if (mode === 'direct' && !canPublish(pl.tiktok)) { json(res, { error: 'Posting straight to TikTok isn\'t available yet: save it to your drafts instead' }, 400); return true; }
     if (mode === 'direct' && !meta.privacy) { json(res, { error: 'Choose who can see this post' }, 400); return true; }
     if (mode === 'direct' && meta.branded && meta.privacy === 'SELF_ONLY') { json(res, { error: 'Branded content cannot be private' }, 400); return true; }
     lastPost.set(pl.id, Date.now());

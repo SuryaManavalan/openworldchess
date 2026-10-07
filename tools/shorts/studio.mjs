@@ -37,7 +37,9 @@ if (cmd === 'me') {
   const me = await call('/studio/tiktok/me');
   if (!me.connected) { console.error('The studio account is not connected to TikTok:', me.error ?? me.blocked ?? ''); process.exit(1); }
   if (me.blocked) { console.error('TikTok will not take posts right now:', me.blocked); process.exit(1); }
-  const draft = flag('draft');
+  // Until TikTok approves Direct Post for the app, videos can only go to the account's drafts.
+  const draft = flag('draft') || me.canPublish === false;
+  if (me.canPublish === false && !flag('draft')) console.log('Direct Post is not approved for the app yet: sending to drafts');
   // Public if the account allows it; TikTok lists what it does.
   const privacy = flag('private') ? 'SELF_ONLY' : (me.privacy ?? []).includes('PUBLIC_TO_EVERYONE') ? 'PUBLIC_TO_EVERYONE' : (me.privacy ?? [])[0];
   const meta = { title: caption, privacy, comment: !me.commentOff, duet: !me.duetOff, stitch: !me.stitchOff, yourBrand: true, branded: false };

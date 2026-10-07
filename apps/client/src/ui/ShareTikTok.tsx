@@ -34,6 +34,8 @@ export function unstashClip(): ClipData | null { try { const s = sessionStorage.
 
 type Me = {
   enabled: boolean; connected?: boolean; name?: string; username?: string; avatar?: string; blocked?: string;
+  /** False: this app can only send to the player's TikTok drafts (no Direct Post yet). */
+  canPublish?: boolean;
   privacy?: string[]; commentOff?: boolean; duetOff?: boolean; stitchOff?: boolean; maxSec?: number;
 };
 const PRIVACY: Record<string, string> = { PUBLIC_TO_EVERYONE: 'Everyone', MUTUAL_FOLLOW_FRIENDS: 'Friends', FOLLOWER_OF_CREATOR: 'Followers', SELF_ONLY: 'Only me' };
@@ -130,6 +132,12 @@ export function ShareTikTok() {
                 <div><div className="muted small">Posting to TikTok as</div><b>{me.name}</b>{me.username && <span className="muted"> @{me.username}</span>}</div>
               </div>
               {me.blocked && <p className="field-error">{me.blocked}</p>}
+              {me.canPublish === false && <>
+                <p>Your clip goes to your TikTok drafts: open TikTok, add a caption and sound, and post it from there.</p>
+                {error && <p className="field-error">{error}</p>}
+                <button className="btn big tiktok" disabled={!rec || !!sending} onClick={() => post('draft')}><TikTokMark /> {sending === 'draft' ? 'Sending…' : 'Send to my TikTok drafts'}</button>
+              </>}
+              {me.canPublish !== false && <>
               <label className="field">Caption
                 <textarea value={caption} maxLength={2200} rows={3} placeholder="Say something about this battle" onChange={(e) => setCaption(e.target.value)} />
               </label>
@@ -168,6 +176,7 @@ export function ShareTikTok() {
               {error && <p className="field-error">{error}</p>}
               <button className="btn big tiktok" disabled={!canPost} onClick={() => post('direct')}><TikTokMark /> {sending === 'direct' ? 'Posting…' : 'Post to TikTok'}</button>
               <button className="btn ghost" style={{ width: '100%', marginTop: 8 }} disabled={!rec || !!sending || tooLong} onClick={() => post('draft')}>{sending === 'draft' ? 'Sending…' : 'Save to TikTok drafts instead'}</button>
+              </>}
             </>}
             {sent && <div className="share-done">
               <Icon name={sent.status === 'FAILED' ? 'alert' : 'check'} size={28} />
