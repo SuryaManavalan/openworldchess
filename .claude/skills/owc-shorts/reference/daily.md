@@ -28,7 +28,10 @@ node tools/shorts/studio.mjs log        # every video so far
 - If `me` says `"canPublish": false`, TikTok hasn't approved Direct Post for the app yet: `post`
   sends the video to the account's **drafts** by itself, and the owner publishes it. That's
   expected; carry on, and record the status it prints.
-- If the log's last entry is dated today (UTC) and isn't `skipped`, today's video is already made: stop.
+- If the log's last entry is dated today (UTC) and its status is one a run writes
+  (`PUBLISH_COMPLETE`, `SEND_TO_USER_INBOX`, or anything else from TikTok), today's video is already
+  made: stop. Entries marked `posted by hand` or `skipped` don't count: they were put in the log by
+  the owner, or are a day to make again.
   (The server also refuses more than 3 posts in 24 hours, whoever asks.)
 - **Keep every file you write inside `out/dayNN/`** (shots, timeline, entry JSON): `out/` is ignored
   by git. Write nothing under `tools/` or anywhere else git tracks, and if a hook asks you to commit
