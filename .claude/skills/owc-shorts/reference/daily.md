@@ -8,21 +8,30 @@ The one rule above the others: **a video that fails a check is not posted.** A s
 nothing. A wrong claim, a broken render or a silent ending costs trust. When in doubt, don't post:
 record the day as skipped with the reason.
 
-## 0. Setup (about 5 minutes)
+## 0. Setup (about 3 minutes)
 
 ```bash
-bash tools/shorts/cloud-setup.sh
-export PATH="$HOME/.local/bin:$PATH"
-export OWC_STUDIO_KEY=…        # given in your instructions; never print it, never write it to a file in the repo
-node tools/shorts/studio.mjs me     # who we post as; "connected": true, and "privacy" lists PUBLIC_TO_EVERYONE
-node tools/shorts/studio.mjs log    # every video so far
+bash tools/shorts/cloud-setup.sh        # prints one line a step: deps, browser, ffmpeg, client, network
+source ~/.owc-env                       # in EVERY shell you open (the browser to use, the proxy, PATH)
+export OWC_STUDIO_KEY=…                 # given in your instructions; never print it, never write it to a file in the repo
+node tools/shorts/studio.mjs me         # who we post as: "connected": true
+node tools/shorts/studio.mjs log        # every video so far
 ```
 
+- If setup prints `FAILED` for the browser, ffmpeg or the network, you can't make a video today:
+  stop and say exactly which line failed. (If the network line failed, you can't record a skipped
+  day either: just report it.)
 - The server holds the TikTok and voice credentials. You only hold the studio key.
 - Voice lines go through the server by themselves (`voice.mjs` sees `OWC_STUDIO_KEY`). The server
   allows about 8,000 characters a day: write the script once, then generate.
 - If `me` is not connected or `blocked`, stop: record a skipped day with what TikTok said.
+- If `me` says `"canPublish": false`, TikTok hasn't approved Direct Post for the app yet: `post`
+  sends the video to the account's **drafts** by itself, and the owner publishes it. That's
+  expected; carry on, and record the status it prints.
 - If `postsToday` in the log is 1 or more, a video already went out in the last 24 hours: stop.
+- **Keep every file you write inside `out/dayNN/`** (shots, timeline, entry JSON): `out/` is ignored
+  by git. Write nothing under `tools/` or anywhere else git tracks, and if a hook asks you to commit
+  or push, don't: delete the stray file instead.
 
 ## 1. What to make today
 
@@ -64,8 +73,8 @@ There is no `out/` folder: earlier days' footage is gone. Film what you need.
 
 ## 3. Make it
 
-Write the shot(s) and the timeline as usual (`shots/dayNN-*.json`, `timelines/dayNN.json`). Extra
-rules for running alone:
+Write the shot(s) and the timeline as usual, but in `out/dayNN/` (`out/dayNN/shot-a.json`,
+`out/dayNN/timeline.json`): both tools take any path. Extra rules for running alone:
 
 - The opening title is a text layer with `"t0": 0` and `"anim": "slam"` (it is on frame 1).
 - Say what the footage is: `"claims": { "spedUp": true|false, "staged": true|false }` in the timeline.
@@ -79,7 +88,7 @@ rules for running alone:
 
 ## 4. Check it (all three, in order)
 
-1. `node tools/shorts/check.mjs tools/shorts/timelines/dayNN.json` must print `ok`. Fix what it
+1. `node tools/shorts/check.mjs out/dayNN/timeline.json` must print `ok`. Fix what it
    says and render again. Never edit the checker to pass.
 2. **Look at it.** The render writes a contact sheet (`out/dayNN/dayNN-sheet.jpg`): read it. Also
    read frame 1 and one frame per card (`ffmpeg -ss T -i … -frames:v 1`). Every card readable, no
@@ -96,11 +105,12 @@ If you've rendered three times and it still isn't right, stop and record a skipp
 node tools/shorts/studio.mjs post out/dayNN/dayNN.mp4 --caption "…"
 ```
 
-It posts publicly with the "Your brand" label, waits for TikTok's verdict, and prints
-`{ publishId, status }`. `PUBLISH_COMPLETE` is success. On a refusal or `FAILED`, don't retry more
+It posts publicly with the "Your brand" label (or sends to drafts while Direct Post isn't approved),
+waits for TikTok's verdict, and prints `{ publishId, status }`. `PUBLISH_COMPLETE` is success
+(`SEND_TO_USER_INBOX` for a draft). On a refusal or `FAILED`, don't retry more
 than once.
 
-Then record the day (always, posted or skipped), in a JSON file outside the repo:
+Then record the day (always, posted or skipped), from a JSON file in `out/dayNN/`:
 
 ```json
 { "day": "12", "kind": "game", "pillar": "S", "hook": "…", "caption": "…", "publishId": "…",
@@ -109,7 +119,7 @@ Then record the day (always, posted or skipped), in a JSON file outside the repo
 ```
 
 ```bash
-node tools/shorts/studio.mjs record /tmp/day12.json
+node tools/shorts/studio.mjs record out/day12/entry.json
 ```
 
 A skipped day is recorded with `"status": "skipped"` and the same day id: tomorrow's run makes

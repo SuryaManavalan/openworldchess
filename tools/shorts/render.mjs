@@ -71,7 +71,7 @@ if (voices.length && voices.at(-1).at + voices.at(-1).d > tl.seconds) console.wa
 }
 
 // 2. The overlay and the score, from scene.html.
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.OWC_CHROMIUM ? { executablePath: process.env.OWC_CHROMIUM } : {});
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 page.on('pageerror', (e) => console.log('scene error:', e.message));
 await page.goto('file://' + new URL('./scene.html', import.meta.url).pathname);

@@ -40,6 +40,8 @@ import { dirname, resolve } from 'node:path';
 const spec = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const env = spec.scenario ? JSON.parse(readFileSync(resolve(spec.scenario), 'utf8')) : null;
 // A staged world: its server, and its spot (plus an optional "offset" in squares).
+// No scenario and no base: the live game.
+if (!env) spec.base ??= process.env.OWC_BASE ?? 'https://openworldchess.com';
 if (env) { spec.base = env.base; spec.center ??= [env.center[0] + (spec.offset?.[0] ?? 0), env.center[1] + (spec.offset?.[1] ?? 0)]; }
 // CSS size: 540×960 × 2 device pixels = 1080×1920. "viewport": a narrower CSS width (e.g. 405, a
 // phone's) keeps the output 1080×1920 but draws the interface at a phone's size.
@@ -73,7 +75,8 @@ function camAt(t) {
 // SwiftShader: ~175 ms a frame vs ~1.9 s at 1080×1920). It opens briefly on the desktop.
 // Set "headless": true in the shot to film without a window.
 const headless = spec.headless ?? !process.env.DISPLAY;
-const browser = await chromium.launch({ headless, args: ['--ignore-gpu-blocklist'] });
+// OWC_CHROMIUM: a browser already on the machine (the cloud sandbox's), when Playwright's own can't be downloaded.
+const browser = await chromium.launch({ headless, args: ['--ignore-gpu-blocklist'], ...(process.env.OWC_CHROMIUM ? { executablePath: process.env.OWC_CHROMIUM } : {}) });
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: DPR });
 page.on('pageerror', (e) => console.log('page error:', e.message));
 if (spec.as) {
