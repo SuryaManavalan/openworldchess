@@ -27,7 +27,7 @@ if (cmd === 'me') {
   console.log(JSON.stringify(await call('/studio/tiktok/me'), null, 1));
 } else if (cmd === 'log') {
   const r = await call('/studio/log');
-  for (const e of r.log ?? []) console.log(`${e.day}\t${new Date(e.at).toISOString().slice(0, 10)}\t${e.kind ?? 'game'}\t${e.pillar ?? '-'}\t${e.status ?? '-'}\t${e.hook}`);
+  for (const e of r.log ?? []) console.log(`${e.day}\t${new Date(e.at).toISOString().slice(0, 16) + 'Z'}\t${e.kind ?? 'game'}\t${e.pillar ?? '-'}\t${e.status ?? '-'}\t${e.hook}`);
   console.log(`(${r.log?.length ?? 0} videos; ${r.postsToday ?? 0} posted in the last 24 h)`);
 } else if (cmd === 'record') {
   console.log(JSON.stringify(await call('/studio/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: readFileSync(args[0]) })));
