@@ -86,6 +86,10 @@ Write the shot(s) and the timeline as usual, but in `out/dayNN/` (`out/dayNN/sho
 `out/dayNN/timeline.json`): both tools take any path. Extra rules for running alone:
 
 - The opening title is a text layer with `"t0": 0` and `"anim": "slam"` (it is on frame 1).
+- **Every video is narrated**, even where the calendar's Voice column says "—": the owner wants a
+  voiceover on all of them. Chronicler for lore, world and community videos, Caster for battles and
+  memes. One or two flowing passages with `"timed": true` and cards cued to the words (see
+  production.md → Sound); a mantra piece speaks its words on the beat.
 - Say what the footage is: `"claims": { "spedUp": true|false, "staged": true|false }` in the timeline.
 - Every factual line must be in `reference/truth.md`. If you want to say something that isn't
   there, check the code; if you can't confirm it, don't say it.
