@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 process.env.STUDIO_KEY = 'test-studio-key';
+process.env.STUDIO_VIEW_KEY = 'view-key';
 const { handleStudio, loadStudio } = await import('../src/studio.ts');
 const { Game } = await import('../src/game.ts');
 
@@ -39,6 +40,18 @@ describe('the studio', () => {
     expect(log[0].timeline).toBeUndefined();
     const full = await (await call('/studio/log?full=1')).json();
     expect(full.log[0].timeline).toEqual({ seconds: 20 });
+  });
+
+  it("shows the owner's captions page to its own read-only key only", async () => {
+    await call('/studio/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: '12', hook: 'A <b>hook</b>', caption: 'Copy me. #chess', status: 'SEND_TO_USER_INBOX' }) });
+    expect((await fetch(base + '/studio/captions?v=wrong')).status).toBe(404);
+    expect((await fetch(base + '/studio/captions?v=test-studio-key')).status).toBe(404);
+    const html = await (await fetch(base + '/studio/captions?v=view-key')).text();
+    expect(html).toContain('Copy me. #chess');
+    expect(html).toContain('A &lt;b&gt;hook&lt;/b&gt;');
+    expect(html).toContain('In your TikTok drafts');
+    // The view key opens nothing else.
+    expect((await call('/studio/log', {}, 'view-key')).status).toBe(404);
   });
 
   it('refuses to post until a studio account is set, and to speak without a voice key', async () => {
