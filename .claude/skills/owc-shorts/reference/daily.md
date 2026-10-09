@@ -138,6 +138,23 @@ node tools/shorts/studio.mjs record out/day12/entry.json
 A skipped day is recorded with `"status": "skipped"` and the same day id: tomorrow's run makes
 that day again.
 
+**Hand the caption to the owner.** A draft reaches TikTok without its caption (TikTok's drafts
+upload takes only the file), so the owner pastes it in from their phone:
+
+- If you have the `PushNotification` tool, send one when the video is uploaded: one line saying
+  Day NN is in the TikTok drafts (or was skipped, and why).
+- **End your final message with the caption, alone, in a code block, as the very last thing**, under
+  the line "Caption to paste:". Nothing after it: the owner copies it straight from there.
+
+````
+Caption to paste:
+```
+Knights hop. Pawns trudge. Elephants march. Free in your browser, link in bio. #chess #openworldchess
+```
+````
+
+(On a skipped day there's no caption: end with the reason instead.)
+
 ## 6. What you never do
 
 - Never push to the repository, open pull requests or change the game. The log on the server is the
