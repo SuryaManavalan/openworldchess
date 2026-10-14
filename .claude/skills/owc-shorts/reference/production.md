@@ -148,9 +148,9 @@ Until it exists, assemble with ffmpeg (`drawtext`, `overlay`, `xfade`,
 
 ## Posting
 
-- Post from the @openworldchess account. The API route is planned
-  (`POST /tiktok/studio-post`, see `docs/specs/tiktok.md`). Until it's built, a
-  person uploads the files.
+- Post with `node tools/shorts/studio.mjs post <video.mp4> --caption "…"` (through the game
+  server, as the studio's TikTok account; see `docs/specs/studio.md`). Until TikTok approves Direct
+  Post, the video lands in the account's drafts and the owner posts it.
 - Once a day. Good windows for this audience: 7–10 pm local time, and weekend
   late mornings.
 - Pin the best 3 videos to the profile. Reply to the first comments fast.
