@@ -46,7 +46,9 @@ ${p.noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#23211f">
 <meta name="google-site-verification" content="${GOOGLE_VERIFY}">
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Nunito:wght@600;700;800;900&display=swap">
 <link rel="stylesheet" href="/site.css">
@@ -54,7 +56,7 @@ ${ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(
 </head>
 <body>
 <nav class="top"><div class="wrap">
-  <a class="brand" href="/about"><img src="/icon.svg" alt="" width="28" height="28"> Open World Chess</a>
+  <a class="brand" href="/about"><img src="/icon-192.png" alt="" width="28" height="28"> Open World Chess</a>
   <div class="links">${NAV.map(([h, n]) => `<a href="${h}"${h === p.path ? ' aria-current="page"' : ''}>${n}</a>`).join('')}</div>
   <a class="btn gold" href="/">Play free</a>
 </div></nav>
@@ -98,7 +100,7 @@ export const GAME_LD = {
   inLanguage: 'en',
   isAccessibleForFree: true,
   sameAs: [DISCORD, GITHUB],
-  publisher: { '@type': 'Organization', name: 'Open World Chess', url: ORIGIN, logo: ORIGIN + '/icon.svg', email: 'openworldchessgame@gmail.com' },
+  publisher: { '@type': 'Organization', name: 'Open World Chess', url: ORIGIN, logo: ORIGIN + '/icon-512.png', email: 'openworldchessgame@gmail.com' },
 };
 
 // ------------------------------------------------------------------ the guide (the rulebook)

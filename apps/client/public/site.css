@@ -11,7 +11,7 @@ img { max-width: 100%; }
 nav.top { position: sticky; top: 0; z-index: 5; background: rgba(35,33,31,.94); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
 nav.top .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
 nav.top .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; color: var(--ink); text-decoration: none; font-size: 18px; margin-right: auto; white-space: nowrap; }
-nav.top .brand img { width: 28px; height: 28px; }
+nav.top .brand img { width: 28px; height: 28px; border-radius: 7px; }
 nav.top .links { display: flex; gap: 18px; }
 nav.top .links a { color: var(--dim); text-decoration: none; font-weight: 800; font-size: 15px; }
 nav.top .links a:hover, nav.top .links a[aria-current] { color: var(--ink); }

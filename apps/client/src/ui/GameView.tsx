@@ -100,7 +100,7 @@ function bridge(sc0: Scene) {
 
 function notify(text: string) {
   try {
-    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Open World Chess', { body: text, icon: '/icon.svg' });
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Open World Chess', { body: text, icon: '/icon-192.png' });
   } catch { /* unsupported */ }
 }
 
