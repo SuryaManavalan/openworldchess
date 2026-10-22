@@ -39,6 +39,9 @@ type Me = {
   privacy?: string[]; commentOff?: boolean; duetOff?: boolean; stitchOff?: boolean; maxSec?: number;
 };
 const PRIVACY: Record<string, string> = { PUBLIC_TO_EVERYONE: 'Everyone', MUTUAL_FOLLOW_FRIENDS: 'Friends', FOLLOWER_OF_CREATOR: 'Followers', SELF_ONLY: 'Only me' };
+// TikTok's own words for the two disclosure rules (Content Sharing Guidelines).
+const BRAND_NEEDED = 'You need to indicate if your content promotes yourself, a third party, or both.';
+const NO_PRIVATE = 'Branded content visibility cannot be set to private.';
 const call = (path: string, init: RequestInit = {}) => fetch(path, { ...init, headers: { 'x-owc-token': get('owc.token') ?? '', ...(init.headers ?? {}) } });
 
 export function ShareTikTok() {
@@ -54,6 +57,7 @@ export function ShareTikTok() {
   const [allow, setAllow] = useState({ comment: false, duet: false, stitch: false });
   const [disclose, setDisclose] = useState(false);
   const [brand, setBrand] = useState({ yours: false, branded: false });
+  const [note, setNote] = useState<string | null>(null);
   const [sending, setSending] = useState<null | 'direct' | 'draft'>(null);
   const [sent, setSent] = useState<{ id: string; mode: 'direct' | 'draft'; status: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,16 +139,19 @@ export function ShareTikTok() {
               {me.canPublish === false && <>
                 <p>Your clip goes to your TikTok drafts: open TikTok, add a caption and sound, and post it from there.</p>
                 {error && <p className="field-error">{error}</p>}
-                <button className="btn big tiktok" disabled={!rec || !!sending} onClick={() => post('draft')}><TikTokMark /> {sending === 'draft' ? 'Sending…' : 'Send to my TikTok drafts'}</button>
+                <button className="btn big tiktok" disabled={!rec || !!sending || !!me.blocked} onClick={() => post('draft')}><TikTokMark /> {sending === 'draft' ? 'Sending…' : 'Send to my TikTok drafts'}</button>
               </>}
               {me.canPublish !== false && <>
               <label className="field">Caption
                 <textarea value={caption} maxLength={2200} rows={3} placeholder="Say something about this battle" onChange={(e) => setCaption(e.target.value)} />
               </label>
               <label className="field">Who can see this video
-                <select value={privacy} onChange={(e) => setPrivacy(e.target.value)}>
+                <select value={privacy} onChange={(e) => { setPrivacy(e.target.value); setNote(null); }}>
                   <option value="" disabled>Choose…</option>
-                  {(me.privacy ?? []).map((p) => <option key={p} value={p} disabled={p === 'SELF_ONLY' && disclose && brand.branded}>{PRIVACY[p] ?? p}{p === 'SELF_ONLY' && disclose && brand.branded ? ' (not allowed for branded content)' : ''}</option>)}
+                  {(me.privacy ?? []).map((p) => {
+                    const no = p === 'SELF_ONLY' && disclose && brand.branded;
+                    return <option key={p} value={p} disabled={no} title={no ? NO_PRIVATE : undefined}>{PRIVACY[p] ?? p}{no ? ' (branded content cannot be private)' : ''}</option>;
+                  })}
                 </select>
               </label>
               <div className="field">Allow users to
@@ -161,11 +168,12 @@ export function ShareTikTok() {
                   <p className="muted small">Turn on to disclose that this video promotes goods or services in exchange for something of value. Your video could promote yourself, a third party, or both.</p>
                   <div className="checks col">
                     <label><input type="checkbox" checked={brand.yours} onChange={(e) => setBrand({ ...brand, yours: e.target.checked })} /> Your brand <span className="muted small">You are promoting yourself or your own business.</span></label>
-                    <label><input type="checkbox" checked={brand.branded} onChange={(e) => { setBrand({ ...brand, branded: e.target.checked }); if (e.target.checked && privacy === 'SELF_ONLY') setPrivacy(''); }} /> Branded content <span className="muted small">You are promoting another brand or a third party.</span></label>
+                    <label><input type="checkbox" checked={brand.branded} onChange={(e) => { setBrand({ ...brand, branded: e.target.checked }); if (e.target.checked && privacy === 'SELF_ONLY') { setPrivacy(''); setNote(NO_PRIVATE + ' Choose who can see it.'); } }} /> Branded content <span className="muted small">You are promoting another brand or a third party.</span></label>
                   </div>
+                  {note && <p className="field-error">{note}</p>}
                   {brandNeeded
-                    ? <p className="field-error">You need to indicate if your content promotes yourself, a third party, or both.</p>
-                    : <p className="muted small">Your video will be labeled "{label(brand.branded ? 'branded' : 'yours')}".</p>}
+                    ? <p className="field-error">{BRAND_NEEDED}</p>
+                    : <p className="muted small">Your video will be labeled as '{label(brand.branded ? 'branded' : 'yours')}'</p>}
                 </>}
               </div>
               {tooLong && <p className="field-error">This clip is {secs}s; your account can post up to {me.maxSec}s.</p>}
@@ -174,8 +182,8 @@ export function ShareTikTok() {
                 <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Music Usage Confirmation</a>.
               </p>
               {error && <p className="field-error">{error}</p>}
-              <button className="btn big tiktok" disabled={!canPost} onClick={() => post('direct')}><TikTokMark /> {sending === 'direct' ? 'Posting…' : 'Post to TikTok'}</button>
-              <button className="btn ghost" style={{ width: '100%', marginTop: 8 }} disabled={!rec || !!sending || tooLong} onClick={() => post('draft')}>{sending === 'draft' ? 'Sending…' : 'Save to TikTok drafts instead'}</button>
+              <button className="btn big tiktok" disabled={!canPost} title={brandNeeded ? BRAND_NEEDED : undefined} onClick={() => post('direct')}><TikTokMark /> {sending === 'direct' ? 'Posting…' : 'Post to TikTok'}</button>
+              <button className="btn ghost" style={{ width: '100%', marginTop: 8 }} disabled={!rec || !!sending || tooLong || !!me.blocked} onClick={() => post('draft')}>{sending === 'draft' ? 'Sending…' : 'Save to TikTok drafts instead'}</button>
               </>}
             </>}
             {sent && <div className="share-done">
