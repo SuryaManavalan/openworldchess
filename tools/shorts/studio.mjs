@@ -38,14 +38,20 @@ if (cmd === 'me') {
   if (!me.connected) { console.error('The studio account is not connected to TikTok:', me.error ?? me.blocked ?? ''); process.exit(1); }
   if (me.blocked) { console.error('TikTok will not take posts right now:', me.blocked); process.exit(1); }
   // Until TikTok approves Direct Post for the app, videos can only go to the account's drafts.
-  const draft = flag('draft') || me.canPublish === false;
+  let draft = flag('draft') || me.canPublish === false;
   if (me.canPublish === false && !flag('draft')) console.log('Direct Post is not approved for the app yet: sending to drafts');
   // Public if the account allows it; TikTok lists what it does.
   const privacy = flag('private') ? 'SELF_ONLY' : (me.privacy ?? []).includes('PUBLIC_TO_EVERYONE') ? 'PUBLIC_TO_EVERYONE' : (me.privacy ?? [])[0];
   const meta = { title: caption, privacy, comment: !me.commentOff, duet: !me.duetOff, stitch: !me.stitchOff, yourBrand: true, branded: false };
   const video = readFileSync(file);
   console.log(`posting ${file} (${(video.length / 1e6).toFixed(1)} MB) as @${me.username ?? me.name}, ${draft ? 'to drafts' : privacy}`);
-  const r = await call(`/studio/tiktok/post?mode=${draft ? 'draft' : 'direct'}`, { method: 'POST', headers: { 'content-type': 'video/mp4', 'x-owc-meta': encodeURIComponent(JSON.stringify(meta)) }, body: video });
+  const send = (d) => call(`/studio/tiktok/post?mode=${d ? 'draft' : 'direct'}`, { method: 'POST', headers: { 'content-type': 'video/mp4', 'x-owc-meta': encodeURIComponent(JSON.stringify(meta)) }, body: video });
+  let r = await send(draft);
+  // Until TikTok audits the app, it refuses public posts (only private accounts): the drafts it is, once.
+  if (!r.publishId && !draft && /private accounts/.test(r.error ?? '')) {
+    console.log('TikTok has not audited the app for public posts yet: sending to drafts');
+    draft = true; r = await send(true);
+  }
   if (!r.publishId) { console.error('refused:', r.error ?? r.status); process.exit(1); }
   // TikTok processes the upload for a while; wait for its verdict (up to 5 minutes).
   let status = 'PROCESSING_UPLOAD', fail;

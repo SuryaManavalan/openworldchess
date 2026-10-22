@@ -54,7 +54,7 @@ documents its options, this document names the file instead of repeating it.
  check.mjs  (the gate: format, sound, readability, safe zone, required labels)
       │
       ▼
- studio.mjs post  →  the game server  →  TikTok (the account's drafts, for now)
+ studio.mjs post  →  the game server  →  TikTok (public; drafts as a fallback)
 ```
 
 ## 2. Programs and services
@@ -72,7 +72,7 @@ documents its options, this document names the file instead of repeating it.
 | **Stockfish** (our `@owc/engine`) | 19 | Playing staged battles to a real checkmate | `acts/battle.mjs` |
 | **resvg** | 2.6 | Rendering piece art to PNG for cards | `art/piece-png.mjs` |
 | **Google Fonts** | Cinzel (display), Inter (bold) | Card typography | `scene.html` |
-| **TikTok Content Posting API** | upload to drafts (`video.upload`); Direct Post not approved yet | Publishing | `apps/server/src/tiktok.ts`, `studio.ts` |
+| **TikTok Content Posting API** | Direct Post (`video.publish`, approved Oct 2026) and drafts (`video.upload`) | Publishing | `apps/server/src/tiktok.ts`, `studio.ts` |
 | **Claude Code** + the `owc-shorts` skill | | The agent that writes the JSON and runs the scripts | `.claude/skills/owc-shorts/` |
 | **Claude cloud routine** | Opus, daily at 15:00 UTC | The unattended daily run | routine "OWC daily video" |
 
@@ -406,9 +406,10 @@ node tools/shorts/studio.mjs log                # every video so far
 
 - The script uploads the MP4 to the game server, which posts it through TikTok's Content Posting
   API as the studio's account (**Open World Chess**) and waits for TikTok's verdict.
-- **Today, videos go to the account's TikTok drafts**, not straight to the profile. TikTok approved
-  the app for sign-in and uploading to drafts; Direct Post needs a separate review, and public
-  posting needs TikTok's audit after that.
+- **Videos post publicly, with their caption and the "Your brand" label.** TikTok approved Direct
+  Post in October 2026, but until the app passes TikTok's Content Posting audit, TikTok refuses
+  public posts ("only private accounts"), so for now every video goes to the account's drafts.
+  The script does that by itself, and also when the owner's TikTok sign-in has lapsed.
 - **A draft arrives without its caption** (TikTok's drafts upload takes only the file). The owner
   copies the caption from the end of the daily run's message, or from the private captions page
   (`/studio/captions`), pastes it in TikTok, turns on the **"Your brand"** disclosure, and posts.
@@ -503,7 +504,7 @@ entries are at `GET /studio/log?full=1`).
   The agent's own tracking drifted on Day 10 and it had to cut the video down. A follow option is
   the most useful next addition.
 - **The agent's videos aren't kept.** A cloud machine is discarded after its run; the only copy of
-  a daily video is the draft on TikTok (its recipe is in the log).
+  a daily video is the one on TikTok (its recipe is in the log).
 - **A fully opaque overlay frame used to stop ffmpeg silently.** Every overlay frame now keeps one
   transparent corner pixel. `FFV=warning` before a render shows ffmpeg's warnings.
 - **Older footage shows things that have changed.** Clips from before October 2026 show the

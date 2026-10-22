@@ -25,9 +25,10 @@ node tools/shorts/studio.mjs log        # every video so far
 - Voice lines go through the server by themselves (`voice.mjs` sees `OWC_STUDIO_KEY`). The server
   allows about 8,000 characters a day: write the script once, then generate.
 - If `me` is not connected or `blocked`, stop: record a skipped day with what TikTok said.
-- If `me` says `"canPublish": false`, TikTok hasn't approved Direct Post for the app yet: `post`
-  sends the video to the account's **drafts** by itself, and the owner publishes it. That's
-  expected; carry on, and record the status it prints.
+- `post` tries to publish publicly. Until TikTok audits the app it refuses ("only private
+  accounts"), and `post` sends the video to the account's **drafts** by itself (also when `me` says
+  `"canPublish": false`); the owner publishes it. That's expected; carry on, and record the
+  status it prints.
 - If the log's last entry was made less than 12 hours ago (`date -u` against its date and time) and
   its status is one a run writes (`PUBLISH_COMPLETE`, `SEND_TO_USER_INBOX`, or anything else from
   TikTok), today's video is already made: stop. Entries marked `posted by hand` or `skipped` don't count: they were put in the log by
@@ -118,7 +119,7 @@ If you've rendered three times and it still isn't right, stop and record a skipp
 node tools/shorts/studio.mjs post out/dayNN/dayNN.mp4 --caption "…"
 ```
 
-It posts publicly with the "Your brand" label (or sends to drafts while Direct Post isn't approved),
+It posts publicly with the "Your brand" label (or falls back to drafts, see above),
 waits for TikTok's verdict, and prints `{ publishId, status }`. `PUBLISH_COMPLETE` is success
 (`SEND_TO_USER_INBOX` for a draft). On a refusal or `FAILED`, don't retry more
 than once.
@@ -138,11 +139,11 @@ node tools/shorts/studio.mjs record out/day12/entry.json
 A skipped day is recorded with `"status": "skipped"` and the same day id: tomorrow's run makes
 that day again.
 
-**Hand the caption to the owner.** A draft reaches TikTok without its caption (TikTok's drafts
-upload takes only the file), so the owner pastes it in from their phone:
+**Hand the caption to the owner.** A public post carries its caption. A draft reaches TikTok
+without it (TikTok's drafts upload takes only the file), so the owner pastes it in from their phone:
 
 - If you have the `PushNotification` tool, send one when the video is uploaded: one line saying
-  Day NN is in the TikTok drafts (or was skipped, and why).
+  Day NN is posted, or in the TikTok drafts, or was skipped (and why).
 - **End your final message with the caption, alone, in a code block, as the very last thing**, under
   the line "Caption to paste:". Nothing after it: the owner copies it straight from there.
 
